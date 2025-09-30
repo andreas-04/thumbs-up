@@ -22,14 +22,14 @@ python -m venv .venv # create the virtual env
 ### Installing Existing Dependencies
 
 ```bash
-python -m pip install --upgrade pip
+python3 -m pip install --upgrade pip
 pip install -r scripts/dependencies.txt
 ```
 
 ### Installing New Dependencies
 
 ```bash
-python -m pip install <package> 
+python3 -m pip install <package> 
 # update dep list
 pip freeze > scripts/dependencies.txt
 ```
