@@ -22,14 +22,16 @@ stateDiagram-v2
     ADVERTISING --> DORMANT: Timeout / No connections
     
     state ACTIVE {
-        [*] --> Serving
-        Serving: 🔓 LUKS storage unlocked
-        Serving: 📂 NFS mounted (client-specific rules)
-        Serving: 🛡️ Firewall rules per client IP
-        Serving: 📝 Logging all access
-        Serving: 👁️ Monitoring activity
+        [*] --> ActiveState
+        ActiveState: 🔓 LUKS storage unlocked
+        ActiveState: 📂 NFS mounted (client-specific rules)
+        ActiveState: 🛡️ Firewall rules per client IP
+        ActiveState: 📝 Logging all access
+        ActiveState: 👁️ Monitoring activity
         
-        state Serving {
+        ActiveState --> ClientConnections
+        
+        state ClientConnections {
             [*] --> SingleClient
             SingleClient --> MultipleClients: Additional client connects
             MultipleClients --> SingleClient: Client disconnects

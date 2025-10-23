@@ -15,36 +15,36 @@ sequenceDiagram
     
     Note over C,S: Mutual Authentication Success
     
-    S->>S: Extract Client IP & CN
-    S->>FW: iptables -A INPUT -s client_ip -p tcp --dport 2049 -j ACCEPT
-    S->>ST: Check if mounted
+    S->>S: Extract Client IP Address & Common Name
+    S->>FW: Add firewall rule to allow client IP to NFS port
+    S->>ST: Check if storage is already mounted
     
-    alt First Client
-        S->>ST: cryptsetup luksOpen
-        S->>ST: mount /dev/mapper/secure_storage /mnt/storage
+    alt First Client Connection
+        S->>ST: Unlock encrypted LUKS volume
+        S->>ST: Mount encrypted storage to filesystem
     end
     
-    S->>S: Update /etc/exports with client_ip
-    S->>S: exportfs -ra
+    S->>S: Add client IP to NFS export table
+    S->>S: Refresh NFS exports configuration
     
     S-->>C: Connection Established + NFS Mount Info
     
-    C->>S: NFS Mount Request
-    S-->>C: NFS Mount Success
+    C->>S: Request NFS Mount
+    S-->>C: NFS Mount Granted
     
     Note over C,S: File Operations
     C->>S: Read/Write Files
-    S->>S: Log Access
+    S->>S: Log All File Access Events
     
-    C->>S: Disconnect
-    S->>FW: iptables -D INPUT -s client_ip -p tcp --dport 2049 -j ACCEPT
-    S->>S: Remove client_ip from /etc/exports
-    S->>S: exportfs -ra
+    C->>S: Client Disconnects
+    S->>FW: Remove firewall rule for client IP
+    S->>S: Remove client IP from NFS export table
+    S->>S: Refresh NFS exports configuration
     
     alt Last Client Disconnected
-        S->>S: Start 60s inactivity timer
-        Note over S: Wait for timeout...
-        S->>ST: umount /mnt/storage
-        S->>ST: cryptsetup luksClose
-        S->>S: Stop mDNS, return to DORMANT
+        S->>S: Start inactivity timeout (60 seconds)
+        Note over S: Waiting for new connections...
+        S->>ST: Unmount encrypted storage
+        S->>ST: Lock LUKS volume
+        S->>S: Stop mDNS broadcast, return to DORMANT state
     end
