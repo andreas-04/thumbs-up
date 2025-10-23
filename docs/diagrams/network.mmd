@@ -1,0 +1,58 @@
+graph LR
+    subgraph "Local Network"
+        Internet[Internet/External Network]
+        Router[WiFi Router]
+        
+        subgraph "NAS Device"
+            WiFi[WiFi Interface]
+            mDNS[mDNS/Avahi<br/>Port 5353]
+            mTLSPort[mTLS Service<br/>Port 8443]
+            NFSPort[NFS Server<br/>Port 2049]
+            
+            FW[iptables Firewall]
+            Auth[Certificate Auth]
+            
+            subgraph "Storage Layer"
+                LUKS[LUKS Encryption]
+                FS[Filesystem]
+                USB[USB Storage]
+            end
+        end
+        
+        ValidClient1[✓ Client 1<br/>Valid Cert<br/>192.168.1.100]
+        ValidClient2[✓ Client 2<br/>Valid Cert<br/>192.168.1.101]
+        InvalidClient[✗ Attacker<br/>No Valid Cert<br/>192.168.1.150]
+    end
+    
+    Router --> WiFi
+    
+    WiFi --> mDNS
+    mDNS -.->|Discover| ValidClient1
+    mDNS -.->|Discover| ValidClient2
+    mDNS -.->|Discover| InvalidClient
+    
+    ValidClient1 -->|1. mTLS Handshake| mTLSPort
+    ValidClient2 -->|1. mTLS Handshake| mTLSPort
+    InvalidClient -.->|1. mTLS Attempt| mTLSPort
+    
+    mTLSPort --> Auth
+    Auth -->|✓ Valid| FW
+    Auth -.->|✗ Invalid| InvalidClient
+    
+    FW -->|Allow 192.168.1.100| NFSPort
+    FW -->|Allow 192.168.1.101| NFSPort
+    FW -.->|Block 192.168.1.150| InvalidClient
+    
+    NFSPort --> LUKS
+    LUKS --> FS
+    FS --> USB
+    
+    NFSPort -->|2. NFS Mount| ValidClient1
+    NFSPort -->|2. NFS Mount| ValidClient2
+    
+    style ValidClient1 fill:#ccffcc
+    style ValidClient2 fill:#ccffcc
+    style InvalidClient fill:#ffcccc
+    style FW fill:#ffffcc
+    style Auth fill:#ffffcc
+    style LUKS fill:#ffcccc

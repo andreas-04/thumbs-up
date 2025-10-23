@@ -13,13 +13,13 @@ def run_mtls_client(host='localhost', port=8443, message='Hello from mTLS client
     
     # Load client's certificate and private key for authentication
     context.load_cert_chain(
-        certfile='../client_cert.pem',
-        keyfile='../client_key.pem'
+        certfile='../../pki/client_cert.pem',
+        keyfile='../../pki/client_key.pem'
     )
     
     # Load server certificate as trusted CA
     # In production, you'd use a proper CA certificate
-    context.load_verify_locations(cafile='../server_cert.pem')
+    context.load_verify_locations(cafile='../../pki/server_cert.pem')
     
     # For self-signed certs with "localhost", we need to set the server hostname
     context.check_hostname = False  # We're using self-signed cert
@@ -46,12 +46,12 @@ def run_mtls_client(host='localhost', port=8443, message='Hello from mTLS client
 
 if __name__ == '__main__':
     # Check if certificates exist
-    required_files = ['../client_cert.pem', '../client_key.pem', '../server_cert.pem']
+    required_files = ['../../pki/client_cert.pem', '../../pki/client_key.pem', '../../pki/server_cert.pem']
     missing = [f for f in required_files if not Path(f).exists()]
     
     if missing:
         print("Missing certificate files:", ', '.join(missing))
-        print("\nPlease run: python gen_selfsigned.py")
+        print("\nPlease run: cd ../../pki && python gen_selfsigned.py")
     else:
         try:
             run_mtls_client()

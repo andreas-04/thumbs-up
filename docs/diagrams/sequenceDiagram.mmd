@@ -1,0 +1,79 @@
+sequenceDiagram
+    participant User
+    participant Device
+    participant Avahi
+    participant mTLS
+    participant Storage
+    participant NFS
+    participant Firewall
+    participant Client
+    
+    Note over Device: STATE: DORMANT
+    Device->>Device: Services stopped
+    Device->>Storage: LUKS volume locked
+    
+    User->>Device: Press activation button
+    
+    Note over Device: STATE: ADVERTISING
+    Device->>Avahi: Start mDNS broadcast
+    Avahi-->>Client: Service discoverable (_thumbsup._tcp)
+    Device->>mTLS: Listen on port 8443
+    
+    Client->>Device: Discover service via mDNS
+    Client->>mTLS: Initiate connection
+    
+    mTLS->>mTLS: Mutual certificate validation
+    alt mTLS Success
+        mTLS-->>Device: Client authenticated (IP, CN)
+        
+        Note over Device: STATE: ACTIVE (First Client)
+        Device->>Storage: Unlock LUKS volume
+        Storage-->>Device: Volume unlocked
+        Device->>Storage: Mount encrypted storage
+        
+        Device->>Firewall: Add rule: ALLOW client_ip → NFS
+        Device->>NFS: Export /mnt/storage to client_ip
+        NFS-->>Client: Mount point available
+        
+        Device->>Device: Log: Client connected
+        Device->>Device: Start activity monitoring
+        
+        Client->>NFS: Read/Write files
+        NFS->>Device: Log access
+        
+        opt Additional Client
+            Client->>mTLS: Client 2 connects
+            mTLS->>mTLS: Validate certificate
+            Device->>Firewall: Add rule for client_2_ip
+            Device->>NFS: Export to client_2_ip
+        end
+        
+        Client->>Device: Disconnect
+        Device->>Firewall: Remove client_ip rule
+        Device->>NFS: Unexport from client_ip
+        Device->>Device: Log: Client disconnected
+        
+        alt Last Client Disconnected
+            Device->>Device: Start inactivity timer (60s)
+            
+            alt Timeout Expires
+                Note over Device: STATE: DORMANT
+                Device->>NFS: Unmount all exports
+                Device->>Storage: Unmount filesystem
+                Device->>Storage: Lock LUKS volume
+                Device->>Firewall: Remove all client rules
+                Device->>Avahi: Stop mDNS broadcast
+                Device->>mTLS: Stop listening
+                Device->>Device: Return to dormant state
+            end
+            
+            alt New Client Before Timeout
+                Device->>Device: Cancel timer
+                Note over Device: Remain ACTIVE
+            end
+        end
+        
+    else mTLS Failure
+        mTLS-->>Client: Connection rejected
+        Device->>Device: Log: Failed authentication
+    end

@@ -1,0 +1,50 @@
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant CA as Certificate Authority
+    participant FW as Firewall
+    participant ST as Storage
+    
+    Note over C,S: mTLS Handshake
+    C->>S: ClientHello + Client Certificate
+    S->>CA: Validate Client Certificate
+    CA-->>S: Certificate Valid ✓
+    S->>C: ServerHello + Server Certificate
+    C->>CA: Validate Server Certificate
+    CA-->>C: Certificate Valid ✓
+    
+    Note over C,S: Mutual Authentication Success
+    
+    S->>S: Extract Client IP & CN
+    S->>FW: iptables -A INPUT -s client_ip -p tcp --dport 2049 -j ACCEPT
+    S->>ST: Check if mounted
+    
+    alt First Client
+        S->>ST: cryptsetup luksOpen
+        S->>ST: mount /dev/mapper/secure_storage /mnt/storage
+    end
+    
+    S->>S: Update /etc/exports with client_ip
+    S->>S: exportfs -ra
+    
+    S-->>C: Connection Established + NFS Mount Info
+    
+    C->>S: NFS Mount Request
+    S-->>C: NFS Mount Success
+    
+    Note over C,S: File Operations
+    C->>S: Read/Write Files
+    S->>S: Log Access
+    
+    C->>S: Disconnect
+    S->>FW: iptables -D INPUT -s client_ip -p tcp --dport 2049 -j ACCEPT
+    S->>S: Remove client_ip from /etc/exports
+    S->>S: exportfs -ra
+    
+    alt Last Client Disconnected
+        S->>S: Start 60s inactivity timer
+        Note over S: Wait for timeout...
+        S->>ST: umount /mnt/storage
+        S->>ST: cryptsetup luksClose
+        S->>S: Stop mDNS, return to DORMANT
+    end
