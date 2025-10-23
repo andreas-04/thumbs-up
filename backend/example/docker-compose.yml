@@ -1,0 +1,39 @@
+services:
+  mtls-server:
+    build:
+      context: ..  # Build from backend root to access pki/
+      dockerfile: example/server/Dockerfile
+    container_name: mtls-server
+    ports:
+      - "8443:8443"
+      - "5354:5353/udp"  # mDNS port (mapped to 5354 on host to avoid conflict)
+    networks:
+      - mtls-network
+    restart: unless-stopped
+    # Required for Avahi/mDNS
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+    # Keep the server running
+    stdin_open: true
+    tty: true
+
+  mtls-client:
+    build:
+      context: ..  # Build from backend root to access pki/
+      dockerfile: example/client/Dockerfile
+    container_name: mtls-client
+    networks:
+      - mtls-network
+    depends_on:
+      - mtls-server
+    # Wait for server to be ready before connecting
+    command: >
+      sh -c "sleep 3 && python3 -c 'from mtls_client import run_mtls_client; run_mtls_client(host=\"mtls-server\", port=8443)'"
+    stdin_open: true
+    tty: true
+
+networks:
+  mtls-network:
+    driver: bridge
