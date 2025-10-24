@@ -18,27 +18,27 @@ RUN apt-get update && apt-get install -y \
 # Create working directory
 WORKDIR /app
 
-# Copy server application (context is backend/, so use api/secure_nas_server.py)
-COPY api/secure_nas_server.py /app/
+# Copy server application modules
+COPY api/server/*.py /app/
 
-# Copy PKI certificates (context is backend/, so use pki/)
+# Copy PKI certificates
 COPY pki/server_cert.pem /app/pki/server_cert.pem
 COPY pki/server_key.pem /app/pki/server_key.pem
 COPY pki/client_cert.pem /app/pki/client_cert.pem
 
 # Copy startup script
-COPY scripts/server_startup.sh /app/start.sh
+COPY scripts/entrypoint_server.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Copy configuration files
-COPY conf/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-COPY conf/dbus-system.conf /etc/dbus-1/system.conf
+COPY config/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+COPY config/dbus-system.conf /etc/dbus-1/system.conf
 
 # Create directories for storage simulation
 RUN mkdir -p /mnt/encrypted_storage /app/demo_storage
 
 # Copy demo data files to a staging location (will be copied to volume on startup)
-COPY api/demo_data/ /app/demo_data_template/
+COPY api/server/demo_data/ /app/demo_data_template/
 
 # Expose mTLS port, NFS port, and RPC ports
 EXPOSE 8443

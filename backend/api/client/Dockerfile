@@ -16,21 +16,21 @@ RUN apt-get update && apt-get install -y \
 # Create working directory
 WORKDIR /app
 
-# Copy client application (context is backend/, so use api/secure_nas_client.py)
-COPY api/secure_nas_client.py /app/
+# Copy client application
+COPY api/client/secure_nas_client.py /app/
 
-# Copy PKI certificates (context is backend/, so use pki/)
+# Copy PKI certificates
 COPY pki/client_cert.pem /app/pki/client_cert.pem
 COPY pki/client_key.pem /app/pki/client_key.pem
 COPY pki/server_cert.pem /app/pki/server_cert.pem
 
 # Copy startup script
-COPY scripts/client_startup.sh /app/start.sh
+COPY scripts/entrypoint_client.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Copy configuration files
-COPY conf/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-COPY conf/dbus-system.conf /etc/dbus-1/system.conf
+COPY config/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+COPY config/dbus-system.conf /etc/dbus-1/system.conf
 
 # Create mount point for NFS
 RUN mkdir -p /mnt/nas

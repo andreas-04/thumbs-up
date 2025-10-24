@@ -44,4 +44,4 @@ echo "All services started successfully!"
 echo "Starting Secure NAS server application..."
 
 # Start the Secure NAS server
-exec python3 /app/secure_nas_server.py
+exec python3 /app/server.py

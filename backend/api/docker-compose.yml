@@ -2,7 +2,7 @@ services:
   server:
     build:
       context: ..
-      dockerfile: api/Dockerfile.server
+      dockerfile: api/server/Dockerfile
     image: secure-nas-server
     container_name: secure-nas-server
     hostname: secure-nas-server
@@ -23,7 +23,7 @@ services:
   client:
     build:
       context: ..
-      dockerfile: api/Dockerfile.client
+      dockerfile: api/client/Dockerfile
     image: secure-nas-client
     container_name: secure-nas-client
     cap_add:

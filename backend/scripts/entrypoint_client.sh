@@ -21,4 +21,4 @@ echo "D-Bus and Avahi started successfully!"
 echo "Starting client application..."
 
 # Start the client application
-exec python3 /app/secure_nas_client.py "$@"
+exec python3 /app/client.py "$@"
