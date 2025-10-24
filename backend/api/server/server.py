@@ -19,11 +19,13 @@ import time
 import signal
 import sys
 import logging
+import threading
 from pathlib import Path
 from typing import Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 
 # Import our clean modules
 from state_machine import DeviceState, StateMachine
@@ -61,6 +63,7 @@ class ClientSessions:
     Manages client sessions with automatic access control.
     
     Coordinates firewall and NFS access for authenticated clients.
+    Thread-safe for concurrent client connections.
     """
     
     def __init__(self, firewall_manager, nfs_manager, storage_manager):
@@ -68,11 +71,13 @@ class ClientSessions:
         self.nfs = nfs_manager
         self.storage = storage_manager
         self._sessions: Dict[str, ClientSession] = {}
+        self._lock = threading.Lock()
     
     @property
     def active_count(self) -> int:
         """Get number of active clients."""
-        return len(self._sessions)
+        with self._lock:
+            return len(self._sessions)
     
     @property
     def has_clients(self) -> bool:
@@ -81,7 +86,8 @@ class ClientSessions:
     
     def get_session(self, client_ip: str) -> Optional[ClientSession]:
         """Get session by client IP."""
-        return self._sessions.get(client_ip)
+        with self._lock:
+            return self._sessions.get(client_ip)
     
     @contextmanager
     def client_access(self, client_ip: str, client_port: int, cert: dict):
@@ -105,8 +111,9 @@ class ClientSessions:
     
     def update_activity(self, client_ip: str) -> None:
         """Update last activity timestamp for a client."""
-        if session := self._sessions.get(client_ip):
-            session.last_activity = datetime.now()
+        with self._lock:
+            if session := self._sessions.get(client_ip):
+                session.last_activity = datetime.now()
     
     def handle_command(self, command: str, client_cn: str) -> str:
         """
@@ -148,13 +155,15 @@ class ClientSessions:
             cert_fingerprint=cert_fingerprint
         )
         
-        self._sessions[client_ip] = session
+        with self._lock:
+            self._sessions[client_ip] = session
         return session
     
     def _remove_session(self, client_ip: str) -> None:
         """Remove client session."""
-        if session := self._sessions.pop(client_ip, None):
-            logger.info(f"✓ Session closed for {session.cert_cn}")
+        with self._lock:
+            if session := self._sessions.pop(client_ip, None):
+                logger.info(f"✓ Session closed for {session.cert_cn}")
     
     def _list_files(self) -> str:
         """List files in storage."""
@@ -225,6 +234,12 @@ class SecureNASServer:
         # SSL and network
         self.ssl_context: ssl.SSLContext = None
         self.server_socket: socket.socket = None
+        
+        # Thread pool for handling concurrent clients
+        self.executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="ClientHandler")
+        
+        # Lock for state transitions triggered by client connections
+        self._state_lock = threading.Lock()
         
         # Register state transition callbacks
         self._register_state_callbacks()
@@ -352,9 +367,10 @@ class SecureNASServer:
                 logger.warning(f"No certificate from {client_ip}")
                 return
             
-            # Transition to ACTIVE on first client
-            if not self.sessions.has_clients:
-                self.state_machine.transition_to(DeviceState.ACTIVE)
+            # Transition to ACTIVE on first client (thread-safe)
+            with self._state_lock:
+                if not self.sessions.has_clients:
+                    self.state_machine.transition_to(DeviceState.ACTIVE)
             
             # Use context manager for automatic access control
             with self.sessions.client_access(client_ip, client_port, cert) as session:
@@ -365,10 +381,11 @@ class SecureNASServer:
         except Exception as e:
             logger.error(f"Error with client {client_ip}: {e}", exc_info=True)
         finally:
-            # Transition back to ADVERTISING if no more clients
-            if not self.sessions.has_clients:
-                logger.info("No more clients - back to advertising")
-                self.state_machine.transition_to(DeviceState.ADVERTISING)
+            # Transition back to ADVERTISING if no more clients (thread-safe)
+            with self._state_lock:
+                if not self.sessions.has_clients:
+                    logger.info("No more clients - back to advertising")
+                    self.state_machine.transition_to(DeviceState.ADVERTISING)
     
     def _communicate_with_client(self, conn: ssl.SSLSocket, session) -> None:
         """Handle client communication protocol."""
@@ -430,7 +447,8 @@ class SecureNASServer:
                 while not self.state_machine.is_state(DeviceState.SHUTDOWN):
                     try:
                         conn, addr = secure_sock.accept()
-                        self._handle_client_connection(conn, addr)
+                        # Handle client connection in separate thread
+                        self.executor.submit(self._handle_client_connection, conn, addr)
                         
                     except ssl.SSLError as e:
                         logger.error(f"SSL Error: {e}")
@@ -441,6 +459,11 @@ class SecureNASServer:
                         break
                     except Exception as e:
                         logger.error(f"Server error: {e}", exc_info=True)
+                
+                # Shutdown thread pool and wait for active connections
+                logger.info("Shutting down thread pool...")
+                self.executor.shutdown(wait=True, timeout=10)
+                logger.info("All client threads terminated")
 
 
 def main() -> None:
