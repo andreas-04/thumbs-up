@@ -1,0 +1,38 @@
+CONFIDENTIAL DOCUMENT
+====================
+
+Project: ThumbsUp Secure NAS
+Document Type: System Specification
+Classification: Internal Use Only
+
+Overview:
+--------
+This document contains sensitive technical specifications for the
+ThumbsUp Secure Network-Attached Storage system.
+
+Access to this file requires:
+1. Valid client certificate issued by trusted CA
+2. Successful mTLS handshake with server
+3. Active firewall rule permitting client IP
+4. NFS export configured for client
+
+Technical Details:
+-----------------
+- Protocol: NFSv4 with mTLS wrapper
+- Encryption: AES-256 (LUKS)
+- Authentication: X.509 certificates
+- Key Management: Local CA with CRL support
+- Network: Zero-configuration (mDNS/Avahi)
+
+Implementation Status:
+---------------------
+✓ mTLS authentication
+✓ Certificate validation
+✓ Dynamic firewall rules
+✓ Per-client NFS exports
+✓ State machine (DORMANT/ADVERTISING/ACTIVE/SHUTDOWN)
+○ LUKS integration (pseudocode)
+○ Certificate revocation checking
+○ Hardware deployment
+
+Last Modified: 2025-10-23
