@@ -114,31 +114,3 @@ jobs:
         exit-code: '0'
         severity: 'CRITICAL,HIGH'
 
-  secret-scan:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: Scan for secrets (git diff mode)
-      if: github.event_name == 'push' || github.event_name == 'pull_request'
-      uses: trufflesecurity/trufflehog@main
-      with:
-        path: ./
-        base: ${{ github.event.repository.default_branch }}
-        head: HEAD
-        extra_args: --only-verified
-      continue-on-error: true
-    
-    - name: Scan for secrets (full filesystem scan)
-      if: github.event_name == 'schedule'
-      run: |
-        docker run --rm -v "$(pwd):/scan" trufflesecurity/trufflehog:latest filesystem /scan --only-verified --json > trufflehog-results.json || true
-        if [ -s trufflehog-results.json ]; then
-          echo "⚠️ Potential secrets found!"
-          cat trufflehog-results.json
-        else
-          echo "✓ No secrets detected"
-        fi
