@@ -1,0 +1,8 @@
+thumbsup-client (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * mDNS discovery support
+  * mTLS authentication
+  * NFS file sharing
+
+ -- Andreas Neacsu <andreasneacsu@gmail.com>  Fri, 24 Oct 2025 12:00:00 +0000
