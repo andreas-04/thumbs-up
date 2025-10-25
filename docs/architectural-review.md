@@ -1,106 +1,59 @@
-# Architectural Review & Planning Document
-## Secure On-Demand Wireless Thumb Drive (ThumbsUp)
+# Architecture Documentation
+## ThumbsUp - Secure On-Demand Wireless NAS
 
-**Review Date:** October 23, 2025  
-**Project Phase:** MVP Complete - Planning Extended Features  
-**Document Version:** 1.0
-
----
-
-## Table of Contents
-1. [Executive Summary](#executive-summary)
-2. [Requirements Analysis](#requirements-analysis)
-3. [Current Implementation Review](#current-implementation-review)
-4. [Gap Analysis](#gap-analysis)
-5. [Architectural Strengths](#architectural-strengths)
-6. [Architectural Concerns](#architectural-concerns)
-7. [Future Feature Planning](#future-feature-planning)
-8. [Recommendations](#recommendations)
+**Last Updated:** October 24, 2025  
+**Version:** 1.0 (MVP)
 
 ---
 
-## Executive Summary
+## Overview
 
-The **ThumbsUp** project is an MVP implementation of a secure, portable Wi-Fi-enabled NAS system designed for on-demand file sharing. The current implementation successfully demonstrates:
+**ThumbsUp** is a secure, portable Wi-Fi-enabled NAS system that provides on-demand file sharing using mutual TLS authentication and dynamic access control. The system operates through a state machine that manages service lifecycle, client connections, and secure file access.
 
-- ✅ **State Machine Architecture** (DORMANT → ADVERTISING → ACTIVE → SHUTDOWN)
-- ✅ **Mutual TLS Authentication** (mTLS with X.509 certificates)
-- ✅ **Service Discovery** (Avahi mDNS)
-- ✅ **Dynamic Access Control** (IP-based iptables firewall rules)
-- ✅ **Secure File Sharing** (NFS with per-client exports)
-- ✅ **Session Management** (Multi-client support with cleanup)
-- ✅ **Container-based Deployment** (Docker with proper capabilities)
+### Key Features
 
-The MVP is production-ready for **demonstration purposes** but requires additional security hardening and feature implementation to meet the full requirements specification.
-
----
-
-## Requirements Analysis
-
-### Core Requirements (from Capstone Document)
-
-#### ✅ **Implemented in MVP**
-
-| Requirement | Status | Implementation |
-|------------|--------|----------------|
-| Wireless NAS on single-board computer | ✅ Complete | Docker-based (Pi-compatible) |
-| On-demand activation | ✅ Complete | State machine with manual trigger |
-| mDNS service discovery | ✅ Complete | Avahi-based (_thumbsup._tcp) |
-| Mutual TLS authentication | ✅ Complete | X.509 certificates with validation |
-| Certificate-based access control | ✅ Complete | Per-client firewall rules |
-| NFS file sharing | ✅ Complete | NFSv3 with dynamic exports |
-| Multi-client support | ✅ Complete | Concurrent authenticated sessions |
-| Session logging | ✅ Complete | Structured logging with timestamps |
-| Inactivity timeout | ✅ Complete | Configurable auto-shutdown |
-| Graceful shutdown | ✅ Complete | Proper cleanup of resources |
-
-#### ⚠️ **Partially Implemented**
-
-| Requirement | Status | Current State | Gap |
-|------------|--------|---------------|-----|
-| LUKS encrypted storage | ⚠️ Simulated | Placeholder methods exist | No actual cryptsetup integration |
-| Certificate revocation | ⚠️ Missing | Basic cert validation only | No CRL/OCSP checking |
-| Comprehensive audit logging | ⚠️ Basic | Console logging only | No persistent audit trail |
-
-#### ❌ **Not Yet Implemented (Extended Features)**
-
-| Requirement | Priority | Complexity | Notes |
-|------------|----------|------------|-------|
-| Peer-to-peer synchronization | High | High | Requires Syncthing or custom protocol |
-| Attribute-based access control (ABE) | Medium | Very High | Requires Charm-Crypto or similar |
-| Anomaly detection | Medium | High | ML-based access pattern monitoring |
-| Secure backup (rsync over SSH) | High | Medium | Automated encrypted backups |
-| Secure software updates | High | Medium | Signed update manifests |
-| Time-based access control | Low | Low | Scheduled access windows |
-| Hardware button activation | Low | Low | GPIO integration for Pi |
+- **State Machine Architecture** - Four-state lifecycle (DORMANT → ADVERTISING → ACTIVE → SHUTDOWN)
+- **Mutual TLS Authentication** - Certificate-based client authentication
+- **Service Discovery** - Avahi mDNS for automatic device discovery
+- **Dynamic Access Control** - Per-client iptables firewall rules
+- **NFS File Sharing** - Dynamic per-client NFS exports
+- **Multi-Client Support** - Concurrent authenticated sessions
+- **Container Deployment** - Docker-based with proper Linux capabilities
 
 ---
 
-## Current Implementation Review
+## Architecture Overview
 
 ### Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    ThumbsUp NAS System                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐          ┌──────────────┐                 │
-│  │   Client     │          │   Server     │                 │
-│  │              │          │              │                 │
-│  │  • mDNS      │ ◄─────►  │  • State     │                 │
-│  │    Discovery │          │    Machine   │                 │
-│  │  • mTLS      │          │  • mTLS      │                 │
-│  │    Auth      │          │    Server    │                 │
-│  │  • NFS       │          │  • Avahi     │                 │
-│  │    Mount     │          │    mDNS      │                 │
-│  │              │          │  • Firewall  │                 │
-│  └──────────────┘          │    (iptables)│                 │
-│                            │  • NFS       │                 │
-│                            │    Server    │                 │
-│                            └──────────────┘                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                    Local WiFi Network                         │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────────┐              ┌─────────────────────┐   │
+│  │  External Client │              │  ThumbsUp NAS Device│   │
+│  │  (User Device)   │              │  (Raspberry Pi)     │   │
+│  │                  │              │                     │   │
+│  │  • mDNS          │ ◄──────────► │  • State Machine    │   │
+│  │    Discovery     │   Discover   │  • mTLS Server      │   │
+│  │  • mTLS          │   & Connect  │  • Avahi mDNS       │   │
+│  │    Client Auth   │              │  • Firewall         │   │
+│  │  • NFS           │   Secure     │    (iptables)       │   │
+│  │    Mount Client  │   Access     │  • NFS Server       │   │
+│  │                  │              │  • USB Storage      │   │
+│  │  Examples:       │              │    (Encrypted)      │   │
+│  │  - Laptop        │              │                     │   │
+│  │  - Phone         │              │  ┌───────────────┐  │   │
+│  │  - Desktop       │              │  │ Encrypted USB │  │   │
+│  │  - Another Pi    │              │  │ Storage Drive │  │   │
+│  └──────────────────┘              │  └───────────────┘  │   │
+│                                     └─────────────────────┘   │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+
+Note: The "ThumbsUp NAS System" refers only to the device on the right.
+Clients are external user devices that discover and connect to it.
 ```
 
 ### Technology Stack
