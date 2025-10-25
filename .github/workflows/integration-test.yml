@@ -38,13 +38,13 @@ jobs:
     - name: Start Docker services
       working-directory: ./backend/api
       run: |
-        docker-compose up -d
+        docker compose up -d
         sleep 10  # Wait for services to be ready
     
     - name: Check service health
       run: |
         docker ps
-        docker-compose -f backend/api/docker-compose.yml logs
+        docker compose -f backend/api/docker-compose.yml logs
     
     - name: Test mDNS discovery
       run: |
@@ -67,5 +67,5 @@ jobs:
       if: always()
       working-directory: ./backend/api
       run: |
-        docker-compose down -v
-        docker-compose logs
+        docker compose down -v
+        docker compose logs

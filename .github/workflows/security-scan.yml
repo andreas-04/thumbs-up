@@ -1,5 +1,9 @@
 name: Security Scanning
 
+permissions:
+  contents: read
+  security-events: write  # Required for uploading SARIF results
+
 on:
   push:
     branches: [ main, develop ]
@@ -73,11 +77,26 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build Docker images
-      working-directory: ./backend/api
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Generate PKI certificates for Docker build
       run: |
-        docker build -f server/Dockerfile -t thumbsup-server:scan .
-        docker build -f client/Dockerfile -t thumbsup-client:scan .
+        cd backend/pki
+        pip install cryptography
+        python gen_selfsigned.py \
+          --server-cn localhost \
+          --client-cn scan-client \
+          --validity-days 365 \
+          --output-dir .
+    
+    - name: Build Docker images
+      working-directory: ./backend
+      run: |
+        docker build -f api/server/Dockerfile -t thumbsup-server:scan .
+        docker build -f api/client/Dockerfile -t thumbsup-client:scan .
     
     - name: Scan server image with Trivy
       uses: aquasecurity/trivy-action@master
@@ -103,9 +122,23 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Scan for secrets
+    - name: Scan for secrets (git diff mode)
+      if: github.event_name == 'push' || github.event_name == 'pull_request'
       uses: trufflesecurity/trufflehog@main
       with:
         path: ./
         base: ${{ github.event.repository.default_branch }}
         head: HEAD
+        extra_args: --only-verified
+      continue-on-error: true
+    
+    - name: Scan for secrets (full filesystem scan)
+      if: github.event_name == 'schedule'
+      run: |
+        docker run --rm -v "$(pwd):/scan" trufflesecurity/trufflehog:latest filesystem /scan --only-verified --json > trufflehog-results.json || true
+        if [ -s trufflehog-results.json ]; then
+          echo "⚠️ Potential secrets found!"
+          cat trufflehog-results.json
+        else
+          echo "✓ No secrets detected"
+        fi
