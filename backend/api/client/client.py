@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Secure NAS Client
+
+Copyright (c) 2025 Thumbs-Up Team
+SPDX-License-Identifier: BSD-3-Clause
+
 Discovers and connects to Secure NAS server using Avahi mDNS and mTLS authentication
 """
 import ssl

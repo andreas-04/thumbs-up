@@ -1,7 +1,10 @@
 """
 State Machine for Secure NAS Server
 
-Clean, Pythonic state management with callback-based transitions.
+Copyright (c) 2025 Thumbs-Up Team
+SPDX-License-Identifier: BSD-3-Clause
+
+State management with callback-based transitions.
 """
 from enum import Enum, auto
 from typing import Callable, Dict, List
@@ -20,7 +23,7 @@ class DeviceState(Enum):
 
 class StateMachine:
     """
-    Manages device state transitions with clean callback pattern.
+    Manages device state transitions with callback pattern.
     
     Each state can have entry and exit callbacks that are executed
     during transitions.

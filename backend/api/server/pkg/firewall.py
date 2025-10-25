@@ -1,6 +1,9 @@
 """
 Firewall for Secure NAS Server
 
+Copyright (c) 2025 Thumbs-Up Team
+SPDX-License-Identifier: BSD-3-Clause
+
 Manages iptables rules for certificate-based NFS access control.
 """
 import subprocess

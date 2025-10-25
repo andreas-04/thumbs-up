@@ -1,7 +1,10 @@
 """
 Secure NAS Server Package
 
-Clean, modular implementation of a certificate-based secure NAS server.
+Copyright (c) 2025 Thumbs-Up Team
+SPDX-License-Identifier: BSD-3-Clause
+
+Modular implementation of a certificate-based NAS server.
 
 Components:
 - State Machine: Device state management with callbacks
@@ -11,7 +14,7 @@ Components:
 - Storage: Encrypted storage operations (LUKS)
 
 Example:
-    from server.secure_nas_server_clean import SecureNASServer
+    from server import SecureNASServer
     
     server = SecureNASServer(host='0.0.0.0', port=8443)
     server.activate()

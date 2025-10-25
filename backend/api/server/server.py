@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Secure NAS Server - Clean Refactored Version
+Secure NAS Server
 
-A certificate-based secure NAS with state machine control.
-Features: mTLS authentication, dynamic firewall, NFS exports, mDNS discovery.
+Copyright (c) 2025 Thumbs-Up Team
+SPDX-License-Identifier: BSD-3-Clause
+
+Certificate-based NAS server with state machine control.
+Implements mTLS authentication, dynamic firewall rules, NFS exports, and mDNS discovery.
 
 Architecture:
 - state_machine.py: Device state management
@@ -25,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from contextlib import contextmanager
 
-# Import our clean modules
+# Import modules
 from pkg.state_machine import DeviceState, StateMachine
 from pkg.firewall import Firewall
 from pkg.nfs import NFS
@@ -199,7 +202,7 @@ class SecureNASServer:
     Main coordinator for the Secure NAS server.
     
     Orchestrates all components and manages their lifecycle through
-    a clean state machine pattern.
+    a state machine pattern.
     """
     
     def __init__(
@@ -238,7 +241,7 @@ class SecureNASServer:
     # ========================================================================
     
     def _register_state_callbacks(self) -> None:
-        """Register all state entry/exit callbacks using clean decorator pattern."""
+        """Register all state entry/exit callbacks using decorator pattern."""
         
         @self.state_machine.on_enter(DeviceState.DORMANT)
         def enter_dormant():
@@ -446,7 +449,7 @@ class SecureNASServer:
 def main() -> None:
     """Main entry point."""
     print("=" * 70)
-    print("  Secure NAS Server - Clean Architecture")
+    print("  Secure NAS Server")
     print("  mTLS + mDNS + NFS + Certificate-Based Firewall")
     print("=" * 70)
     print()
