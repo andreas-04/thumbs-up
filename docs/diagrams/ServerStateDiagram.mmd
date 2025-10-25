@@ -1,0 +1,34 @@
+stateDiagram-v2
+    direction BT
+    [*] --> DORMANT
+    DORMANT --> [*]: 
+    
+    state DORMANT {
+        [*] --> Idle
+        Idle: ❌ No mDNS broadcast
+        Idle: ❌ No services listening
+        Idle: 🔒 Storage locked (LUKS)
+    }
+    
+    state ADVERTISING {
+        [*] --> Waiting
+        Waiting: 📡 Avahi broadcasts mDNS
+        Waiting: 🔓 mTLS service listening (port 8443)
+        Waiting: 🔒 Storage still locked
+        Waiting: ⏳ Waiting for authenticated client
+    }
+    
+    state ACTIVE {
+        [*] --> Active
+        Active: 🔓 LUKS storage unlocked
+        Active: 📂 NFS mounted (client-specific rules)
+        Active: 🛡️ Firewall rules per client IP
+        Active: 📝 Logging all access
+        Active: 👁️ Monitoring activity
+    }
+    
+    DORMANT --> ADVERTISING: Button Press
+    ADVERTISING --> ACTIVE: Client connects + mTLS succeeds
+    ACTIVE --> ADVERTISING: All clients disconnect
+    ADVERTISING --> DORMANT: No connections
+    ACTIVE --> ACTIVE: Additional clients connect/disconnect 
