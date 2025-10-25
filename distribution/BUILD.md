@@ -62,7 +62,7 @@ thumbsup-client --help
 ## Directory Structure
 
 ```
-client-dist/
+distribution/
 ├── src/
 │   └── thumbsup_client/
 │       ├── __init__.py

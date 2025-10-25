@@ -10,7 +10,7 @@ echo ""
 
 # Check if we're in the right directory
 if [ ! -f "setup.py" ]; then
-    echo "Error: setup.py not found. Run this script from client-dist directory."
+    echo "Error: setup.py not found. Run this script from distribution directory."
     exit 1
 fi
 

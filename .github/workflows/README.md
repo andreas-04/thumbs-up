@@ -21,8 +21,8 @@ This directory contains GitHub Actions workflows for automated testing, building
 - Optional: Deploy previews for PRs
 - Optional: Deploy to production on main branch
 
-### 3. Client Distribution (`client-dist-ci.yml`)
-**Triggers:** Push/PR to client-dist, version tags (v*.*.*)
+### 3. Client Distribution (`distribution-ci.yml`)
+**Triggers:** Push/PR to distribution, version tags (v*.*.*)
 - **Linux Build:** Creates .deb package for Debian/Ubuntu
 - **Windows Build:** Creates .exe installer with NSIS
 - **macOS Build:** Creates standalone app bundle
@@ -81,7 +81,7 @@ act -W .github/workflows/backend-ci.yml -j test
    git tag -a v0.0.0 -m "Release version 0.0.0"
    git push origin v0.0.0
    ```
-4. The `client-dist-ci.yml` workflow will automatically:
+4. The `distribution-ci.yml` workflow will automatically:
    - Build installers for all platforms
    - Create a GitHub release
    - Upload all artifacts
@@ -105,7 +105,7 @@ Add these to your main README.md:
 ```markdown
 [![Backend CI](https://github.com/andreas-04/thumbs-up/workflows/Backend%20CI%2FCD/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/andreas-04/thumbs-up/workflows/Frontend%20CI%2FCD/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/frontend-ci.yml)
-[![Client Distribution](https://github.com/andreas-04/thumbs-up/workflows/Client%20Distribution%20CI%2FCD/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/client-dist-ci.yml)
+[![Client Distribution](https://github.com/andreas-04/thumbs-up/workflows/Client%20Distribution%20CI%2FCD/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/distribution-ci.yml)
 [![Security Scan](https://github.com/andreas-04/thumbs-up/workflows/Security%20Scanning/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/security-scan.yml)
 ```
 
