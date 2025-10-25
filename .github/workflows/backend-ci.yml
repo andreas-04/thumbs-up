@@ -71,14 +71,14 @@ jobs:
       uses: docker/setup-buildx-action@v3
     
     - name: Build Server Docker Image
-      working-directory: ./backend/api
+      working-directory: ./backend
       run: |
-        docker build -f server/Dockerfile -t thumbsup-server:${{ github.sha }} .
+        docker build -f api/server/Dockerfile -t thumbsup-server:${{ github.sha }} .
     
     - name: Build Client Docker Image
-      working-directory: ./backend/api
+      working-directory: ./backend
       run: |
-        docker build -f client/Dockerfile -t thumbsup-client:${{ github.sha }} .
+        docker build -f api/client/Dockerfile -t thumbsup-client:${{ github.sha }} .
     
     - name: Test Docker Compose
       working-directory: ./backend/api
