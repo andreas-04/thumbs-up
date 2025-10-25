@@ -23,7 +23,7 @@ sudo apt-get install dpkg-dev debhelper dh-python python3-all python3-setuptools
 ./build-deb.sh
 ```
 
-Output: `dist/thumbsup-client_1.0.0-1_all.deb`
+Output: `dist/thumbsup-client_0.0.0-1_all.deb`
 
 ### Windows .exe Installer
 
@@ -47,7 +47,7 @@ docker run --rm -v $(pwd)/dist:/dist -it ubuntu:22.04 bash
 
 # Inside container:
 apt-get update
-apt-get install -y /dist/thumbsup-client_1.0.0-1_all.deb
+apt-get install -y /dist/thumbsup-client_0.0.0-1_all.deb
 thumbsup-client --help
 ```
 

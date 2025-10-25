@@ -1,4 +1,4 @@
-thumbsup-client (1.0.0-1) unstable; urgency=medium
+thumbsup-client (0.0.0-1) unstable; urgency=medium
 
   * Initial release
   * mDNS discovery support

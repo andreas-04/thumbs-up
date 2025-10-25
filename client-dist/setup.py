@@ -12,7 +12,7 @@ long_description = (this_directory / "README.md").read_text() if (this_directory
 
 setup(
     name="thumbsup-client",
-    version="1.0.0",
+    version="0.0.0",
     description="Secure NAS Client for ThumbsUp - mDNS Discovery + mTLS Authentication",
     long_description=long_description,
     long_description_content_type="text/markdown",

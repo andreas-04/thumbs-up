@@ -21,10 +21,10 @@ Complete installation instructions for ThumbsUp Client on Linux and Windows.
 
 ```bash
 # Download the package
-wget https://github.com/andreas-04/thumbs-up/releases/latest/download/thumbsup-client_1.0.0-1_all.deb
+wget https://github.com/andreas-04/thumbs-up/releases/latest/download/thumbsup-client_0.0.0-1_all.deb
 
 # Install
-sudo dpkg -i thumbsup-client_1.0.0-1_all.deb
+sudo dpkg -i thumbsup-client_0.0.0-1_all.deb
 
 # Fix dependencies if needed
 sudo apt-get install -f

@@ -78,8 +78,8 @@ act -W .github/workflows/backend-ci.yml -j test
 2. Commit changes
 3. Create and push a version tag:
    ```bash
-   git tag -a v1.0.0 -m "Release version 1.0.0"
-   git push origin v1.0.0
+   git tag -a v0.0.0 -m "Release version 0.0.0"
+   git push origin v0.0.0
    ```
 4. The `client-dist-ci.yml` workflow will automatically:
    - Build installers for all platforms

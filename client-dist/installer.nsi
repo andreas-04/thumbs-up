@@ -12,10 +12,10 @@ InstallDirRegKey HKLM "Software\ThumbsUp\Client" "InstallDir"
 RequestExecutionLevel admin
 
 ; Version information
-VIProductVersion "1.0.0.0"
+VIProductVersion "0.0.0.0"
 VIAddVersionKey "ProductName" "ThumbsUp Client"
-VIAddVersionKey "FileVersion" "1.0.0"
-VIAddVersionKey "ProductVersion" "1.0.0"
+VIAddVersionKey "FileVersion" "0.0.0"
+VIAddVersionKey "ProductVersion" "0.0.0"
 VIAddVersionKey "LegalCopyright" "MIT License"
 VIAddVersionKey "FileDescription" "ThumbsUp Secure NAS Client"
 
@@ -68,10 +68,10 @@ Section "ThumbsUp Client" SecMain
     
     ; Write registry keys
     WriteRegStr HKLM "Software\ThumbsUp\Client" "InstallDir" "$INSTDIR"
-    WriteRegStr HKLM "Software\ThumbsUp\Client" "Version" "1.0.0"
+    WriteRegStr HKLM "Software\ThumbsUp\Client" "Version" "0.0.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "DisplayName" "ThumbsUp Client"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "UninstallString" "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "DisplayVersion" "1.0.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "DisplayVersion" "0.0.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "Publisher" "ThumbsUp Project"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ThumbsUpClient" "NoRepair" 1
