@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy client application
-COPY api/client/secure_nas_client.py /app/
+COPY api/client/client.py /app/
 
 # Copy PKI certificates
 COPY pki/client_cert.pem /app/pki/client_cert.pem
