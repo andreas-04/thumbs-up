@@ -1,7 +1,7 @@
 annotated-types==0.7.0
 anyio==4.11.0
 cffi==2.0.0
-cryptography==46.0.1
+cryptography==46.0.3
 fastapi==0.118.0
 idna==3.10
 pycparser==2.23
