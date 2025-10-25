@@ -26,11 +26,11 @@ from datetime import datetime
 from contextlib import contextmanager
 
 # Import our clean modules
-from state_machine import DeviceState, StateMachine
-from firewall import Firewall
-from nfs import NFS
-from mdns_service import MDNSService
-from storage import Storage
+from pkg.state_machine import DeviceState, StateMachine
+from pkg.firewall import Firewall
+from pkg.nfs import NFS
+from pkg.mdns_service import MDNSService
+from pkg.storage import Storage
 
 # Configure logging
 logging.basicConfig(
