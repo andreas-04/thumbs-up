@@ -67,6 +67,21 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Generate PKI certificates for Docker build
+      run: |
+        cd backend/pki
+        pip install cryptography
+        python gen_selfsigned.py \
+          --server-cn localhost \
+          --client-cn docker-client \
+          --validity-days 365 \
+          --output-dir .
+    
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
