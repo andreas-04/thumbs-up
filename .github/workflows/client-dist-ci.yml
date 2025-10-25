@@ -1,5 +1,7 @@
 name: Client Distribution CI/CD
 
+permissions:
+  contents: write  # Required for creating releases
 
 on:
   push:
