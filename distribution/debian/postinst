@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+# Create certificate directory in user's home if it doesn't exist
+if [ ! -d "/etc/thumbsup/certs" ]; then
+    mkdir -p /etc/thumbsup/certs
+    chmod 755 /etc/thumbsup/certs
+fi
+
+# Create symlink to user config directory
+if [ ! -L "/root/.thumbsup" ]; then
+    ln -sf /etc/thumbsup /root/.thumbsup
+fi
+
+# Create mount point if it doesn't exist
+if [ ! -d "/mnt/nas" ]; then
+    mkdir -p /mnt/nas
+    chmod 755 /mnt/nas
+fi
+
+echo ""
+echo "=========================================="
+echo "ThumbsUp Client installed successfully!"
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "1. Obtain certificates from your ThumbsUp administrator"
+echo "2. Place them in /etc/thumbsup/certs/ or ~/.thumbsup/certs/"
+echo "   Required files:"
+echo "   - client_cert.pem"
+echo "   - client_key.pem"
+echo "   - server_cert.pem"
+echo ""
+echo "3. Run with: sudo thumbsup-client"
+echo ""
+echo "For help: thumbsup-client --help"
+echo ""
+
+#DEBHELPER#
+
+exit 0

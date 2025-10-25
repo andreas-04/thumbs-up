@@ -1,0 +1,179 @@
+name: Client Distribution CI/CD
+
+permissions:
+  contents: write  # Required for creating releases
+
+on:
+  push:
+    branches: [ main, distribution ]
+    paths:
+      - 'distribution/**'
+      - '.github/workflows/distribution-ci.yml'
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'distribution/**'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential dpkg-dev debhelper dh-python python3-all python3-setuptools
+    
+    - name: Generate certificates
+      run: |
+        cd backend/pki
+        pip install cryptography
+        python gen_selfsigned.py \
+          --server-cn thumbsup.local \
+          --client-cn default-client \
+          --validity-days 365 \
+          --output-dir ../../distribution/certs
+    
+    - name: Build .deb package
+      working-directory: ./distribution
+      run: |
+        chmod +x build-deb.sh
+        ./build-deb.sh
+    
+    - name: Test .deb package
+      run: |
+        # Verify package contents
+        dpkg-deb --contents distribution/dist/*.deb
+        # Install in test mode
+        sudo dpkg -i distribution/dist/*.deb || true
+        sudo apt-get install -f -y
+    
+    - name: Upload .deb artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: thumbsup-client-deb
+        path: distribution/dist/*.deb
+        retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install PyInstaller
+      run: pip install pyinstaller
+    
+    - name: Generate certificates
+      shell: bash
+      run: |
+        cd backend/pki
+        pip install cryptography
+        python gen_selfsigned.py \
+          --server-cn thumbsup.local \
+          --client-cn default-client \
+          --validity-days 365 \
+          --output-dir ../../distribution/certs
+    
+    - name: Install NSIS
+      run: |
+        choco install nsis -y
+    
+    - name: Build Windows executable
+      working-directory: ./distribution
+      shell: cmd
+      run: build-windows.bat
+    
+    - name: Upload .exe artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: thumbsup-client-exe
+        path: distribution/dist/*.exe
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: pip install pyinstaller
+    
+    - name: Generate certificates
+      run: |
+        cd backend/pki
+        pip install cryptography
+        python gen_selfsigned.py \
+          --server-cn thumbsup.local \
+          --client-cn default-client \
+          --validity-days 365 \
+          --output-dir ../../distribution/certs
+    
+    - name: Build macOS app
+      working-directory: ./distribution
+      run: |
+        # Build standalone executable
+        pyinstaller thumbsup-client.spec
+    
+    - name: Create DMG (optional)
+      working-directory: ./distribution
+      run: |
+        # Uncomment when you add DMG creation script
+        # ./build-macos.sh
+        echo "DMG creation placeholder"
+    
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: thumbsup-client-macos
+        path: distribution/dist/thumbsup-client
+        retention-days: 30
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Display structure
+      run: ls -R ./artifacts
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/thumbsup-client-deb/*.deb
+          artifacts/thumbsup-client-exe/*.exe
+          artifacts/thumbsup-client-macos/thumbsup-client
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
