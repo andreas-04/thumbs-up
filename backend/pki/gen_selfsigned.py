@@ -90,6 +90,6 @@ if __name__ == "__main__":
     client_prefix = str(output_path / "client")
     write_pem_pair(client_prefix, ckey, ccert)
 
-    print(f"\n✅ Certificates generated successfully in '{args.output_dir}':")
+    print(f"\n[SUCCESS] Certificates generated successfully in '{args.output_dir}':")
     print(f"   - server_key.pem, server_cert.pem")
     print(f"   - client_key.pem, client_cert.pem")
