@@ -279,30 +279,18 @@ class SecureNASServer:
         @self.state_machine.on_enter(DeviceState.SHUTDOWN)
         def enter_shutdown():
             logger.info("🛑 SHUTDOWN - Cleaning up")
-            self._perform_shutdown()
+            self.mdns.stop()
+            if self.storage.is_unlocked:
+                self.storage.lock()
+            if self.server_socket:
+                self.server_socket.close()
+            logger.info("✓ Shutdown complete")
     
     def _handle_shutdown_signal(self, signum: int, frame) -> None:
         """Handle OS shutdown signals gracefully."""
         logger.info(f"Received signal {signum}, shutting down...")
         self.state_machine.transition_to(DeviceState.SHUTDOWN)
         sys.exit(0)
-    
-    def _perform_shutdown(self) -> None:
-        """Perform graceful shutdown sequence."""
-        # Transition through states for proper cleanup
-        current = self.state_machine.state
-        
-        if current == DeviceState.ACTIVE:
-            self.state_machine.transition_to(DeviceState.ADVERTISING)
-        
-        if self.state_machine.state == DeviceState.ADVERTISING:
-            self.state_machine.transition_to(DeviceState.DORMANT)
-        
-        # Close server socket
-        if self.server_socket:
-            self.server_socket.close()
-        
-        logger.info("✓ Shutdown complete")
     
     # ========================================================================
     # SSL/TLS CONFIGURATION

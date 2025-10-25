@@ -108,7 +108,7 @@ backend/
 
 docs/
 ├── requirements.md               - Capstone specification
-├── system-architecture.md        - Mermaid diagrams
+├── diagrams.md        - Mermaid diagrams
 └── architectural-review.md       - This document
 
 frontend/
@@ -117,7 +117,7 @@ frontend/
 
 ### State Machine Implementation
 
-The server implements a robust state machine with 4 states:
+The server implements a state machine with 4 states:
 
 1. **DORMANT** (Initial)
    - No services running
@@ -549,13 +549,13 @@ def is_access_allowed(session: ClientSession) -> bool:
 
 ## Architectural Strengths
 
-### 1. **Clean State Machine Design**
+### 1. **State Machine Design**
 ✅ Well-defined states with clear transitions
 ✅ Proper entry/exit actions for each state
 ✅ Signal handling for graceful shutdown
-✅ Easy to extend with new states
+✅ Extensible with new states
 
-### 2. **Strong Separation of Concerns**
+### 2. **Separation of Concerns**
 ✅ Authentication layer (mTLS) separate from authorization (firewall)
 ✅ NFS management isolated from access control
 ✅ Client session tracking decoupled from network handling
@@ -569,7 +569,7 @@ def is_access_allowed(session: ClientSession) -> bool:
 ✅ Reproducible environment
 ✅ Proper capability management (NET_ADMIN, SYS_ADMIN)
 ✅ Network isolation
-✅ Easy to deploy on Raspberry Pi or cloud
+✅ Deployment on Raspberry Pi or cloud platforms
 
 ### 5. **Comprehensive Logging**
 ✅ Structured log messages with timestamps

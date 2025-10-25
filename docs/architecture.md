@@ -8,17 +8,17 @@
 
 ## Overview
 
-**ThumbsUp** is a secure, portable Wi-Fi-enabled NAS system that provides on-demand file sharing using mutual TLS authentication and dynamic access control. The system operates through a state machine that manages service lifecycle, client connections, and secure file access.
+ThumbsUp is a portable Wi-Fi-enabled NAS system that provides on-demand file sharing using mutual TLS authentication and dynamic access control. The system operates through a state machine that manages service lifecycle, client connections, and file access.
 
-### Key Features
+### Implementation Details
 
 - **State Machine Architecture** - Four-state lifecycle (DORMANT → ADVERTISING → ACTIVE → SHUTDOWN)
 - **Mutual TLS Authentication** - Certificate-based client authentication
-- **Service Discovery** - Avahi mDNS for automatic device discovery
+- **Service Discovery** - Avahi mDNS for device discovery
 - **Dynamic Access Control** - Per-client iptables firewall rules
 - **NFS File Sharing** - Dynamic per-client NFS exports
 - **Multi-Client Support** - Concurrent authenticated sessions
-- **Container Deployment** - Docker-based with proper Linux capabilities
+- **Container Deployment** - Docker-based with Linux capabilities
 
 ---
 
@@ -87,11 +87,17 @@ backend/
 | │ └─ Dockerfile           # Client container image
 | ├─ server/
 | │ ├─ server.py            # Main server implementation
-| │ ├─ state_machine.py     # State machine logic
-| │ ├─ firewall.py          # iptables management
-| │ ├─ nfs.py               # NFS export management
-| │ ├─ mdns_service.py      # Avahi mDNS integration
-| │ ├─ storage.py           # Storage lock/unlock (simulated)
+| │ ├─ __init__.py          # Package initialization
+| │ ├─ Dockerfile           # Server container image
+| │ ├─ pkg/                 # Core server modules
+| │ │ ├─ __init__.py        # Package initialization
+| │ │ ├─ state_machine.py   # State machine logic
+| │ │ ├─ firewall.py        # iptables management
+| │ │ ├─ nfs.py             # NFS export management
+| │ │ ├─ mdns_service.py    # Avahi mDNS integration
+| │ │ └─ storage.py         # Storage lock/unlock (demo mode)
+| │ ├─ demo_luks/           # Demo storage files
+| │ └─ tests/               # Unit tests
 | │ ├─ Dockerfile           # Server container image
 | │ └─ demo_data/           # Sample files for testing
 | ├─ docker-compose.yml     # Container orchestration
@@ -113,7 +119,7 @@ backend/
 | 
 docs/
 ├─ requirements.md        # Capstone specification
-├─ system-architecture.md # Mermaid diagrams
+├─ diagrams.md # Mermaid diagrams
 └─ architecture.md        # This document
 
 frontend/
@@ -122,7 +128,7 @@ frontend/
 
 ### State Machine Implementation
 
-The server implements a robust state machine with 4 states:
+The server implements a state machine with 4 states:
 
 1. **DORMANT** (Initial)
    - No services running
@@ -132,7 +138,7 @@ The server implements a robust state machine with 4 states:
 
 2. **ADVERTISING** (Post-activation)
    - Firewall initialized
-   - Storage unlocked
+   - Storage unlocked (demo mode)
    - mTLS server listening
    - mDNS broadcasting service
    - Waiting for first client
@@ -141,8 +147,8 @@ The server implements a robust state machine with 4 states:
    - Multiple clients supported
    - Per-client firewall rules
    - Per-client NFS exports
-   - Activity monitoring
-   - Inactivity timer running
+   - Session tracking
+   - Connection monitoring
 
 4. **SHUTDOWN** (Graceful cleanup)
    - All clients disconnected
@@ -153,12 +159,14 @@ The server implements a robust state machine with 4 states:
 
 **State Transitions:**
 ```
-DORMANT → ADVERTISING     (Button press / manual activation)
+DORMANT → ADVERTISING     (activate() method call)
 ADVERTISING → ACTIVE      (First client authenticates)
 ACTIVE → ADVERTISING      (Last client disconnects)
-ADVERTISING → DORMANT     (Timeout / no connections)
-ANY → SHUTDOWN            (Termination signal)
+ANY → SHUTDOWN            (SIGINT/SIGTERM signal)
+SHUTDOWN → DORMANT        (Cleanup complete)
 ```
+
+Note: ADVERTISING → DORMANT timeout is planned but not yet implemented.
 
 ### Security Implementation
 
@@ -185,13 +193,12 @@ ANY → SHUTDOWN            (Termination signal)
 4. **Session Management**
    - Server tracks active clients in dictionary
    - Each client has session object with metadata
-   - Inactivity timeout per client (300 seconds default)
-   - Last activity timestamp updated on messages
+   - Per-connection inactivity timeout (300 seconds default)
+   - Connection closed on timeout
 
 5. **Cleanup**
    - On disconnect: remove firewall rule, remove NFS export
-   - On last client disconnect: start inactivity timer
-   - On timeout: transition to DORMANT state
+   - On last client disconnect: transition to ADVERTISING state
 
 #### Certificate Structure
 
@@ -426,6 +433,6 @@ backend/scripts/
 
 ## Summary
 
-ThumbsUp is a working MVP that demonstrates secure, on-demand file sharing over Wi-Fi using industry-standard protocols (mTLS, NFS, mDNS). The state machine architecture provides clean lifecycle management, and the per-client access control ensures security through dynamic firewall rules and NFS exports. The system is containerized for easy deployment and testing, with a clear path for future enhancements.
+ThumbsUp is a working MVP that demonstrates on-demand file sharing over Wi-Fi using industry-standard protocols (mTLS, NFS, mDNS). The state machine architecture provides lifecycle management, and the per-client access control implements security through dynamic firewall rules and NFS exports. The system is containerized for deployment and testing.
 
 

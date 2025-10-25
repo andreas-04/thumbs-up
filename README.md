@@ -2,42 +2,36 @@
 
 [![Client Distribution CI/CD](https://github.com/andreas-04/thumbs-up/actions/workflows/distribution-ci.yml/badge.svg)](https://github.com/andreas-04/thumbs-up/actions/workflows/distribution-ci.yml)
 
-**Your files, your device, your network. No cloud required.**
+A portable, certificate-based network-attached storage system for local file sharing.
 
-ThumbsUp is a secure, portable Wi-Fi NAS that you control. Think of it as a smart USB drive that appears on your network when you need it and disappears when you don't.
+## Overview
 
-## What is this?
+ThumbsUp is a network-attached storage (NAS) implementation designed for Raspberry Pi or similar single-board computers. The system provides file sharing over local networks using NFS, with mutual TLS authentication and dynamic firewall rules.
 
-Ever wish you could share files between your devices without uploading them to someone else's servers? That's ThumbsUp. It's a Raspberry Pi (or similar device) with a USB drive attached that creates a secure file-sharing hub on your local network.
+## Features
 
-## Why would I use this?
+The system implements:
+- State-based operation (dormant, advertising, active, shutdown)
+- mDNS service discovery via Avahi
+- Mutual TLS (mTLS) authentication
+- Per-client iptables firewall rules
+- NFS file sharing with dynamic exports
+- Multi-client concurrent access
 
-- **Privacy first** - Your files never leave your physical possession
-- **No internet needed** - Works entirely on your local WiFi
-- **Secure by design** - Certificate-based authentication (mutual TLS)
-- **On-demand** - Only visible when you want it to be
-- **Open source** - You can see exactly what it does
+## Operation
 
-Perfect for:
-- Sharing files between your own devices
-- Backing up data without cloud services
-- Field work where internet isn't available
-- Anyone who wants control over their data
+The system operates in four states:
 
-## How does it work?
+1. **DORMANT** - Services inactive, device not discoverable on network
+2. **ADVERTISING** - mDNS broadcast active, listening for mTLS connections
+3. **ACTIVE** - Storage accessible via NFS to authenticated clients
+4. **SHUTDOWN** - Graceful shutdown, cleaning up resources
 
-1. **Dormant** - The device sits quietly, not advertising itself
-2. **Activated** - You press the button (or send a signal)
-3. **Discovered** - Your devices see it on the network via mDNS
-4. **Authenticated** - Only devices with valid certificates can connect
-5. **Access** - Mount and access files via NFS
-6. **Done** - Disconnect when finished, device goes dormant again
-
-All connections are secured with mutual TLS authentication, and a firewall ensures only authenticated clients can access your files.
+Activation is triggered by calling the activate() method (physical button integration planned). Only clients presenting valid X.509 certificates can establish connections. The firewall restricts NFS access to authenticated client IP addresses.
 
 ## Quick Start
 
-### For the Server (Raspberry Pi or similar)
+### For the Server
 
 ```bash
 cd backend/api
@@ -48,72 +42,73 @@ See [backend/README.md](backend/README.md) for detailed setup.
 
 ### For the Client (Your devices)
 
-We provide installers for:
+Client packages available:
 - **Debian/Ubuntu** - `.deb` package
 - **Windows** - `.exe` installer
-- **macOS** - Python client (for now)
+- **macOS** - Python client
 
-Check out [distribution/README.md](distribution/README.md) for installation instructions.
+See [distribution/README.md](distribution/README.md) for installation instructions.
 
 ## Project Structure
 
 ```
 thumbs-up/
-├── backend/          # The NAS server that runs on the Pi
+├── backend/          # Server implementation for Raspberry Pi
 │   ├── api/          # Docker-based server and client
-│   ├── config/       # mDNS and system configs
+│   ├── config/       # mDNS and system configuration
 │   └── pki/          # Certificate management
-├── distribution/     # Build scripts for client installers
-├── frontend/         # Web UI (coming soon)
-└── docs/             # Architecture and design docs
+├── distribution/     # Client installer build scripts
+├── frontend/         # Web UI
+└── docs/             # Architecture and design documentation
 ```
 
-## Features
+## Implementation Status
 
-### Current (MVP)
-- ✅ State machine architecture (dormant → active → shutdown)
+### Implemented
+- ✅ State machine architecture (DORMANT → ADVERTISING → ACTIVE → SHUTDOWN)
 - ✅ Mutual TLS authentication
 - ✅ mDNS service discovery (Avahi)
 - ✅ Dynamic firewall rules per client
-- ✅ NFS file sharing
+- ✅ NFS file sharing with dynamic exports
 - ✅ Multi-client support
 - ✅ Docker deployment
 
 ### Planned
-- 🔲 Encrypted storage
+- 🔲 Physical button activation (currently simulated via activate() method)
+- 🔲 LUKS encrypted storage (currently demo mode with unencrypted storage)
 - 🔲 Time-based access control
-- 🔲 Certificate revocation
-- 🔲 Web UI for management
-- 🔲 Peer-to-peer sync between devices
+- 🔲 Certificate revocation checking
+- 🔲 Web-based management interface
+- 🔲 Peer-to-peer synchronization
 - 🔲 Secure OTA updates
 
-## Security
+## Security Model
 
-Security isn't an afterthought—it's the foundation:
+The system implements the following security mechanisms:
 
-- **Mutual TLS** - Both client and server authenticate each other
-- **Certificate-based auth** - No passwords to steal or guess
-- **Per-client firewall rules** - Dynamic iptables management
-- **Local-only** - No external services or cloud dependencies
-- **Transparent** - Open source, auditable code
+- **Mutual TLS** - Client and server authenticate each other using X.509 certificates
+- **Certificate-based authentication** - No password-based authentication
+- **Per-client firewall rules** - Dynamic iptables management restricts NFS access to authenticated client IPs
+- **Local operation** - No external network dependencies or cloud services
+- **Open source** - Code available for security review
 
-See [docs/architecture.md](docs/architecture.md) for the full security model.
+See [docs/architecture.md](docs/architecture.md) for detailed security architecture.
 
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md) - How everything fits together
-- [System Design](docs/system-architecture.md) - Technical deep dive
+- [System Design](docs/diagrams.md) - Technical deep dive
 - [Requirements](docs/requirements.md) - Original project specification
 - [Build Instructions](distribution/BUILD.md) - Creating installers
 
 ## License
 
-See [LICENSE](distribution/LICENSE) for details.
+BSD 3-Clause License. See [LICENSE](LICENSE) for details.
 
-## Acknowledgments
+## Project Context
 
-Built as a capstone project exploring secure, user-controlled storage solutions. Inspired by the need for privacy-aware, infrastructure-independent file sharing.
+Capstone project investigating secure, user-controlled storage systems with certificate-based authentication and local network file sharing.
 
 ---
 
-**Note:** This is currently in MVP stage. It works, but it's designed for personal use and learning. Use in production environments at your own risk.
+**Note:** This project is in active development. Intended for educational and personal use.
