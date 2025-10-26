@@ -6,6 +6,7 @@ Manages Avahi service announcements for network discovery.
 import subprocess
 import time
 import logging
+import platform
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -66,13 +67,28 @@ class MDNSService:
     def _start_broadcast(self, txt_record: str) -> None:
         """Start Avahi broadcast with given TXT record."""
         try:
-            cmd = [
-                'avahi-publish', '-s',
-                self.service_name,
-                self.service_type,
-                str(self.port),
-                txt_record
-            ]
+            # Prefer the platform-native mDNS publisher where available:
+            # - On macOS (Darwin) use the built-in `dns-sd -R` command
+            # - On other systems (Linux/Raspbian) use avahi-publish
+            system = platform.system()
+            if system == 'Darwin':
+                # dns-sd -R <Name> <Type> <Domain> <Port> [TXT...]
+                cmd = [
+                    'dns-sd', '-R',
+                    self.service_name,
+                    self.service_type,
+                    'local',
+                    str(self.port),
+                    txt_record
+                ]
+            else:
+                cmd = [
+                    'avahi-publish', '-s',
+                    self.service_name,
+                    self.service_type,
+                    str(self.port),
+                    txt_record
+                ]
             
             self._process = subprocess.Popen(
                 cmd,
