@@ -5,7 +5,7 @@ services:
       dockerfile: api/server/Dockerfile
     image: secure-nas-server
     container_name: secure-nas-server
-    hostname: secure-nas-server
+    hostname: thumbsup-server
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN  # Required for mount/umount operations
