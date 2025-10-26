@@ -36,7 +36,10 @@ setup(
     
     # Dependencies
     install_requires=[
-        # No external Python packages needed - uses stdlib only
+        # Zeroconf is a small pure-Python mDNS implementation used as a
+        # cross-platform fallback when Avahi command-line tools are
+        # not available (Windows/macOS). Keep it minimal.
+        "zeroconf>=0.52.0",
     ],
     
     # Entry point for command-line usage

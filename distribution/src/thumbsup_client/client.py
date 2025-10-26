@@ -93,8 +93,59 @@ class SecureNASClient:
             logger.warning(f"Discovery timeout after {timeout} seconds")
             return None, None
         except FileNotFoundError:
-            logger.error("avahi-browse not found. Install avahi-utils package.")
-            return None, None
+            # avahi-browse is not available on some platforms (eg. Windows).
+            # Try using the pure-Python zeroconf library as a fallback.
+            logger.warning("avahi-browse not found. Attempting Python zeroconf fallback...")
+            try:
+                from zeroconf import Zeroconf, ServiceBrowser
+
+                found = {}
+
+                class _Listener:
+                    def add_service(self, zc, type_, name):
+                        try:
+                            info = zc.get_service_info(type_, name)
+                            if info:
+                                addresses = info.parsed_addresses()
+                                addr = addresses[0] if addresses else None
+                                found['address'] = addr
+                                found['port'] = info.port
+                        except Exception:
+                            pass
+
+                    def remove_service(self, zc, type_, name):
+                        return
+
+                zc = Zeroconf()
+                try:
+                    listener = _Listener()
+                    browser = ServiceBrowser(zc, service_name, listener)
+
+                    waited = 0.0
+                    interval = 0.1
+                    while waited < timeout:
+                        if 'address' in found:
+                            address = found.get('address')
+                            port = found.get('port')
+                            logger.info(f"✓ Found server via zeroconf: {address}:{port}")
+                            return address, int(port)
+                        time.sleep(interval)
+                        waited += interval
+
+                    logger.warning("No server found via zeroconf fallback")
+                    return None, None
+                finally:
+                    try:
+                        zc.close()
+                    except Exception:
+                        pass
+            except ImportError:
+                logger.error("avahi-browse not found. Install avahi-utils (Linux) or 'pip install zeroconf' to enable mDNS discovery on this platform.")
+                return None, None
+            except Exception as e:
+                logger.error(f"Zeroconf discovery failed: {e}")
+                logger.error("avahi-browse not found. Install avahi-utils (Linux) or 'pip install zeroconf' to enable mDNS discovery on this platform.")
+                return None, None
         except Exception as e:
             logger.error(f"Discovery error: {e}")
             return None, None
