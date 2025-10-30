@@ -44,9 +44,7 @@ class SecureNASClient:
         
         Returns:
             tuple: (hostname, port) or (None, None) if not found
-        """
-        logger.info(f"🔍 Discovering server via mDNS ({service_name})...")
-        
+        """        
         try:
             # Use avahi-browse to discover the service
             # -t: terminate after discovering
@@ -74,7 +72,6 @@ class SecureNASClient:
                         port = parts[8]      # port
                         txt_records = parts[9] if len(parts) > 9 else ""
                         
-                        logger.info(f"✓ Found server: {hostname} at {address}:{port}")
                         
                         # Parse TXT records if present
                         if txt_records:
@@ -85,7 +82,6 @@ class SecureNASClient:
                                     txt_dict[key] = value
                             
                             status = txt_dict.get('status', 'unknown')
-                            logger.info(f"  Status: {status}")
                             if 'clients' in txt_dict:
                                 logger.info(f"  Connected clients: {txt_dict['clients']}")
                         
@@ -134,9 +130,7 @@ class SecureNASClient:
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_REQUIRED
         self.ssl_context.load_verify_locations(cafile=str(ca_path))
-        
-        logger.info("✓ mTLS configured with client certificate")
-    
+            
     def connect(self) -> bool:
         """Connect to the Secure NAS server and keep the session alive."""
         # Discover server if host not specified
@@ -144,28 +138,24 @@ class SecureNASClient:
             discovered_host, discovered_port = self.discover_server()
             if not discovered_host:
                 logger.error("❌ Could not discover server via mDNS")
-                logger.info("Make sure the server is running and advertising via Avahi")
                 return False
             self.host = discovered_host
             if discovered_port:
                 self.port = discovered_port
-        
-        logger.info(f"Connecting to Secure NAS at {self.host}:{self.port}...")
         
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 with self.ssl_context.wrap_socket(sock, server_hostname=self.host) as ssock:
                     ssock.connect((self.host, self.port))
 
-                    logger.info("✓ Connected successfully!")
+                    logger.info(f"Connected successfully to Secure NAS at {self.host}:{self.port}!")
 
                     if cert := ssock.getpeercert():
                         subject = dict(x[0] for x in cert['subject'])
                         server_cn = subject.get('commonName', 'Unknown')
-                        logger.info(f"  Server CN: {server_cn}")
 
                     welcome = ssock.recv(1024).decode('utf-8')
-                    logger.info(f"  Server: {welcome.strip()}")
+                    logger.info(f"{server_cn}: {welcome.strip()}")
 
                     self._mounted = self.mount_nfs_share()
                     logger.info("Session established. Press Ctrl+C to disconnect.")
@@ -194,8 +184,6 @@ class SecureNASClient:
     def mount_nfs_share(self) -> bool:
         """Mount the NFS share locally."""
         try:
-            logger.info("📁 Mounting NFS share...")
-
             subprocess.run(['mkdir', '-p', str(self.mount_point)], check=True)
 
             result = subprocess.run([
@@ -207,11 +195,10 @@ class SecureNASClient:
             ], capture_output=True, text=True)
 
             if result.returncode == 0:
-                logger.info(f"✓ NFS share mounted at {self.mount_point}")
+                logger.info(f"NFS share mounted at {self.mount_point}")
                 return True
 
             logger.error(f"Failed to mount NFS: {result.stderr.strip()}")
-            logger.info("Note: Mount requires SYS_ADMIN capability in container")
             return False
 
         except subprocess.CalledProcessError as exc:
@@ -224,9 +211,7 @@ class SecureNASClient:
     def unmount_nfs_share(self) -> None:
         """Unmount the NFS share if it was mounted."""
         try:
-            logger.info("Unmounting NFS share...")
             subprocess.run(['umount', str(self.mount_point)], capture_output=True)
-            logger.info("✓ NFS share unmounted")
         except Exception as exc:
             logger.warning(f"Failed to unmount: {exc}")
 
@@ -258,13 +243,7 @@ class SecureNASClient:
             logger.error(f"Session error: {exc}")
 
 
-def main():
-    """Main entry point"""
-    print("=" * 70)
-    print("  Secure NAS Client - mDNS Discovery + mTLS Authentication")
-    print("=" * 70)
-    print()
-    
+def main(): 
     # Check for required certificates
     # Try Docker path first, then development path
     if Path('/app/pki/client_cert.pem').exists():
@@ -284,11 +263,6 @@ def main():
     # If host is provided, use it directly; otherwise discover via mDNS
     host = sys.argv[1] if len(sys.argv) > 1 else None
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8443
-    
-    if host:
-        logger.info(f"Using specified host: {host}")
-    else:
-        logger.info("No host specified - will use mDNS discovery")
     
     # Create and connect client
     client = SecureNASClient(host=host, port=port)

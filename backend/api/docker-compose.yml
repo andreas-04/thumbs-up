@@ -35,7 +35,7 @@ services:
     stdin_open: true
     tty: true
     # Use startup script with NO hostname - forces mDNS discovery
-    command: /app/start.sh
+    command: /app/entrypoint.sh
     profiles:
       - client  # Only start when explicitly requested
 

@@ -321,7 +321,7 @@ class SecureNASServer:
         with conn:
             # Send welcome message
             mount_info = self.nfs.get_mount_info(self.host)
-            welcome = f"Welcome {session.cert_cn}! NFS: {mount_info}\n"
+            welcome = f"Welcome {session.cert_cn}!\n"
             conn.sendall(welcome.encode('utf-8'))
             
             # Message loop
