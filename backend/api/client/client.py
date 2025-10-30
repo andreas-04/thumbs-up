@@ -10,6 +10,7 @@ import time
 import logging
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -21,12 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 class SecureNASClient:
-    """Client for connecting to Secure NAS server with mTLS"""
-    
-    def __init__(self, host=None, port=8443):
-        self.host = host  # Will be discovered if None
+    """Minimal client for connecting to the Secure NAS server."""
+
+    KEEPALIVE_INTERVAL = 120  # seconds between keepalive pings
+    KEEPALIVE_TIMEOUT = 5     # seconds to wait for ACK
+
+    def __init__(self, host: Optional[str] = None, port: int = 8443):
+        self.host = host
         self.port = port
-        self.ssl_context = None
+        self.ssl_context: Optional[ssl.SSLContext] = None
+        self.mount_point = Path('/mnt/nas')
+        self._mounted = False
     
     def discover_server(self, service_name="_thumbsup._tcp", timeout=10):
         """
@@ -131,8 +137,8 @@ class SecureNASClient:
         
         logger.info("✓ mTLS configured with client certificate")
     
-    def connect(self):
-        """Connect to the Secure NAS server"""
+    def connect(self) -> bool:
+        """Connect to the Secure NAS server and keep the session alive."""
         # Discover server if host not specified
         if not self.host:
             discovered_host, discovered_port = self.discover_server()
@@ -147,175 +153,109 @@ class SecureNASClient:
         logger.info(f"Connecting to Secure NAS at {self.host}:{self.port}...")
         
         try:
-            # Create socket and wrap with SSL
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 with self.ssl_context.wrap_socket(sock, server_hostname=self.host) as ssock:
                     ssock.connect((self.host, self.port))
-                    
+
                     logger.info("✓ Connected successfully!")
-                    
-                    # Get server certificate info
-                    cert = ssock.getpeercert()
-                    if cert:
+
+                    if cert := ssock.getpeercert():
                         subject = dict(x[0] for x in cert['subject'])
                         server_cn = subject.get('commonName', 'Unknown')
                         logger.info(f"  Server CN: {server_cn}")
-                    
-                    # Receive welcome message
+
                     welcome = ssock.recv(1024).decode('utf-8')
                     logger.info(f"  Server: {welcome.strip()}")
-                    
-                    # Interactive session
-                    logger.info("\n✓ NFS access granted!")
-                    logger.info("\nYou can now mount the NFS share:")
 
-                    logger.info("\nPress Enter to attempt auto-mount, or type 'skip' to continue without mounting...")
-                    
-                    # Try to mount NFS share
-                    mount_choice = input().strip().lower()
-                    if mount_choice != 'skip':
-                        self.mount_nfs_share()
-                    
-                    logger.info("\nAvailable commands:")
-                    logger.info("  mount    - Mount NFS share (if not already mounted)")
-                    logger.info("  ls       - List files in /mnt/nas")
-                    logger.info("  cat <file> - Display file contents")
-                    logger.info("  shell    - Drop to bash shell (mount stays active)")
-                    logger.info("  ping     - Send ping to server")
-                    logger.info("  quit     - Disconnect and unmount\n")
-                    
-                    while True:
-                        try:
-                            # Get user input
-                            message = input("> ").strip()
-                            
-                            if message.lower() in ['quit', 'exit', 'q']:
-                                logger.info("Disconnecting...")
-                                self.unmount_nfs_share()
-                                break
-                            
-                            if not message:
-                                continue
-                            
-                            # Handle local commands
-                            if message.lower() == 'mount':
-                                self.mount_nfs_share()
-                                continue
-                            elif message.lower() == 'ls':
-                                self.list_nfs_files()
-                                continue
-                            elif message.lower().startswith('cat '):
-                                filename = message[4:].strip()
-                                self.read_nfs_file(filename)
-                                continue
-                            elif message.lower() == 'shell':
-                                logger.info("\n🐚 Starting shell... (NFS mount remains active)")
-                                logger.info("   Type 'exit' to return to client, or Ctrl+D")
-                                logger.info("   To verify mount: ls -la /mnt/nas\n")
-                                subprocess.run(['/bin/bash'])
-                                logger.info("\n✓ Returned to client")
-                                continue
-                            
-                            # Send other messages to server
-                            ssock.sendall(message.encode('utf-8'))
-                            
-                            # Receive response
-                            response = ssock.recv(4096).decode('utf-8')
-                            print(response)
-                            
-                        except KeyboardInterrupt:
-                            logger.info("\nDisconnecting...")
-                            break
-                    
-                    logger.info("✓ Connection closed")
-        
-        except ssl.SSLError as e:
-            logger.error(f"SSL Error: {e}")
+                    self._mounted = self.mount_nfs_share()
+                    logger.info("Session established. Press Ctrl+C to disconnect.")
+
+                    self._session_loop(ssock)
+
+        except ssl.SSLError as exc:
+            logger.error(f"SSL Error: {exc}")
             logger.error("Certificate validation failed!")
             return False
         except ConnectionRefusedError:
             logger.error(f"Connection refused. Is the server running at {self.host}:{self.port}?")
             return False
-        except Exception as e:
-            logger.error(f"Connection error: {e}")
+        except KeyboardInterrupt:
+            logger.info("Disconnecting...")
+        except Exception as exc:
+            logger.error(f"Connection error: {exc}")
             return False
+        finally:
+            if self._mounted:
+                self.unmount_nfs_share()
+                self._mounted = False
         
         return True
     
-    def mount_nfs_share(self):
-        """Mount the NFS share locally"""
+    def mount_nfs_share(self) -> bool:
+        """Mount the NFS share locally."""
         try:
-            logger.info("\n📁 Mounting NFS share...")
-            
-            # Create mount point
-            subprocess.run(['mkdir', '-p', '/mnt/nas'], check=True)
-            
-            # Mount NFS share
+            logger.info("📁 Mounting NFS share...")
+
+            subprocess.run(['mkdir', '-p', str(self.mount_point)], check=True)
+
             result = subprocess.run([
                 'mount',
                 '-t', 'nfs',
-                '-o', 'vers=3,nolock',  # NFSv3 (easier in containers), no locking
-                f'{self.host}:/app/demo_storage',  # Updated to match server export path
-                '/mnt/nas'
+                '-o', 'vers=3,nolock',
+                f'{self.host}:/app/demo_storage',
+                str(self.mount_point)
             ], capture_output=True, text=True)
-            
+
             if result.returncode == 0:
-                logger.info(f"✓ NFS share mounted at /mnt/nas")
-                logger.info("  You can now access files securely!")
-                self.list_nfs_files()
-            else:
-                logger.error(f"Failed to mount NFS: {result.stderr}")
-                logger.info("Note: Mount requires SYS_ADMIN capability in container")
-                
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to mount NFS share: {e}")
-        except Exception as e:
-            logger.error(f"Error: {e}")
-    
-    def list_nfs_files(self):
-        """List files in the mounted NFS share"""
-        try:
-            result = subprocess.run(
-                ['ls', '-lah', '/mnt/nas'],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                print("\n📁 Files in /mnt/nas:")
-                print(result.stdout)
-            else:
-                print(f"Error listing files: {result.stderr}")
-                print("(NFS share may not be mounted yet - try 'mount' command)")
-        except Exception as e:
-            print(f"Error: {e}")
-    
-    def read_nfs_file(self, filename):
-        """Read a file from the mounted NFS share"""
-        try:
-            filepath = f"/mnt/nas/{filename}"
-            result = subprocess.run(
-                ['cat', filepath],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                print(f"\n📄 Contents of {filename}:")
-                print("=" * 50)
-                print(result.stdout)
-                print("=" * 50)
-            else:
-                print(f"Error reading file: {result.stderr}")
-        except Exception as e:
-            print(f"Error: {e}")
-    
-    def unmount_nfs_share(self):
-        """Unmount the NFS share"""
+                logger.info(f"✓ NFS share mounted at {self.mount_point}")
+                return True
+
+            logger.error(f"Failed to mount NFS: {result.stderr.strip()}")
+            logger.info("Note: Mount requires SYS_ADMIN capability in container")
+            return False
+
+        except subprocess.CalledProcessError as exc:
+            logger.error(f"Failed to mount NFS share: {exc}")
+        except Exception as exc:
+            logger.error(f"Error mounting NFS share: {exc}")
+
+        return False
+
+    def unmount_nfs_share(self) -> None:
+        """Unmount the NFS share if it was mounted."""
         try:
             logger.info("Unmounting NFS share...")
-            subprocess.run(['umount', '/mnt/nas'], capture_output=True)
+            subprocess.run(['umount', str(self.mount_point)], capture_output=True)
             logger.info("✓ NFS share unmounted")
-        except Exception as e:
-            logger.warning(f"Failed to unmount: {e}")
+        except Exception as exc:
+            logger.warning(f"Failed to unmount: {exc}")
+
+    def _session_loop(self, ssock: ssl.SSLSocket) -> None:
+        """Keep the TLS session alive with periodic keepalive messages."""
+        try:
+            while True:
+                time.sleep(self.KEEPALIVE_INTERVAL)
+
+                try:
+                    ssock.sendall(b'PING\n')
+                    ssock.settimeout(self.KEEPALIVE_TIMEOUT)
+                    response = ssock.recv(4096)
+                except socket.timeout:
+                    logger.warning("Keepalive timed out; continuing")
+                    continue
+                finally:
+                    ssock.settimeout(None)
+
+                if not response:
+                    logger.warning("Server closed the connection")
+                    break
+
+                logger.debug("Server response: %s", response.decode('utf-8').strip())
+
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            logger.error(f"Session error: {exc}")
 
 
 def main():

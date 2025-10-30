@@ -11,34 +11,19 @@ from typing import Iterator
 
 logger = logging.getLogger(__name__)
 
-
+# Manages NFS exports for authenticated clients.
+# Context manager for automatic cleanup of client exports.
 class NFS:
-    """
-    Manages NFS exports for authenticated clients.
-    
-    Provides context manager for automatic cleanup of client exports.
-    """
-    
     def __init__(self, storage_path: str = '/app/demo_storage'):
         self.storage_path = storage_path
         self.exports_file = Path('/etc/exports')
     
     @property
     def mount_point(self) -> str:
-        """Get the mount point path for clients."""
         return self.storage_path
     
-    @contextmanager
+    @contextmanager # Temporarily export NFS to a client
     def export_for_client(self, client_ip: str) -> Iterator[None]:
-        """
-        Context manager to temporarily export NFS to a client.
-        
-        Usage:
-            with nfs.export_for_client('192.168.1.100'):
-                # Client can mount NFS here
-                pass
-            # Export automatically removed
-        """
         success = self._add_export(client_ip)
         try:
             yield
@@ -47,11 +32,11 @@ class NFS:
                 self._remove_export(client_ip)
     
     def get_mount_info(self, server_host: str) -> str:
-        """Get mount command information for clients."""
+        # Get mount command information for clients.
         return f"{server_host}:{self.storage_path}"
     
     def _add_export(self, client_ip: str) -> bool:
-        """Add NFS export entry for specific client IP."""
+        # Add NFS export entry for specific client IP.
         try:
             export_line = (
                 f"{self.storage_path} {client_ip}"
@@ -73,8 +58,6 @@ class NFS:
                 text=True,
                 check=True
             )
-            
-            logger.info(f"📁 NFS: Exported {self.storage_path} → {client_ip}")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -83,9 +66,9 @@ class NFS:
         except Exception as e:
             logger.error(f"Failed to add NFS export for {client_ip}: {e}")
             return False
-    
+
+    # Remove NFS export entry for specific client IP.
     def _remove_export(self, client_ip: str) -> None:
-        """Remove NFS export entry for specific client IP."""
         try:
             # Read and filter exports
             lines = self.exports_file.read_text().splitlines(keepends=True)
@@ -101,16 +84,14 @@ class NFS:
                 text=True,
                 check=True
             )
-            
-            logger.info(f"📁 NFS: Removed export for {client_ip}")
-            
+                        
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to reload NFS exports: {e.stderr}")
         except Exception as e:
             logger.error(f"Failed to remove NFS export for {client_ip}: {e}")
-    
+
+    # Read existing exports file.
     def _read_exports(self) -> str:
-        """Read existing exports file."""
         try:
             return self.exports_file.read_text()
         except FileNotFoundError:

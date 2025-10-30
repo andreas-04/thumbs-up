@@ -20,6 +20,7 @@ WORKDIR /app
 
 # Copy server application modules
 COPY api/server/*.py /app/
+COPY api/server/pkg/ /app/pkg/
 
 # Copy PKI certificates
 COPY pki/server_cert.pem /app/pki/server_cert.pem
@@ -38,7 +39,7 @@ COPY config/dbus-system.conf /etc/dbus-1/system.conf
 RUN mkdir -p /mnt/encrypted_storage /app/demo_storage
 
 # Copy demo data files to a staging location (will be copied to volume on startup)
-COPY api/server/demo_data/ /app/demo_data_template/
+COPY api/server/demo_luks/ /app/demo_data_template/
 
 # Expose mTLS port, NFS port, and RPC ports
 EXPOSE 8443

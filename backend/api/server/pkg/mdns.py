@@ -10,14 +10,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-
-class MDNSService:
-    """
-    Manages mDNS service discovery using Avahi.
-    
-    Broadcasts service availability and current status.
-    """
-    
+# Manages mDNS service discovery using Avahi.
+# Broadcasts service availability and current status.
+class MDNS:
     def __init__(
         self,
         service_name: str = "ThumbsUp-SecureNAS",
@@ -31,29 +26,23 @@ class MDNSService:
     
     @property
     def is_broadcasting(self) -> bool:
-        """Check if mDNS is currently broadcasting."""
+        # Is mDNS currently broadcasting?
         return self._process is not None and self._process.poll() is None
     
     def start_advertising(self) -> None:
-        """Start broadcasting in advertising mode (waiting for clients)."""
+        # cleanup any existing broadcasts
         self.stop()
-        
         txt_record = f"status=advertising,timestamp={int(time.time())}"
         self._start_broadcast(txt_record)
-        
-        logger.info(f"📡 mDNS: Broadcasting (advertising)")
     
     def start_active(self, num_clients: int = 0) -> None:
-        """Start broadcasting in active mode (serving clients)."""
+        # cleanup any existing broadcasts
         self.stop()
-        
         txt_record = f"status=active,clients={num_clients},timestamp={int(time.time())}"
         self._start_broadcast(txt_record)
-        
-        logger.info(f"📡 mDNS: Broadcasting (active, {num_clients} clients)")
     
     def stop(self) -> None:
-        """Stop mDNS broadcast."""
+        # Stop mDNS broadcast.
         if self._process:
             self._process.terminate()
             try:
@@ -62,9 +51,9 @@ class MDNSService:
                 self._process.kill()
                 self._process.wait()
             self._process = None
-    
+
+    # Start Avahi broadcast with given TXT record.
     def _start_broadcast(self, txt_record: str) -> None:
-        """Start Avahi broadcast with given TXT record."""
         try:
             cmd = [
                 'avahi-publish', '-s',
@@ -81,10 +70,10 @@ class MDNSService:
             )
             
         except FileNotFoundError:
-            logger.warning("⚠️  avahi-publish not found - mDNS unavailable")
+            logger.warning("Error: avahi-publish not found - mDNS unavailable")
         except Exception as e:
-            logger.error(f"⚠️  mDNS broadcast error: {e}")
+            logger.error(f"mDNS broadcast exception: {e}")
     
     def __del__(self):
-        """Cleanup on deletion."""
+        # Cleanup on deletion.
         self.stop()

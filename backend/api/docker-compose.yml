@@ -18,7 +18,7 @@ services:
       - nfs-storage:/app/demo_storage
     networks:
       - nas-network
-    restart: unless-stopped
+    restart: no
 
   client:
     build:

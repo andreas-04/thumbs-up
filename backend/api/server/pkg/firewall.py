@@ -10,7 +10,8 @@ from typing import Optional, Iterator
 
 logger = logging.getLogger(__name__)
 
-
+# Manages iptables firewall rules for NFS access control 
+# and provides a context manager for automatic cleanup of rules.
 class Firewall:
     """
     Manages iptables firewall rules for NFS access control.
@@ -22,12 +23,9 @@ class Firewall:
         self.mtls_port = mtls_port
         self.nfs_port = nfs_port
     
+    # Initialize firewall with default-deny policy for NFS port.
     def initialize(self) -> None:
-        """Initialize firewall with default-deny policy for NFS port."""
-        logger.info("🔥 Initializing firewall rules...")
-        
         try:
-            # Cleanup old rules from previous runs
             self._cleanup_old_nas_rules()
             
             # Allow established connections
@@ -46,33 +44,21 @@ class Firewall:
                 '-m', 'comment', '--comment', 'NAS_mTLS_Port'
             ])
             
-            logger.info(f"✓ Firewall initialized - mTLS:{self.mtls_port} open, "
-                       f"NFS:{self.nfs_port} restricted")
-            
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to initialize firewall: {e}")
             raise
     
     @contextmanager
     def allow_client(self, client_ip: str) -> Iterator[str]:
-        """
-        Context manager to temporarily allow client access to NFS.
-        
-        Usage:
-            with firewall.allow_client('192.168.1.100') as rule_id:
-                # Client has access here
-                pass
-            # Access automatically revoked
-        """
         rule_id = self._add_client_rule(client_ip)
         try:
             yield rule_id
         finally:
             if rule_id:
                 self._remove_client_rule(client_ip, rule_id)
-    
+
+    # Add iptables rule for specific client
     def _add_client_rule(self, client_ip: str) -> Optional[str]:
-        """Add iptables rule for specific client."""
         try:
             rule_id = f"NAS_Client_{client_ip.replace('.', '_')}"
             
@@ -83,16 +69,14 @@ class Firewall:
                 '-j', 'ACCEPT',
                 '-m', 'comment', '--comment', rule_id
             ])
-            
-            logger.info(f"🔥 Firewall: Allow {client_ip} → NFS:{self.nfs_port}")
             return rule_id
             
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to add firewall rule for {client_ip}: {e}")
             return None
     
+    # Remove iptables rule for specific client
     def _remove_client_rule(self, client_ip: str, rule_id: str) -> None:
-        """Remove iptables rule for specific client."""
         try:
             self._delete_rule([
                 '-p', 'tcp',
@@ -102,13 +86,11 @@ class Firewall:
                 '-m', 'comment', '--comment', rule_id
             ])
             
-            logger.info(f"🔥 Firewall: Revoked {client_ip}")
-            
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove firewall rule for {client_ip}: {e}")
-    
+
+    # Remove old NAS client rules from previous runs.
     def _cleanup_old_nas_rules(self) -> None:
-        """Remove old NAS client rules from previous runs."""
         try:
             result = subprocess.run(
                 ['iptables', '-S', 'INPUT'],
@@ -127,18 +109,18 @@ class Firewall:
                             check=False  # Don't fail if rule doesn't exist
                         )
         except Exception as e:
-            logger.warning(f"Error cleaning old rules: {e}")
-    
+            logger.warning(f"Exception occured when cleaning old rules: {e}")
+
+    # Add an iptables INPUT rule.
     def _add_rule(self, args: list) -> None:
-        """Add an iptables INPUT rule."""
         subprocess.run(
             ['iptables', '-A', 'INPUT'] + args,
             capture_output=True,
             check=True
         )
-    
+        
+    # Delete an iptables INPUT rule.
     def _delete_rule(self, args: list) -> None:
-        """Delete an iptables INPUT rule."""
         subprocess.run(
             ['iptables', '-D', 'INPUT'] + args,
             capture_output=True,
