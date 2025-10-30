@@ -25,8 +25,8 @@ COPY pki/client_key.pem /app/pki/client_key.pem
 COPY pki/server_cert.pem /app/pki/server_cert.pem
 
 # Copy startup script
-COPY scripts/entrypoint_client.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY api/client/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Copy configuration files
 COPY config/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
@@ -36,5 +36,5 @@ COPY config/dbus-system.conf /etc/dbus-1/system.conf
 RUN mkdir -p /mnt/nas
 
 # Default: Use mDNS discovery (no host specified)
-# Override to skip discovery: docker run secure-nas-client /app/start.sh <host> <port>
-CMD ["/app/start.sh"]
+# Override to skip discovery: docker run secure-nas-client /app/entrypoint.sh <host> <port>
+CMD ["/app/entrypoint.sh"]

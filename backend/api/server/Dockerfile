@@ -28,8 +28,8 @@ COPY pki/server_key.pem /app/pki/server_key.pem
 COPY pki/client_cert.pem /app/pki/client_cert.pem
 
 # Copy startup script
-COPY scripts/entrypoint_server.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY api/server/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Copy configuration files
 COPY config/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
@@ -49,4 +49,4 @@ EXPOSE 111/udp
 EXPOSE 20048
 
 # Use the startup script as entrypoint
-CMD ["/app/start.sh"]
+CMD ["/app/entrypoint.sh"]
