@@ -1,0 +1,35 @@
+graph TD
+    CP["Control Plane<br/>K3s Master"] --> API
+    CP --> ETCD
+    
+    subgraph "K3s Built-in"
+        API[API Server]
+        CM["Controller Manager"] 
+        S[Scheduler]
+        ETCD["etcd"]
+    end
+    
+    subgraph "Custom Components"
+        BACKEND["Backend<br/>Go API"]
+        FRONTEND["Frontend<br/>React UI"] 
+        OPERATOR["NFS Operator<br/>Go Controller"]
+    end
+    
+    API --> BACKEND
+    ETCD --> OPERATOR
+    
+    ETCD --> PIS
+    
+    subgraph "Pis" [" "]
+        PI1["Pi 1<br/>Agent + Sync + NAS"]
+        PI2["Pi 2<br/>Agent + Sync + NAS"] 
+        PI3["Pi 3<br/>Agent + Sync + NAS"]
+    end
+    
+    PIS --> PI1
+    PIS --> PI2
+    PIS --> PI3
+    
+    CLIENTS["Clients<br/>mTLS + NFS"] --> PI1
+    CLIENTS --> PI2
+    CLIENTS --> PI3
