@@ -9,10 +9,11 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN  # Required for mount/umount operations
-    ports:
-      - "8443:8443"    # mTLS port
-      - "2049:2049"    # NFS port
-      - "5353:5353/udp"  # mDNS port
+    # Ports exposed internally via nas-network (not needed on host for container-to-container communication)
+    # Uncomment if you want to test mTLS/NFS from your host machine:
+    # ports:
+    #   - "8443:8443"    # mTLS port
+    #   - "2049:2049"    # NFS port
     volumes:
       # Use a named volume for NFS exports (NFS requires a real filesystem, not overlay)
       - nfs-storage:/app/demo_storage
