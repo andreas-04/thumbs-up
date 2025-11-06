@@ -12,9 +12,8 @@ services:
     ports:
       - "8443:8443"    # mTLS port
       - "2049:2049"    # NFS port
-      - "5353:5353/udp"  # mDNS port
+      # - "5353:5353/udp"  # mDNS port
     volumes:
-      # Use a named volume for NFS exports (NFS requires a real filesystem, not overlay)
       - nfs-storage:/app/demo_storage
     networks:
       - nas-network

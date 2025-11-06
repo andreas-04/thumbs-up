@@ -1,0 +1,492 @@
+openapi: 3.0.3
+info:
+  title: ThumbsUp Control Plane API
+  version: 0.1.0
+  description: Sample API surface for enrollment and RBAC management in the standalone control plane.
+servers:
+  - url: https://control-plane.example.com/api/v1
+paths:
+  /auth/signup:
+    post:
+      summary: Create the initial organization owner account.
+      description: >
+        Allows creation of the first admin account when the control plane has no users.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          description: Admin already exists.
+  /auth/login:
+    post:
+      summary: Obtain an access token for the control plane UI or API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials.
+  /enrollment-tokens:
+    post:
+      summary: Create a one-time enrollment token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEnrollmentTokenRequest'
+      responses:
+        '201':
+          description: Token created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentTokenResponse'
+  /enrollment-tokens/{tokenId}:
+    delete:
+      summary: Revoke an unused enrollment token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: tokenId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Token revoked.
+  /devices:
+    get:
+      summary: List registered Pis.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of devices.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+  /devices/enroll:
+    post:
+      summary: Enroll a Pi with an enrollment token.
+      security:
+        - enrollmentMTLS: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceEnrollmentRequest'
+      responses:
+        '201':
+          description: Device enrolled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceEnrollmentResponse'
+        '400':
+          description: Invalid token or hardware fingerprint.
+  /devices/{deviceId}/policy:
+    get:
+      summary: Fetch the current RBAC bundle.
+      security:
+        - deviceMTLS: []
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current policy bundle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyBundle'
+  /devices/{deviceId}/policy/ack:
+    post:
+      summary: Acknowledge policy application.
+      security:
+        - deviceMTLS: []
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyAckRequest'
+      responses:
+        '204':
+          description: Acknowledged.
+  /rbac/policies:
+    get:
+      summary: List RBAC policies.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: RBAC policy definitions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyDefinition'
+    post:
+      summary: Create or update RBAC policy definitions.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDefinition'
+      responses:
+        '201':
+          description: Policy created or updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyDefinition'
+  /client-certificates:
+    post:
+      summary: Submit a CSR to obtain a client certificate with role attributes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateRequest'
+      responses:
+        '201':
+          description: Certificate issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+  /client-certificates/{certificateId}/revoke:
+    post:
+      summary: Revoke a client certificate.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: certificateId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevocationRequest'
+      responses:
+        '204':
+          description: Certificate revoked.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    enrollmentMTLS:
+      type: mutualTLS
+      description: Short-lived enrollment certificate presented by Pi agents.
+    deviceMTLS:
+      type: mutualTLS
+      description: Long-lived device certificate issued during enrollment.
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        name:
+          type: string
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+          format: int32
+          description: Token lifetime in seconds.
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - operator
+    CreateEnrollmentTokenRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Friendly name for the token.
+        intendedHardwareId:
+          type: string
+          description: Optional hardware ID to bind the token to a specific Pi.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Token expiry; defaults to 24 hours.
+    EnrollmentTokenResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        secret:
+          type: string
+          description: Returned only at creation time.
+        expiresAt:
+          type: string
+          format: date-time
+    DeviceEnrollmentRequest:
+      type: object
+      required:
+        - token
+        - hardwareFingerprint
+        - agentVersion
+      properties:
+        token:
+          type: string
+        hardwareFingerprint:
+          type: string
+          description: Combined serial/MAC hash for identification.
+        agentVersion:
+          type: string
+    DeviceEnrollmentResponse:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        deviceCertificatePem:
+          type: string
+          description: PEM encoded device certificate.
+        caBundlePem:
+          type: string
+        pollIntervalSeconds:
+          type: integer
+        endpoints:
+          type: object
+          properties:
+            policy:
+              type: string
+              format: uri
+            telemetry:
+              type: string
+              format: uri
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        hardwareFingerprint:
+          type: string
+        lastPolicyVersion:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - registered
+            - offline
+            - revoked
+    PolicyDefinition:
+      type: object
+      required:
+        - id
+        - version
+        - roles
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleDefinition'
+        updatedAt:
+          type: string
+          format: date-time
+    RoleDefinition:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        nfsExports:
+          type: array
+          items:
+            $ref: '#/components/schemas/NfsExport'
+        firewallRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/FirewallRule'
+    NfsExport:
+      type: object
+      properties:
+        path:
+          type: string
+        access:
+          type: string
+          enum:
+            - read-only
+            - read-write
+        clients:
+          type: array
+          items:
+            type: string
+          description: Client IPs or CIDR blocks.
+    FirewallRule:
+      type: object
+      properties:
+        port:
+          type: integer
+        protocol:
+          type: string
+          enum:
+            - tcp
+            - udp
+        sourceCidrs:
+          type: array
+          items:
+            type: string
+    PolicyBundle:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        policyVersion:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleDefinition'
+        issuedAt:
+          type: string
+          format: date-time
+    PolicyAckRequest:
+      type: object
+      properties:
+        policyVersion:
+          type: string
+        status:
+          type: string
+          enum:
+            - applied
+            - failed
+        message:
+          type: string
+          description: Optional error details if status is failed.
+    CertificateRequest:
+      type: object
+      required:
+        - csr
+        - roles
+      properties:
+        csr:
+          type: string
+          description: PEM encoded certificate signing request.
+        roles:
+          type: array
+          items:
+            type: string
+          description: Roles approved for the client.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional custom expiry earlier than default.
+    CertificateResponse:
+      type: object
+      properties:
+        certificateId:
+          type: string
+        certificatePem:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    RevocationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - key_compromise
+            - affiliation_changed
+            - superseded
+            - cessation_of_operation
