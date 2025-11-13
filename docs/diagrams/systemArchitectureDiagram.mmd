@@ -1,0 +1,27 @@
+graph TB
+    %% Define nodes with custom icons using emojis
+    A[👤 Admin] --> CP
+    CP[🖥️ **Control Plane**<br/>Device Registration<br/>RBAC Controller<br/>Log Aggregator<br/>User Management] --> P1
+    CP --> P2
+
+    P1[🍓 **NAS Server 1**<br/>mDNS <br/>mTLS <br/>NFS <br/>LUKS ] --> C1
+
+    P2[🍓 **NAS Server 2**<br/>mDNS <br/>mTLS <br/>NFS <br/>LUKS ] --> C3
+    P2 --> C4
+    P2 --> C5
+
+    C1[💻 **Linux Box** Client 1]
+    C3[💻 **MacOS** Client 3]
+    C4[💻 **Linux Box** Client 4]
+    C5[💻 **Windows** Client 5]
+
+    %% Styling
+    classDef controlPlane fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef piServer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef client fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef admin fill:#fff3e0,stroke:#e65100,stroke-width:2px
+
+    class A admin
+    class CP controlPlane
+    class P1,P2 piServer
+    class C1,C3,C4,C5 client

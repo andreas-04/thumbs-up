@@ -1,0 +1,49 @@
+graph TB
+    subgraph "Client Layer"
+        C[**Client Device**<br/>Certificate Store<br/>Private Key]
+    end
+
+    subgraph "Network Layer"
+        MDNS[**mDNS Discovery**<br/>Service Advertisement<br/>_thumbsup._tcp]
+        TLS[**mTLS Handshake**<br/>Mutual Authentication<br/>Port 8443]
+    end
+
+    subgraph "Access Control Layer"
+        CERT[**Certificate Validation**<br/>CA Verification<br/>Client Auth]
+        NFS_SEC[**Firewall Rule Based NFS**<br/>IP-restricted Exports]
+    end
+
+    subgraph "Storage Layer"
+        LUKS[**LUKS Full Disk Encryption**<br/>Audit Logging<br/>Access Events<br/>Security Monitoring]
+    end
+
+    C --> MDNS
+    MDNS --> TLS
+    TLS --> CERT
+    NFS_SEC --> LUKS
+
+    %% Security boundaries
+    subgraph "Security Boundaries"
+        B1[Boundary 1: Network Access]
+        B2[Boundary 2: Authentication]
+        B3[Boundary 3: Authorization]
+        B4[Boundary 4: Data Protection]
+    end
+
+    MDNS -.-> B1
+    CERT -.-> B2
+    NFS_SEC -.-> B3
+    LUKS -.-> B4
+
+    %% Styling
+    classDef client fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef network fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef access fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef storage fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef boundary fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,stroke-dasharray: 5 5
+
+    class C client
+    class MDNS,TLS network
+    class CERT,FW,NFS_SEC access
+    class LUKS,LOG storage
+    class B1,B2,B3,B4 boundary

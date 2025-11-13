@@ -1,0 +1,29 @@
+graph TB
+    subgraph "Secure NAS Server"
+        S[SecureNASServer<br/>Main Controller<br/>State Management]
+        FW[Firewall<br/>iptables Rules<br/>Client IP Access]
+        NFS[NFS<br/>Export Management<br/>Client-Specific Shares]
+        MDNS[MDNS<br/>Avahi Service<br/>Network Discovery]
+        ST[Storage<br/>LUKS Encryption<br/>Volume Management]
+    end
+
+    S --> FW
+    S --> NFS
+    S --> MDNS
+    S --> ST
+
+    subgraph "External Components"
+        CL[Client<br/>mTLS Connection<br/>Certificate Auth]
+        CA[Certificate Authority<br/>Client/Server Certs]
+    end
+
+    CL --> S
+    CA --> CL
+    CA --> S
+
+    %% Styling
+    classDef server fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef external fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+
+    class S,FW,NFS,MDNS,ST server
+    class CL,CA external
