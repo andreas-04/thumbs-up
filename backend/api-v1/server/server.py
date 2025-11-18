@@ -11,6 +11,7 @@ Architecture:
 - nfs.py: NFS export management
 - mdns_service.py: Avahi service discovery
 - storage.py: Encrypted storage operations
+- web_api.py: Web-based client access (no installation required)
 """
 import ssl
 import socket
@@ -18,18 +19,27 @@ import time
 import signal
 import sys
 import logging
+import asyncio
 from pathlib import Path
 from typing import Tuple, Dict, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from contextlib import contextmanager
 from enum import Enum, auto
+from threading import Thread
 
 # Import our clean modules
 from pkg.firewall import Firewall
 from pkg.nfs import NFS
 from pkg.mdns import MDNS
 from pkg.storage import Storage
+
+# Import web API
+try:
+    from web_api import WebAPI
+    WEB_API_AVAILABLE = True
+except ImportError:
+    WEB_API_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +48,9 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+if not WEB_API_AVAILABLE:
+    logger.warning("[Web] Web API dependencies not installed. Web access disabled.")
 
 
 class DeviceState(Enum):
@@ -70,6 +83,7 @@ class SecureNASServer:
 
     host: str = '0.0.0.0'
     port: int = 8443
+    web_port: int = 8080
     nfs_port: int = 2049
     storage_path: Path = Path('/app/demo_storage')
     inactivity_timeout: int = 300
@@ -78,12 +92,15 @@ class SecureNASServer:
     nfs: NFS = field(init=False)
     mdns: MDNS = field(init=False)
     storage: Storage = field(init=False)
+    web_api: Optional[object] = field(default=None, init=False)
     sessions: Dict[str, ClientSession] = field(default_factory=dict, init=False, repr=False)
     ssl_context: Optional[ssl.SSLContext] = field(default=None, init=False)
     server_socket: Optional[socket.socket] = field(default=None, init=False)
     state: DeviceState = field(default=DeviceState.DORMANT, init=False)
     _enter_handlers: Dict[DeviceState, Callable[[], None]] = field(default_factory=dict, init=False, repr=False)
     _exit_handlers: Dict[DeviceState, Callable[[], None]] = field(default_factory=dict, init=False, repr=False)
+    _web_loop: Optional[asyncio.AbstractEventLoop] = field(default=None, init=False)
+    _web_thread: Optional[Thread] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         storage_path = Path(self.storage_path)
@@ -211,10 +228,12 @@ class SecureNASServer:
         self.firewall.initialize()
         self.storage.unlock()
         self._setup_ssl_context()
+        self._start_web_api()
         self.mdns.start_advertising()
 
     def _exit_advertising(self) -> None:
         self.mdns.stop()
+        self._stop_web_api()
 
     def _enter_active(self) -> None:
         if not self.storage.is_unlocked:
@@ -236,6 +255,9 @@ class SecureNASServer:
     def _perform_shutdown(self) -> None:
         logger.info("[NAS] Performing shutdown...")
         
+        # Stop web API first
+        self._stop_web_api()
+        
         # Transition through states for proper cleanup
         current = self.state
 
@@ -244,6 +266,47 @@ class SecureNASServer:
 
         if current in (DeviceState.ACTIVE, DeviceState.ADVERTISING):
             self._exit_advertising()
+    
+    # ========================================================================
+    # WEB API MANAGEMENT
+    # ========================================================================
+    
+    def _start_web_api(self) -> None:
+        """Start the web-based API server in a separate thread."""
+        if not WEB_API_AVAILABLE:
+            logger.info("[Web] Web API not available (dependencies not installed)")
+            return
+        
+        try:
+            self.web_api = WebAPI(storage_path=self.storage_path, port=self.web_port)
+            
+            # Run in separate thread with its own event loop
+            def run_web_server():
+                self._web_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._web_loop)
+                self._web_loop.run_until_complete(self.web_api.start())
+                self._web_loop.run_forever()
+            
+            self._web_thread = Thread(target=run_web_server, daemon=True)
+            self._web_thread.start()
+            
+            logger.info(f"[Web] Web access available at http://<device-ip>:{self.web_port}")
+            logger.info(f"[Web] Share this link or scan QR code for instant access")
+        except Exception as e:
+            logger.error(f"[Web] Failed to start web API: {e}")
+    
+    def _stop_web_api(self) -> None:
+        """Stop the web API server."""
+        if self.web_api and self._web_loop:
+            try:
+                asyncio.run_coroutine_threadsafe(self.web_api.stop(), self._web_loop)
+                self._web_loop.call_soon_threadsafe(self._web_loop.stop)
+                if self._web_thread:
+                    self._web_thread.join(timeout=2)
+                logger.info("[Web] Web API stopped")
+            except Exception as e:
+                logger.error(f"[Web] Error stopping web API: {e}")
+
         
     def ensure_certificates(self) -> None:
         """Validate expected certificate files exist."""

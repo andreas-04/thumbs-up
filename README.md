@@ -37,6 +37,27 @@ All connections are secured with mutual TLS authentication, and a firewall ensur
 
 ## Quick Start
 
+### Easy Web Access (No Installation!) 🌐
+
+**The easiest way to access your files:**
+
+1. Start the server:
+   ```bash
+   cd backend/api
+   docker-compose up
+   ```
+
+2. Open any web browser and visit:
+   ```
+   http://<server-ip>:8080
+   ```
+
+3. That's it! Browse and download files instantly.
+
+**Bonus:** Click "Show QR Code" in the web interface to generate a QR code for instant mobile access!
+
+See [backend/WEB_ACCESS.md](backend/WEB_ACCESS.md) for detailed web access guide.
+
 ### For the Server (Raspberry Pi or similar)
 
 ```bash

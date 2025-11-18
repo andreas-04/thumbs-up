@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y \
 # Create working directory
 WORKDIR /app
 
+# Copy requirements and install Python dependencies
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
 # Copy server application modules
 COPY api/server/*.py /app/
 COPY api/server/pkg/ /app/pkg/
@@ -41,8 +45,9 @@ RUN mkdir -p /mnt/encrypted_storage /app/demo_storage
 # Copy demo data files to a staging location (will be copied to volume on startup)
 COPY api/server/demo_luks/ /app/demo_data_template/
 
-# Expose mTLS port, NFS port, and RPC ports
+# Expose mTLS port, Web API port, NFS port, and RPC ports
 EXPOSE 8443
+EXPOSE 8080
 EXPOSE 2049
 EXPOSE 111
 EXPOSE 111/udp
