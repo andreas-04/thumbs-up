@@ -1,0 +1,17 @@
+storage/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+certs/*.pem
+!certs/README.md
+.DS_Store
+*.log

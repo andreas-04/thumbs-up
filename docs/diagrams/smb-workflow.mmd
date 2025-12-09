@@ -1,0 +1,29 @@
+flowchart TD
+    ServerStart(["Server Startup"]) --> InitSMB["Create SMB user & start service on port 445"]
+    InitSMB --> AdvertiseMDNS["Advertise _smb._tcp via mDNS"]
+    
+    AdvertiseMDNS --> Ready["Server Ready"]
+    
+    Ready -.Discoverable.-> ClientOS(["Client discovers share"])
+    
+    ClientOS --> Mount["Mount share with token credentials"]
+    
+    Mount --> NTLMv2Auth["NTLMv2 Authentication"]
+    
+    NTLMv2Auth -->|Valid| Mounted["SMB3 share mounted"]
+    NTLMv2Auth -->|Invalid| Mount
+    
+    Mounted --> Actions{Action}
+    Actions -->|Browse| FileOps[Access Files]
+    Actions -->|Read| FileOps
+    Actions -->|Write| FileOps
+    Actions -->|Delete| FileOps
+    FileOps -->|Continue| Actions
+    Actions -->|Unmount| Disconnect["Disconnected"]
+    
+    style InitSMB fill:#e0ffe0
+    style AdvertiseMDNS fill:#e0f0ff
+    style Mount fill:#ffffcc
+    style Mounted fill:#f0f0ff
+
+

@@ -1,0 +1,20 @@
+flowchart TD
+    Start([Fresh Raspberry Pi]) --> Pull[Pull packages]
+    Pull --> Setup[Run setup script]
+    Setup --> ConfigPIN[Configure admin PIN]
+    ConfigPIN --> GenCerts[Generate SSL certificates]
+    GenCerts --> WaitButton[Wait for button press]
+    
+    WaitButton --> StartServers[Start servers]
+    
+    StartServers --> Running([Servers Running])
+    
+    Running -.-> WebFlow[Web UI Workflow]
+    Running -.-> SMBFlow[SMB Workflow]
+    
+    style Pull fill:#e0ffe0
+    style Setup fill:#e0ffe0
+    style WaitButton fill:#ffffcc
+    style Running fill:#e0f0ff
+    style WebFlow fill:#f0f0ff
+    style SMBFlow fill:#f0f0ff

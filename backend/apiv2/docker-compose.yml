@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  thumbsup:
+    build: .
+    container_name: thumbsup-server
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./storage:/app/storage
+      - ./certs:/app/certs
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8443
+      - STORAGE_PATH=/app/storage
+      - CERT_PATH=/app/certs/server_cert.pem
+      - KEY_PATH=/app/certs/server_key.pem
+      - TOKEN_EXPIRY_HOURS=24
+      - ENABLE_UPLOADS=true
+      - ENABLE_DELETE=false
+      - SERVICE_NAME=ThumbsUp File Share
+    restart: unless-stopped
+    networks:
+      - thumbsup-network
+
+networks:
+  thumbsup-network:
+    driver: bridge
