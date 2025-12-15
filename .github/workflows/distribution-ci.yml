@@ -58,7 +58,7 @@ jobs:
         sudo apt-get install -f -y
     
     - name: Upload .deb artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: thumbsup-client-deb
         path: distribution/dist/*.deb
@@ -99,7 +99,7 @@ jobs:
       run: build-windows.bat
     
     - name: Upload .exe artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: thumbsup-client-exe
         path: distribution/dist/*.exe
@@ -143,7 +143,7 @@ jobs:
         echo "DMG creation placeholder"
     
     - name: Upload macOS artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: thumbsup-client-macos
         path: distribution/dist/thumbsup-client
