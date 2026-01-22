@@ -1,0 +1,16 @@
+[Unit]
+Description=ThumbsUp File Sharing Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/thumbs-up
+ExecStart=/usr/bin/python3 /home/pi/thumbs-up/startup.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

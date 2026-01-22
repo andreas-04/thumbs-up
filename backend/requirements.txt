@@ -1,11 +1,21 @@
-# Python dependencies for ThumbsUp NAS Server
+# Python dependencies for ThumbsUp File Sharing
 
-# Core dependencies
-cryptography>=41.0.0      # PKI/certificate management
+# Web Framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+Werkzeug==3.0.1
 
-# Web API dependencies (for browser-based access - no client installation needed)
-aiohttp>=3.9.0           # Async HTTP server
-aiohttp-cors>=0.7.0      # CORS support for web clients
-PyJWT>=2.8.0             # JWT token authentication
-qrcode[pil]>=7.4.2       # QR code generation for easy access
-Pillow>=10.0.0           # Image processing for QR codes
+# Async HTTP (for apiv1 if needed)
+aiohttp>=3.9.0
+aiohttp-cors>=0.7.0
+
+# Authentication & Security
+PyJWT==2.8.0
+cryptography>=41.0.7
+
+# QR Code Generation
+qrcode[pil]>=7.4.2
+Pillow>=10.2.0
+
+# Configuration
+python-dotenv==1.0.0
