@@ -7,6 +7,7 @@ Manages Samba configuration and service lifecycle with default guest admin acces
 import os
 import subprocess
 import tempfile
+import socket
 from pathlib import Path
 from typing import Optional
 
@@ -19,20 +20,46 @@ class SMBManager:
     DEFAULT_GUEST_PASSWORD = "guest"
     
     def __init__(self, storage_path: str, service_name: str = "ThumbsUp", 
-                 port: int = 445, workgroup: str = "WORKGROUP"):
+                 port: int = None, workgroup: str = "WORKGROUP"):
         """
         Initialize SMB Manager.
         
         Args:
             storage_path: Path to shared storage directory
             service_name: Service name for mDNS and share description
-            port: SMB port (default 445)
+            port: SMB port (default 445, or 4450 for WSL/testing)
             workgroup: Windows workgroup name
         """
         self.storage_path = Path(storage_path).resolve()
         self.service_name = service_name
+        
+        # Auto-detect port: use 4450 for WSL, 445 for native Linux
+        if port is None:
+            # Check if running in WSL
+            try:
+                with open('/proc/version', 'r') as f:
+                    if 'microsoft' in f.read().lower():
+                        port = 4450  # WSL detected
+                    else:
+                        port = 445   # Native Linux
+            except:
+                port = 445  # Default to standard port
+        
         self.port = port
         self.workgroup = workgroup
+        
+        # Get server hostname/IP
+        self.hostname = socket.gethostname()
+        # Add .local for mDNS/Avahi resolution
+        if not self.hostname.endswith('.local'):
+            self.mdns_hostname = f"{self.hostname}.local"
+        else:
+            self.mdns_hostname = self.hostname
+        
+        try:
+            self.ip_address = socket.gethostbyname(self.hostname)
+        except:
+            self.ip_address = '127.0.0.1'
         
         # Get credentials from env or use defaults
         self.guest_user = os.getenv('SMB_GUEST_USER', self.DEFAULT_GUEST_USER)
@@ -88,6 +115,9 @@ class SMBManager:
     printing = bsd
     printcap name = /dev/null
     disable spoolss = yes
+    
+    # Port configuration (non-standard port for WSL compatibility)
+    smb ports = {self.port}
     
     # Guest account mapping
     guest account = {self.guest_user}
@@ -197,17 +227,26 @@ class SMBManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
-            )
-            
-            # Give it a moment to start
-            import time
-            time.sleep(1)
-            
             # Check if still running
             if process.poll() is None:
                 print(f"✓ SMB service started (PID: {process.pid})")
-                print(f"✓ Share available at: smb://localhost/thumbsup")
+                
+                # Display connection info with correct port
+                if self.port == 445:
+                    print(f"✓ Share available at: smb://{self.mdns_hostname}/thumbsup")
+                    print(f"  Or use IP: smb://{self.ip_address}/thumbsup")
+                else:
+                    print(f"✓ Share available at: smb://{self.mdns_hostname}:{self.port}/thumbsup")
+                    print(f"  Or use IP: smb://{self.ip_address}:{self.port}/thumbsup")
+                    print(f"  (Using port {self.port} - WSL/Testing mode)")
+                
+                print(f"  Username: {self.guest_user}")
+                print(f"  Password: {self.guest_password}")
+                self.pid_file.write_text(str(process.pid))
+                return process
+                    print(f"✓ Share available at: smb://localhost:{self.port}/thumbsup")
+                    print(f"  (Using port {self.port} - WSL/Testing mode)")
+                
                 print(f"  Username: {self.guest_user}")
                 print(f"  Password: {self.guest_password}")
                 self.pid_file.write_text(str(process.pid))
@@ -243,17 +282,29 @@ class SMBManager:
         """
         Get connection information for clients.
         
-        Returns:
-            Dictionary with connection details
         """
+        # Build URL with port if non-standard
+        if self.port == 445:
+            url = f'smb://{self.mdns_hostname}/thumbsup'
+            url_ip = f'smb://{self.ip_address}/thumbsup'
+        else:
+            url = f'smb://{self.mdns_hostname}:{self.port}/thumbsup'
+            url_ip = f'smb://{self.ip_address}:{self.port}/thumbsup'
+        
         return {
             'service_name': self.service_name,
             'share_name': 'thumbsup',
             'username': self.guest_user,
             'password': self.guest_password,
             'workgroup': self.workgroup,
+            'hostname': self.hostname,
+            'mdns_hostname': self.mdns_hostname,
+            'ip_address': self.ip_address,
             'port': self.port,
-            'url': 'smb://localhost/thumbsup',
+            'url': url,
+            'url_ip': url_ip,
+            'storage_path': str(self.storage_path)
+        }   'url': url,
             'storage_path': str(self.storage_path)
         }
 
