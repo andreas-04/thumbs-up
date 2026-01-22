@@ -15,3 +15,6 @@ certs/*.pem
 !certs/README.md
 .DS_Store
 *.log
+
+# SMB service runtime files
+services/smb_config/

@@ -10,14 +10,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
-echo "🚀 Starting ThumbsUp SMB Server"
+echo "Starting ThumbsUp SMB Server"
 echo "========================================"
 echo ""
+
+PYTHON="python3"
+PIP="python3 -m pip"
 
 # Check if running on Linux (Raspberry Pi)
 OS="$(uname -s)"
 if [ "$OS" != "Linux" ]; then
-    echo "❌ Error: This script only supports Linux (Raspberry Pi)"
+    echo "ERROR: This script only supports Linux (Raspberry Pi)"
     echo "   Detected OS: $OS"
     exit 1
 fi
@@ -27,7 +30,7 @@ echo ""
 
 # Check if Samba is installed
 if ! command -v smbd &> /dev/null; then
-    echo "📦 Samba not found. Installing..."
+    echo "Samba not found. Installing..."
     echo ""
     
     # Detect Linux distribution
@@ -40,7 +43,7 @@ if ! command -v smbd &> /dev/null; then
                 sudo apt-get install -y samba samba-common-bin
                 ;;
             *)
-                echo "⚠️  Unsupported Linux distribution: $ID"
+                echo "WARNING: Unsupported Linux distribution: $ID"
                 echo "   This script is designed for Raspberry Pi OS (Debian-based)"
                 echo "   Please install Samba manually:"
                 echo "   sudo apt-get install samba samba-common-bin"
@@ -48,55 +51,54 @@ if ! command -v smbd &> /dev/null; then
                 ;;
         esac
     else
-        echo "⚠️  Cannot detect Linux distribution"
+        echo "WARNING: Cannot detect Linux distribution"
         echo "   Attempting Debian/Ubuntu installation..."
         sudo apt-get update
         sudo apt-get install -y samba samba-common-bin || {
-            echo "❌ Installation failed"
+            echo "ERROR: Installation failed"
             echo "   Please install Samba manually"
             exit 1
         }
     fi
     
     echo ""
-    echo "✓ Samba installed successfully"
+    echo "[OK] Samba installed successfully"
     echo ""
 else
-    echo "✓ Samba already installed"
+    echo "[OK] Samba already installed"
     echo ""
 fi
 
 # Check if smbpasswd is available
 if ! command -v smbpasswd &> /dev/null; then
-    echo "⚠️  Warning: smbpasswd command not found"
+    echo "WARNING: smbpasswd command not found"
     echo "   SMB user creation may fail"
 fi
 
 # Check Python dependencies
-if ! python3 -c "import flask" 2>/dev/null; then
-    echo "📦 Installing Python dependencies..."
-    pip3 install --upgrade pip
+if ! $PYTHON -c "import flask" 2>/dev/null; then
+    echo "Installing Python dependencies..."
     
     # Use parent requirements.txt if available
     if [ -f "../requirements.txt" ]; then
-        pip3 install -r ../requirements.txt
+        $PIP install -r ../requirements.txt --break-system-packages
     elif [ -f "requirements.txt" ]; then
-        pip3 install -r requirements.txt
+        $PIP install -r requirements.txt --break-system-packages
     else
-        echo "⚠️  Warning: requirements.txt not found"
+        echo "WARNING: requirements.txt not found"
         echo "   Installing minimal dependencies..."
-        pip3 install flask flask-cors
+        $PIP install flask flask-cors --break-system-packages
     fi
-    echo "   ✅ Dependencies installed"
+    echo "   [OK] Dependencies installed"
     echo ""
 fi
 
 # Verify storage directory exists
 if [ ! -d "$SCRIPT_DIR/storage" ]; then
-    echo "📁 Creating storage directory..."
+    echo "Creating storage directory..."
     mkdir -p "$SCRIPT_DIR/storage/documents"
     mkdir -p "$SCRIPT_DIR/storage/music"
-    echo "   ✅ Storage directories created"
+    echo "   [OK] Storage directories created"
     echo ""
 fi
 
@@ -112,34 +114,39 @@ if [ -z "$SMB_GUEST_PASSWORD" ]; then
     export SMB_GUEST_PASSWORD="guest"
 fi
 
-echo "✓ Samba installed and ready"
-echo "✓ Python dependencies verified"
-echo "✓ Storage directories ready"
-echo "✓ SMB credentials configured"
+echo "[OK] Samba installed and ready"
+echo "[OK] Python dependencies verified"
+echo "[OK] Storage directories ready"
+echo "[OK] SMB credentials configured"
 echo "   Username: $SMB_GUEST_USER"
 echo "   Password: $SMB_GUEST_PASSWORD"
 echo ""
 
 # Check if running with appropriate permissions
 if [ "$OS" = "Linux" ] && [ "$EUID" -ne 0 ]; then
-    echo "⚠️  Note: SMB server may require sudo on Linux"
+    echo "NOTE: SMB server may require sudo on Linux"
     echo "   If you encounter permission errors, run with:"
     echo "   sudo -E bash $0"
     echo ""
 fi
 
-echo "✓ Samba installed and ready"
-echo "✓ Python dependencies verified"
-echo "✓ Storage directories ready"
-echo "✓ SMB credentials configured"
+echo "[OK] Samba installed and ready"
+echo "[OK] Python dependencies verified"
+echo "[OK] Storage directories ready"
+echo "[OK] SMB credentials configured"
 echo "   Username: $SMB_GUEST_USER"
 echo "   Password: $SMB_GUEST_PASSWORD"
 echo ""
 
 # Check if running with appropriate permissions
 if [ "$EUID" -ne 0 ]; then
-    echo "⚠️  Note: SMB server may require sudo for port 445"
+    echo "NOTE: SMB server may require sudo for port 445"
     echo "   If you encounter permission errors, run with:"
     echo "   sudo -E bash $0"
     echo ""
 fi
+
+# Start the SMB service
+echo "Starting SMB service..."
+echo ""
+exec $PYTHON -m services

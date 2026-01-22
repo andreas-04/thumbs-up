@@ -155,12 +155,25 @@ class SMBManager:
             True if successful, False otherwise
         """
         try:
-            # Check if we have permission to create system user
-            # On macOS/Linux, this requires sudo
             print(f"Setting up SMB user: {self.guest_user}")
             
-            # Try to add Samba user (works without system user on some setups)
-            # Use smbpasswd or pdbedit
+            # First, check if system user exists, create if not
+            user_check = subprocess.run(['id', self.guest_user], 
+                                       capture_output=True, text=True)
+            
+            if user_check.returncode != 0:
+                # User doesn't exist, create it as a system user (no login)
+                print(f"Creating system user: {self.guest_user}")
+                create_user = subprocess.run(
+                    ['useradd', '-r', '-s', '/usr/sbin/nologin', self.guest_user],
+                    capture_output=True, text=True
+                )
+                
+                if create_user.returncode != 0:
+                    print(f"Warning: Could not create system user: {create_user.stderr}")
+                    print(f"   Continuing anyway, Samba may work without system user...")
+            
+            # Now add Samba user
             process = subprocess.Popen(
                 ['smbpasswd', '-a', '-s', self.guest_user],
                 stdin=subprocess.PIPE,
@@ -175,7 +188,7 @@ class SMBManager:
             )
             
             if process.returncode == 0:
-                print(f"✓ SMB user '{self.guest_user}' configured")
+                print(f"[OK] SMB user '{self.guest_user}' configured")
                 
                 # Enable the user
                 subprocess.run(
@@ -185,8 +198,8 @@ class SMBManager:
                 )
                 return True
             else:
-                print(f"⚠ Warning: Could not create SMB user: {stderr}")
-                print(f"   You may need to run: sudo smbpasswd -a {self.guest_user}")
+                print(f"WARNING: Could not create SMB user: {stderr}")
+                print(f"   System may not be configured correctly")
                 return False
                 
         except FileNotFoundError:
@@ -207,7 +220,7 @@ class SMBManager:
         """
         # Generate fresh config
         config_path = self.generate_smb_config()
-        print(f"✓ Generated SMB config: {config_path}")
+        print(f"[OK] Generated SMB config: {config_path}")
         
         # Create guest user
         self.create_guest_user()
@@ -227,24 +240,19 @@ class SMBManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+            )
+            
             # Check if still running
             if process.poll() is None:
-                print(f"✓ SMB service started (PID: {process.pid})")
+                print(f"[OK] SMB service started (PID: {process.pid})")
                 
                 # Display connection info with correct port
                 if self.port == 445:
-                    print(f"✓ Share available at: smb://{self.mdns_hostname}/thumbsup")
+                    print(f"[OK] Share available at: smb://{self.mdns_hostname}/thumbsup")
                     print(f"  Or use IP: smb://{self.ip_address}/thumbsup")
                 else:
-                    print(f"✓ Share available at: smb://{self.mdns_hostname}:{self.port}/thumbsup")
+                    print(f"[OK] Share available at: smb://{self.mdns_hostname}:{self.port}/thumbsup")
                     print(f"  Or use IP: smb://{self.ip_address}:{self.port}/thumbsup")
-                    print(f"  (Using port {self.port} - WSL/Testing mode)")
-                
-                print(f"  Username: {self.guest_user}")
-                print(f"  Password: {self.guest_password}")
-                self.pid_file.write_text(str(process.pid))
-                return process
-                    print(f"✓ Share available at: smb://localhost:{self.port}/thumbsup")
                     print(f"  (Using port {self.port} - WSL/Testing mode)")
                 
                 print(f"  Username: {self.guest_user}")
@@ -253,18 +261,18 @@ class SMBManager:
                 return process
             else:
                 stdout, _ = process.communicate()
-                print(f"❌ SMB service failed to start")
+                print(f"ERROR: SMB service failed to start")
                 print(f"   Output: {stdout}")
                 return None
                 
         except FileNotFoundError:
-            print("❌ Error: 'smbd' command not found")
+            print("ERROR: 'smbd' command not found")
             print("   Please install Samba:")
             print("   Ubuntu/Debian: sudo apt-get install samba")
             print("   macOS: brew install samba")
             return None
         except Exception as e:
-            print(f"❌ Error starting SMB service: {e}")
+            print(f"ERROR: Error starting SMB service: {e}")
             return None
     
     def stop_service(self):
@@ -273,7 +281,7 @@ class SMBManager:
             try:
                 pid = int(self.pid_file.read_text().strip())
                 os.kill(pid, 15)  # SIGTERM
-                print(f"✓ SMB service stopped (PID: {pid})")
+                print(f"[OK] SMB service stopped (PID: {pid})")
                 self.pid_file.unlink()
             except (ValueError, ProcessLookupError, FileNotFoundError):
                 pass
@@ -303,8 +311,6 @@ class SMBManager:
             'port': self.port,
             'url': url,
             'url_ip': url_ip,
-            'storage_path': str(self.storage_path)
-        }   'url': url,
             'storage_path': str(self.storage_path)
         }
 

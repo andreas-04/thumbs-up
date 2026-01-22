@@ -22,6 +22,11 @@ from utils.qr_generator import QRGenerator
 from services.mdns_advertiser import MDNSAdvertiser
 
 
+# Get the apiv2 directory (parent of core)
+BASE_DIR = Path(__file__).resolve().parent.parent
+TEMPLATE_DIR = BASE_DIR / 'templates'
+STATIC_DIR = BASE_DIR / 'static'
+
 # Configuration
 CONFIG = {
     'HOST': os.getenv('HOST', '0.0.0.0'),
@@ -37,14 +42,16 @@ CONFIG = {
     'ADMIN_PIN': os.getenv('ADMIN_PIN'),  # Must be set via environment
 }
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app with explicit template folder
+app = Flask(__name__, 
+            template_folder=str(TEMPLATE_DIR),
+            static_folder=str(STATIC_DIR) if STATIC_DIR.exists() else None)
 app.config['MAX_CONTENT_LENGTH'] = CONFIG['MAX_UPLOAD_SIZE']
 CORS(app)
 
 # Validate ADMIN_PIN is set
 if not CONFIG['ADMIN_PIN']:
-    print("❌ Error: ADMIN_PIN environment variable is not set!")
+    print("ERROR: ADMIN_PIN environment variable is not set!")
     print("   Please run startup.py which will configure the PIN.")
     sys.exit(1)
 
@@ -369,13 +376,15 @@ def health():
 def main():
     """Main server entry point."""
     print("=" * 60)
-    print(f"🚀 ThumbsUp API v2 - {CONFIG['SERVICE_NAME']}")
+    print(f"ThumbsUp API v2 - {CONFIG['SERVICE_NAME']}")
     print("=" * 60)
     
     # Check certificates
     if not os.path.exists(CONFIG['CERT_PATH']) or not os.path.exists(CONFIG['KEY_PATH']):
-        print("❌ SSL certificates not found!")
-        print("   Run: python generate_certs.py")
+        print("ERROR: SSL certificates not found!")
+        print("   Certificate path: " + CONFIG['CERT_PATH'])
+        print("   Key path: " + CONFIG['KEY_PATH'])
+        print("   Run: python utils/generate_certs.py")
         sys.exit(1)
     
     # Generate initial access token

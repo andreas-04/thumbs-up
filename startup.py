@@ -21,6 +21,7 @@ def load_env_file():
         k, v = line.split("=", 1)
         os.environ[k.strip()] = v.strip()
 
+
 def save_env_file():
     """Write configuration back to config.env."""
     lines = ["# Auto-generated config for ThumbsUp"]
@@ -94,7 +95,7 @@ def ensure_config():
             print()
     
     save_env_file()
-    print("✓ Configuration saved to config.env\n")
+    print("[OK] Configuration saved to config.env\n")
 
 def reset_credentials():
     """Reset all credentials and preferences."""
@@ -109,18 +110,18 @@ def reset_credentials():
         # Backup old config
         backup_path = ENV_PATH.with_suffix(".env.backup")
         ENV_PATH.rename(backup_path)
-        print(f"✓ Old config backed up to {backup_path}")
+        print(f"[OK] Old config backed up to {backup_path}")
     
     # Clear environment variables
     for key in ["PREFERENCE", "WEB_PIN", "SMB_GUEST_USER", "SMB_GUEST_PASSWORD"]:
         os.environ.pop(key, None)
     
-    print("✓ Credentials reset")
+    print("[OK] Credentials reset")
     print("\nRunning configuration setup...\n")
     
     # Run config setup
     ensure_config()
-    print("✓ New credentials configured successfully!\n")
+    print("[OK] New credentials configured successfully!\n")
 
 def install_service():
     """Install and enable the systemd service."""
@@ -144,20 +145,20 @@ def install_service():
     
     # Write to systemd directory
     service_dest.write_text(service_content)
-    print(f"✓ Copied service file to {service_dest}")
+    print(f"[OK] Copied service file to {service_dest}")
     
     # Reload systemd, enable and start service
     try:
         subprocess.run(["systemctl", "daemon-reload"], check=True)
-        print("✓ Reloaded systemd daemon")
+        print("[OK] Reloaded systemd daemon")
         
         subprocess.run(["systemctl", "enable", "thumbsup.service"], check=True)
-        print("✓ Enabled thumbsup.service (will start on boot)")
+        print("[OK] Enabled thumbsup.service (will start on boot)")
         
         subprocess.run(["systemctl", "start", "thumbsup.service"], check=True)
-        print("✓ Started thumbsup.service")
+        print("[OK] Started thumbsup.service")
         
-        print("\n✓ Service installation complete!")
+        print("\n[OK] Service installation complete!")
         print("\nUseful commands:")
         print("  sudo systemctl status thumbsup.service  - Check service status")
         print("  sudo journalctl -u thumbsup.service -f  - View logs")
@@ -187,9 +188,9 @@ def start_web_server():
                       env=os.environ.copy(),
                       check=True)
     except KeyboardInterrupt:
-        print("\n\n🛑 Web server stopped by user")
+        print("\n\nWeb server stopped by user")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ Web server exited with error: {e}")
+        print(f"\nERROR: Web server exited with error: {e}")
         sys.exit(1)
 
 def start_smb_server():
@@ -213,14 +214,14 @@ def start_smb_server():
                       env=os.environ.copy(),
                       check=True)
     except KeyboardInterrupt:
-        print("\n\n🛑 SMB server stopped by user")
+        print("\n\nSMB server stopped by user")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ SMB server exited with error: {e}")
+        print(f"\nERROR: SMB server exited with error: {e}")
         sys.exit(1)
 
 def start_both_servers():
     """Start both web and SMB servers in parallel threads."""
-    print("🚀 Starting both web and SMB servers in parallel...\n")
+    print("Starting both web and SMB servers in parallel...\n")
     
     # Create threads for each server
     web_thread = threading.Thread(target=start_web_server, name="WebServer", daemon=True)
@@ -230,7 +231,7 @@ def start_both_servers():
     web_thread.start()
     smb_thread.start()
     
-    print("✅ Both services started")
+    print("[OK] Both services started")
     print("   Press Ctrl+C to stop all servers\n")
     
     try:
@@ -238,8 +239,8 @@ def start_both_servers():
         web_thread.join()
         smb_thread.join()
     except KeyboardInterrupt:
-        print("\n\n🛑 Stopping all servers...")
-        print("✓ Services stopped")
+        print("\n\nStopping all servers...")
+        print("[OK] Services stopped")
 
 def load_apiv2_env():
     """Load backend/apiv2/.env.example and set ADMIN_PIN from WEB_PIN."""
@@ -278,6 +279,7 @@ def main():
     
     load_env_file()
     ensure_config()
+    
     load_apiv2_env()
 
     pref = os.environ["PREFERENCE"]
