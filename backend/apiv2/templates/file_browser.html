@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Files - {{ service_name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .breadcrumb {
+            color: #666;
+            font-size: 14px;
+        }
+        .breadcrumb a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .upload-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .file-list {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .file-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .file-item:hover {
+            background: #f9f9f9;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-icon {
+            font-size: 24px;
+            width: 30px;
+            text-align: center;
+        }
+        .file-info {
+            flex: 1;
+        }
+        .file-name {
+            font-weight: 500;
+            color: #333;
+            text-decoration: none;
+        }
+        .file-name:hover {
+            color: #007bff;
+        }
+        .file-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📁 {{ service_name }}</h1>
+    </div>
+    
+    {% if enable_uploads %}
+    <div class="upload-section">
+        <h3>📤 Upload File</h3>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="path" value="{{ current_path }}">
+            <input type="file" name="file" required>
+            <br><br>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+    </div>
+    {% endif %}
+    
+    <div class="file-list">
+        {% if current_path %}
+        <div class="file-item">
+            <div class="file-icon">📂</div>
+            <div class="file-info">
+                <a href="/?path={{ parent_path }}" class="file-name">..</a>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if files %}
+            {% for file in files %}
+            <div class="file-item">
+                <div class="file-icon">{{ '📁' if file.is_dir else '📄' }}</div>
+                <div class="file-info">
+                    <a href="{{ '/?path=' + file.path if file.is_dir else '/download/' + file.path }}" class="file-name">
+                        {{ file.name }}
+                    </a>
+                    <div class="file-meta">
+                        {{ file.size_formatted if not file.is_dir else 'Folder' }} • Modified: {{ file.modified[:19] }}
+                    </div>
+                </div>
+                <div class="file-actions">
+                    {% if not file.is_dir %}
+                    <a href="/download/{{ file.path }}" class="btn btn-primary" download>Download</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="file-item">
+            <div class="file-info">No files found</div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

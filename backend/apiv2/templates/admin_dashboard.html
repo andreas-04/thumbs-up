@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard - {{ service_name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            margin: 0;
+        }
+        .btn {
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .tokens-list {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .token-item {
+            border-bottom: 1px solid #eee;
+        }
+        .token-item:last-child {
+            border-bottom: none;
+        }
+        .token-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .token-header:hover {
+            background: #f9f9f9;
+        }
+        .token-summary {
+            flex: 1;
+        }
+        .token-summary h3 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+        .token-meta {
+            font-size: 13px;
+            color: #666;
+        }
+        .expand-icon {
+            font-size: 20px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        .token-item.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+        .token-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .token-item.expanded .token-details {
+            max-height: 500px;
+        }
+        .token-content {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            background: #f9f9f9;
+        }
+        .qr-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code {
+            max-width: 250px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+        .revoke-btn {
+            width: 100%;
+            margin-top: 15px;
+        }
+        .empty-state {
+            background: white;
+            border-radius: 12px;
+            padding: 60px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .empty-state h2 {
+            color: #666;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Thumbs Up Admin Dashboard</h1>
+        <form method="post" action="/admin/generate-token">
+            <button type="submit" class="btn">➕ Generate New Guest QR Code</button>
+        </form>
+    </div>
+    
+    {% if token_items %}
+    <div class="tokens-list">
+        {% for item in token_items %}
+        <div class="token-item" id="token-{{ item.id }}">
+            <div class="token-header" onclick="toggleToken('{{ item.id }}')">
+                <div class="token-summary">
+                    <h3>Guest Access Token</h3>
+                    <div class="token-meta">
+                        Created: {{ item.created[:19] }} • Expires: {{ item.expires[:19] }}
+                    </div>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="token-details">
+                <div class="token-content">
+                    <div class="qr-container">
+                        <img src="{{ item.qr_image }}" class="qr-code" alt="QR Code">
+                    </div>
+                    <form method="post" action="/admin/revoke-token/{{ item.id }}">
+                        <button type="submit" class="btn btn-danger revoke-btn">Revoke Access</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h2>No Active Guest Tokens</h2>
+        <p>Click "Generate New Guest QR Code" to create one</p>
+    </div>
+    {% endif %}
+    
+    <script>
+        function toggleToken(tokenId) {
+            const item = document.getElementById('token-' + tokenId);
+            item.classList.toggle('expanded');
+        }
+    </script>
+</body>
+</html>
