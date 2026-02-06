@@ -17,21 +17,18 @@ echo ""
 PYTHON="python3"
 PIP="python3 -m pip"
 
-# Make certs directory if it doesn't exist
-mkdir -p certs
-
 # Check if Flask is installed (quick dependency check)
 if ! $PYTHON -c "import flask" 2>/dev/null; then
     echo "Installing Python dependencies..."
     
     # Use backend requirements.txt
     if [ -f "../requirements.txt" ]; then
-        $PIP install -r ../requirements.txt
+        $PIP install -r ../requirements.txt --break-system-packages
     elif [ -f "../../requirements.txt" ]; then
-        $PIP install -r ../../requirements.txt
+        $PIP install -r ../../requirements.txt --break-system-packages
     else
         echo "ERROR: requirements.txt not found"
-        exit 2
+        exit 1
     fi
     echo "   [OK] Dependencies installed"
     echo ""
