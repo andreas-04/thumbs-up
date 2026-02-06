@@ -1,0 +1,10 @@
+# requirements.txt for ThumbsUp Frontend
+# If your frontend is static, you may not need this. If using Flask or similar, copy backend/apiv2/requirements.txt
+Flask==3.0.0
+Flask-CORS==4.0.0
+Werkzeug==3.0.1
+qrcode[pil]==7.4.2
+Pillow>=10.2.0
+cryptography>=41.0.7
+python-dotenv==1.0.0
+PyJWT==2.8.0
