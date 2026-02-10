@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ./backend/apiv2
+      dockerfile: Dockerfile.web
+    container_name: thumbsup-web
+    ports:
+      - "8443:8443"
+    volumes:
+      - storage:/app/storage
+      - certs:/app/certs
+    environment:
+      - CONTAINER_MODE=true
+      - PREFERENCE=web
+      - HOST=0.0.0.0
+      - PORT=8443
+      - STORAGE_DIR=/app/storage
+      - CERT_PATH=/app/certs/server_cert.pem
+      - KEY_PATH=/app/certs/server_key.pem
+      - TOKEN_EXPIRY_HOURS=24
+      - ENABLE_UPLOADS=true
+      - ENABLE_DELETE=false
+      - SERVICE_NAME=ThumbsUp File Share
+      - MAX_UPLOAD_SIZE=104857600
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - thumbsup-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:8443', context=__import__('ssl')._create_unverified_context())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  smb:
+    build:
+      context: ./backend/apiv2
+      dockerfile: Dockerfile.smb
+    container_name: thumbsup-smb
+    network_mode: host
+    privileged: true
+    volumes:
+      - storage:/app/storage
+      - samba-data:/var/lib/samba
+      - samba-config:/etc/samba
+    environment:
+      - CONTAINER_MODE=true
+      - PREFERENCE=smb
+      - STORAGE_DIR=/app/storage
+      - WORKGROUP=WORKGROUP
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "smbclient", "-L", "localhost", "-N"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  storage:
+    driver: local
+  samba-data:
+    driver: local
+  samba-config:
+    driver: local
+  certs:
+    driver: local
+
+networks:
+  thumbsup-network:
+    driver: bridge

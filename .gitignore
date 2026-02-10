@@ -1,4 +1,4 @@
 *.pem
 *.key
 *.crt
-config.env
+*.env
