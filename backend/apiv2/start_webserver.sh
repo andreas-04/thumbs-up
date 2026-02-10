@@ -20,6 +20,8 @@ PIP="python3 -m pip"
 # Make certs directory if it doesn't exist
 mkdir -p certs
 
+
+# TODO: Installs handled in Dockerfile now - consider removing this entire dependency check block
 # Check if Flask is installed (quick dependency check)
 if ! $PYTHON -c "import flask" 2>/dev/null; then
     echo "Installing Python dependencies..."
