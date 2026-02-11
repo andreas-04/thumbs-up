@@ -1,0 +1,8 @@
+{
+  "name": "thumbsup-frontend",
+  "version": "1.0.0",
+  "description": "ThumbsUp Frontend Dashboard",
+  "scripts": {
+    "build": "mkdir -p dist && echo '<html><body><h1>ThumbsUp Dashboard</h1><p>Frontend loading...</p></body></html>' > dist/index.html"
+  }
+}

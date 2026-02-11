@@ -1,30 +1,31 @@
 # Dockerfile for ThumbsUp Frontend
-# This assumes a Python/Flask-based frontend, similar to backend/apiv2
-# Adjust as needed for your actual frontend tech stack
+# Build stage
+FROM node:18 AS build
 
-FROM python:3.11-slim
-
-# Set working directory
 WORKDIR /app
 
-# Copy requirements (reuse backend/apiv2/requirements.txt for now)
-COPY requirements.txt ./requirements.txt
+COPY frontend/package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+COPY frontend/ .
+RUN npm run build
 
-# Copy frontend source code (update this if you add frontend code)
-COPY . .
+# Production stage - Nginx
+FROM nginx:alpine
 
-# Expose port for port forwarding and remote access
-EXPOSE 8080
+WORKDIR /usr/share/nginx/html
 
-# Copy and use start script
-COPY start.sh ./start.sh
-RUN chmod +x ./start.sh
+RUN rm -rf ./*
 
-# Create certs directory (if not exists)
-RUN mkdir -p /app/certs
+COPY --from=build /app/dist ./
 
-# Entrypoint runs start script (generates/copies certs, starts server)
-ENTRYPOINT ["./start.sh"]
+COPY frontend/nginx.conf /etc/nginx/nginx.conf
+COPY frontend/start_webserver.sh /start_webserver.sh
+RUN chmod +x /start_webserver.sh
+
+RUN mkdir -p /app/pki /etc/nginx/certs
+COPY backend/pki/*.pem /app/pki/
+
+EXPOSE 443
+
+ENTRYPOINT ["/start_webserver.sh"]
