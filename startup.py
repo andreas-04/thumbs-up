@@ -1,3 +1,4 @@
+# DEPRECATED: This file is no longer used, in favor of docker
 import os
 import sys
 import subprocess
