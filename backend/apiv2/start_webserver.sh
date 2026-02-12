@@ -1,17 +1,9 @@
-#!/bin/bash
-#
-# ThumbsUp Web Server Startup Script
-# Ensures dependencies and starts the Flask server
-#
-
+﻿#!/bin/sh
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-echo "========================================"
+echo "=========================================="
 echo "Starting ThumbsUp Web Server"
-echo "========================================"
+echo "=========================================="
 echo ""
 
 PYTHON="python3"
@@ -41,26 +33,20 @@ fi
 
 # Verify SSL certificates exist
 if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
-    echo "Generating SSL certificates..."
-    $PYTHON utils/generate_certs.py
-    echo "   [OK] Certificates generated"
-    echo ""
-fi
-
-# Verify ADMIN_PIN is set
-if [ -z "$ADMIN_PIN" ]; then
-    echo "ERROR: ADMIN_PIN environment variable not set"
-    echo "   This should be set by startup.py"
+    echo "ERROR: SSL certificates not found in certs/ directory"
     exit 1
 fi
 
-echo "[OK] Dependencies verified"
-echo "[OK] SSL certificates ready"
-echo "[OK] Storage directories ready"
+if [ -z "" ]; then
+    echo "ERROR: ADMIN_PIN environment variable not set"
+    exit 1
+fi
+
+echo "[OK] SSL certificates verified"
 echo "[OK] Admin PIN configured"
 echo ""
 
-# Start the server
 echo "Starting Flask server..."
 echo ""
-exec $PYTHON -m core.server
+
+exec python3 -m core.server

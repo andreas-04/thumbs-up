@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: ./backend/apiv2
+      dockerfile: Dockerfile
+    ports:
+      - "443:8443"
+    environment:
+      - ADMIN_PIN=${ADMIN_PIN}
+      - HOST=0.0.0.0
+      - PORT=8443
+      - STORAGE_PATH=./storage
+      - CERT_PATH=./certs/server_cert.pem
+      - KEY_PATH=./certs/server_key.pem
+    volumes:
+      - ./storage:/app/storage
+    restart: unless-stopped
+    container_name: thumbsup-backend
