@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
 Token-based authentication system for ThumbsUp.
-Generates and validates JWT tokens for secure access.
+Generates and validates JWT tokens for secure access with database-backed user accounts.
 """
 
 import jwt
 import secrets
-import hashlib
+import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import request, jsonify
+from models import db, User
 
 
 class TokenAuth:
-    """Handle JWT token generation and validation."""
+    """Handle JWT token generation and validation with database-backed authentication."""
     
     def __init__(self, secret_key=None, token_expiry_hours=24, admin_pin=None):
         """
@@ -22,39 +23,121 @@ class TokenAuth:
         Args:
             secret_key: Secret key for JWT signing (random if None)
             token_expiry_hours: Token validity period in hours
-            admin_pin: PIN for admin authentication
+            admin_pin: PIN for initial admin authentication (legacy support)
         """
         self.secret_key = secret_key or secrets.token_urlsafe(32)
         self.token_expiry_hours = token_expiry_hours
         self.algorithm = 'HS256'
-        self.admin_pin_hash = self._hash_pin(admin_pin) if admin_pin else None
+        # Keep admin_pin for backward compatibility during transition
+        self.admin_pin = admin_pin
         
-        # In-memory storage for active guest tokens
+        # In-memory storage for active guest tokens (will be deprecated)
         # Format: {token_id: {'token': str, 'created': datetime, 'expires': datetime}}
         self.active_guest_tokens = {}
     
-    def _hash_pin(self, pin):
-        """Hash PIN using SHA256."""
-        if not pin:
+    def hash_password(self, password):
+        """
+        Hash password using bcrypt.
+        
+        Args:
+            password: Plain text password
+        
+        Returns:
+            Hashed password string
+        """
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def verify_password(self, password, password_hash):
+        """
+        Verify password against hash.
+        
+        Args:
+            password: Plain text password
+            password_hash: Stored hash
+        
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+        except:
+            return False
+    
+    def authenticate_user(self, email, password):
+        """
+        Authenticate user with email and password.
+        
+        Args:
+            email: User email
+            password: User password
+        
+        Returns:
+            User object if valid, None otherwise
+        """
+        user = User.query.filter_by(email=email).first()
+        if not user:
             return None
-        return hashlib.sha256(pin.encode()).hexdigest()
+        
+        if not self.verify_password(password, user.password_hash):
+            return None
+        
+        # Update last login
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+        
+        return user
     
     def validate_admin_pin(self, pin):
         """
-        Validate admin PIN.
+        Validate admin PIN (for first-time login only).
         
         Args:
             pin: PIN to validate
         
         Returns:
-            True if valid, False otherwise
+            User object if valid, None otherwise
         """
-        if not self.admin_pin_hash or not pin:
-            return False
-        return self._hash_pin(pin) == self.admin_pin_hash
+        if not self.admin_pin or not pin:
+            return None
+        
+        # Only allow PIN login for admin with is_default_pin=True
+        admin_user = User.query.filter_by(role='admin', is_default_pin=True).first()
+        if not admin_user:
+            return None
+        
+        # Verify PIN against admin's password hash
+        if self.verify_password(pin, admin_user.password_hash):
+            return admin_user
+        
+        return None
+    
+    def generate_session_token(self, user):
+        """
+        Generate session token for authenticated user.
+        
+        Args:
+            user: User object
+        
+        Returns:
+            JWT token string
+        """
+        expiry_hours = 2 if user.role == 'admin' else self.token_expiry_hours
+        
+        payload = {
+            'user_id': user.id,
+            'email': user.email,
+            'role': user.role,
+            'iat': datetime.utcnow(),
+            'exp': datetime.utcnow() + timedelta(hours=expiry_hours),
+            'jti': secrets.token_urlsafe(16)
+        }
+        
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        return token
     
     def generate_admin_session(self):
         """
+        DEPRECATED: Use generate_session_token(user) instead.
         Generate ephemeral admin session token (not persisted).
         
         Returns:
@@ -70,6 +153,28 @@ class TokenAuth:
         
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         return token
+    
+    def get_user_from_token(self, token):
+        """
+        Get user object from token.
+        
+        Args:
+            token: JWT token string
+        
+        Returns:
+            User object or None
+        """
+        payload = self.validate_token(token)
+        if not payload:
+            return None
+        
+        user_id = payload.get('user_id')
+        if not user_id or user_id == 'admin' or user_id == 'guest':
+            # Legacy token format
+            return None
+        
+        user = User.query.get(user_id)
+        return user
     
     def is_admin(self, token):
         """
@@ -200,9 +305,20 @@ class TokenAuth:
                 if not payload:
                     return jsonify({'error': 'Invalid or expired token'}), 401
                 
-                # Check permission if specified
-                if permission and permission not in payload.get('permissions', []):
-                    return jsonify({'error': 'Insufficient permissions'}), 403
+                # New token format: all authenticated users have read/write access
+                # (Admin and regular users both get full access)
+                # Old token format: check permissions array
+                if permission:
+                    permissions = payload.get('permissions', [])
+                    role = payload.get('role')
+                    
+                    # New format: authenticated users have all permissions
+                    if role in ('admin', 'user'):
+                        # All authenticated users have read/write access
+                        pass
+                    # Old format: check permissions array
+                    elif permission not in permissions:
+                        return jsonify({'error': 'Insufficient permissions'}), 403
                 
                 # Attach user info to request
                 request.user = payload

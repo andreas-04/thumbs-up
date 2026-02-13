@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  thumbsup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: thumbsup-webserver
+    ports:
+      - "8443:8443"
+    environment:
+      - ADMIN_PIN=1234  
+      - HOST=0.0.0.0
+      - PORT=8443
+      - TOKEN_EXPIRY_HOURS=24
+      - ENABLE_UPLOADS=true
+      - ENABLE_DELETE=false
+      - SERVICE_NAME=ThumbsUp File Share
+    volumes:
+      - ./storage:/app/storage  # Persistent file storage
+      - thumbsup-db:/app/data  # Persistent database directory
+    restart: unless-stopped
+    networks:
+      - thumbsup-net
+
+volumes:
+  thumbsup-db:
+    driver: local
+
+networks:
+  thumbsup-net:
+    driver: bridge

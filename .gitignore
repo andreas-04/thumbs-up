@@ -1,4 +1,5 @@
 *.pem
 *.key
 *.crt
+*.db
 config.env

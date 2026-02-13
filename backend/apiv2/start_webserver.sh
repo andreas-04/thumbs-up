@@ -17,8 +17,8 @@ echo ""
 PYTHON="python3"
 PIP="python3 -m pip"
 
-# Make certs directory if it doesn't exist
-mkdir -p certs
+# Make necessary directories if they don't exist
+mkdir -p certs data storage
 
 
 # TODO: Installs handled in Dockerfile now - consider removing this entire dependency check block
@@ -42,7 +42,21 @@ fi
 # Verify SSL certificates exist
 if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
     echo "Generating SSL certificates..."
-    $PYTHON utils/generate_certs.py
+    $PYTHON utils/generate_certs.py 2>&1
+    
+    # Check if generation succeeded
+    if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
+        echo "ERROR: Certificate generation failed!"
+        echo "Trying alternative method..."
+        $PYTHON gen_selfsigned.py --output-dir certs 2>&1
+        
+        # Final check
+        if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
+            echo "ERROR: Could not generate certificates"
+            exit 1
+        fi
+    fi
+    
     echo "   [OK] Certificates generated"
     echo ""
 fi
