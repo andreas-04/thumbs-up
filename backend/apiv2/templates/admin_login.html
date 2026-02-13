@@ -27,7 +27,7 @@
             margin-bottom: 30px;
             text-align: center;
         }
-        input[type="password"], input[type="text"] {
+        input[type="password"], input[type="text"], input[type="email"] {
             width: 100%;
             padding: 15px;
             margin: 10px 0;
@@ -36,7 +36,7 @@
             font-size: 16px;
             box-sizing: border-box;
         }
-        input[type="password"]:focus, input[type="text"]:focus {
+        input[type="password"]:focus, input[type="text"]:focus, input[type="email"]:focus {
             outline: none;
             border-color: #007bff;
         }
@@ -67,17 +67,47 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔐 Admin Login</h1>
+        <h1>Admin Login</h1>
         <p class="subtitle">{{ service_name }}</p>
         
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
         
-        <form method="post">
-            <input type="password" name="pin" placeholder="Enter Admin PIN" required autofocus>
-            <button type="submit">Login</button>
+        <form method="post" id="loginForm">
+            <div id="pinAuth">
+                <input type="password" name="pin" id="pinInput" placeholder="Enter Admin PIN" autofocus>
+                <button type="submit">Login with PIN</button>
+                <p style="text-align: center; margin-top: 20px;">
+                    <a href="#" onclick="toggleAuth(); return false;" style="color: #007bff; text-decoration: none;">Use email/password instead</a>
+                </p>
+            </div>
+            
+            <div id="emailAuth" style="display: none;">
+                <input type="email" name="email" id="emailInput" placeholder="Email">
+                <input type="password" name="password" id="passwordInput" placeholder="Password">
+                <button type="submit">Login</button>
+                <p style="text-align: center; margin-top: 20px;">
+                    <a href="#" onclick="toggleAuth(); return false;" style="color: #007bff; text-decoration: none;">Use PIN instead</a>
+                </p>
+            </div>
         </form>
     </div>
+    
+    <script>
+        function toggleAuth() {
+            var pinAuth = document.getElementById('pinAuth');
+            var emailAuth = document.getElementById('emailAuth');
+            if (pinAuth.style.display === 'none') {
+                pinAuth.style.display = 'block';
+                emailAuth.style.display = 'none';
+                document.getElementById('pinInput').focus();
+            } else {
+                pinAuth.style.display = 'none';
+                emailAuth.style.display = 'block';
+                document.getElementById('emailInput').focus();
+            }
+        }
+    </script>
 </body>
 </html>

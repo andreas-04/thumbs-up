@@ -17,8 +17,8 @@ import socket
 
 
 def generate_self_signed_cert(
-    cert_path="../certs/server_cert.pem",
-    key_path="../certs/server_key.pem",
+    cert_path="./certs/server_cert.pem",
+    key_path="./certs/server_key.pem",
     hostname=None,
     validity_days=365
 ):
@@ -147,13 +147,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--cert-path",
-        help="Path to save certificate (default: ../certs/server_cert.pem)",
-        default="../certs/server_cert.pem"
+        help="Path to save certificate (default: ./certs/server_cert.pem)",
+        default="./certs/server_cert.pem"
     )
     parser.add_argument(
         "--key-path",
-        help="Path to save private key (default: ../certs/server_key.pem)",
-        default="../certs/server_key.pem"
+        help="Path to save private key (default: ./certs/server_key.pem)",
+        default="./certs/server_key.pem"
     )
     
     args = parser.parse_args()

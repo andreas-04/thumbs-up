@@ -1,431 +1,351 @@
-# Architecture Documentation
-## ThumbsUp - Secure On-Demand Wireless NAS
-
-**Last Updated:** October 24, 2025  
-**Version:** 1.0 (MVP)
-
----
+# ThumbsUp Architecture
 
 ## Overview
 
-**ThumbsUp** is a secure, portable Wi-Fi-enabled NAS system that provides on-demand file sharing using mutual TLS authentication and dynamic access control. The system operates through a state machine that manages service lifecycle, client connections, and secure file access.
+ThumbsUp is a secure, portable Wi-Fi file sharing system designed for on-demand, ephemeral file access without reliance on cloud infrastructure. Built on Flask with containerization support, it provides both web-based and SMB file sharing with JWT authentication, TLS encryption, and mDNS service discovery.
 
-### Key Features
+## System Architecture
 
-- **State Machine Architecture** - Four-state lifecycle (DORMANT → ADVERTISING → ACTIVE → SHUTDOWN)
-- **Mutual TLS Authentication** - Certificate-based client authentication
-- **Service Discovery** - Avahi mDNS for automatic device discovery
-- **Dynamic Access Control** - Per-client iptables firewall rules
-- **NFS File Sharing** - Dynamic per-client NFS exports
-- **Multi-Client Support** - Concurrent authenticated sessions
-- **Container Deployment** - Docker-based with proper Linux capabilities
-
----
-
-## Architecture Overview
-
-### Architecture Overview
+### High-Level Design (Current)
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    Local WiFi Network                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────┐              ┌─────────────────────┐   │
-│  │  ThumbsUp Client │              │  ThumbsUp NAS Device│   │
-│  │  (User Device)   │              │  (Raspberry Pi)     │   │
-│  │                  │              │                     │   │
-│  │  • mDNS          │ ◄──────────► │  • State Machine    │   │
-│  │    Discovery     │   Discover   │  • mTLS Server      │   │
-│  │  • mTLS          │   & Connect  │  • Avahi mDNS       │   │
-│  │    Client Auth   │              │  • Firewall         │   │
-│  │  • NFS           │   Secure     │    (iptables)       │   │
-│  │    Mount Client  │   Access     │  • NFS Server       │   │
-│  │                  │              │  • USB Storage      │   │
-│  │  Examples:       │              │    (Encrypted)      │   │
-│  │  - Laptop        │              │                     │   │
-│  │  - Phone         │              │  ┌───────────────┐  │   │
-│  │  - Desktop       │              │  │ Encrypted USB │  │   │
-│  │  - Another Pi    │              │  │ Storage Drive │  │   │
-│  └─────────────────┘              │  └──────────────┘  │   │
-│                                    └────────────────────┘   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     Client Layer                        │
+│  (Web Browsers, SMB Clients, Mobile Devices)           │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 │ HTTPS/SMB
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│              Network Services                           │
+│  ┌──────────────┐         ┌────────────────┐          │
+│  │ mDNS/Avahi   │         │  TLS/SSL       │          │
+│  │ Advertiser   │         │  Encryption    │          │
+│  └──────────────┘         └────────────────┘          │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│              Application Layer                          │
+│  ┌─────────────────┐      ┌─────────────────┐         │
+│  │  Flask Web API  │      │   SMB Manager   │         │
+│  │  (HTTPS/8443)   │      │   (Port 445)    │         │
+│  └────────┬────────┘      └────────┬────────┘         │
+│           │                         │                   │
+│  ┌────────▼────────┐      ┌────────▼────────┐         │
+│  │  JWT Auth       │      │  Samba Config   │         │
+│  │  System         │      │  Generator      │         │
+│  └─────────────────┘      └─────────────────┘         │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│              Storage Layer                              │
+│           Shared File Storage                           │
+│     (Documents, Music, User Files)                      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Technology Stack
-
-**Server Components:**
-- **Language:** Python 3
-- **OS:** Ubuntu 22.04 (containerized)
-- **Service Discovery:** Avahi daemon
-- **Authentication:** SSL/TLS (Python ssl module)
-- **Firewall:** iptables
-- **File Sharing:** NFS kernel server (NFSv3)
-- **Orchestration:** Docker Compose
-- **PKI:** Python cryptography library
-
-**Client Components:**
-- **Language:** Python 3
-- **OS:** Ubuntu 22.04 (containerized)
-- **Discovery:** avahi-browse
-- **Mount:** NFS client utilities
-- **Authentication:** SSL/TLS
-
-**Frontend Auth Client :**
-- **Framework:** React + TypeScript
-- **Build:** Vite
-- **Status:** Not integrated (default Vite template)
-
-### Code Structure
+### Planned: Containerized Architecture
 
 ```
-backend/
-| api/
-| ├─ client/
-| │ ├─ client.py            # Client application
-| │ └─ Dockerfile           # Client container image
-| ├─ server/
-| │ ├─ server.py            # Main server implementation
-| │ ├─ state_machine.py     # State machine logic
-| │ ├─ firewall.py          # iptables management
-| │ ├─ nfs.py               # NFS export management
-| │ ├─ mdns_service.py      # Avahi mDNS integration
-| │ ├─ storage.py           # Storage lock/unlock (simulated)
-| │ ├─ Dockerfile           # Server container image
-| │ └─ demo_data/           # Sample files for testing
-| ├─ docker-compose.yml     # Container orchestration
-| |
-| ├─ pki/
-| | ├─ gen_selfsigned.py    # Certificate generation script
-| | ├─ server_cert.pem      # Server certificate
-| | ├─ server_key.pem       # Server private key
-| | ├─ client_cert.pem      # Client certificate
-| | └─ client_key.pem       # Client private key
-| |
-| ├─ config/
-| | ├─ avahi-daemon.conf    # mDNS daemon configuration
-| | └─ dbus-system.conf     # D-Bus system configuration
-| |
-| └─ scripts/
-|   ├─ entrypoint_server.sh # Server container entrypoint
-|   └─ entrypoint_client.sh # Client container entrypoint
-| 
-docs/
-├─ requirements.md        # Capstone specification
-├─ system-architecture.md # Mermaid diagrams
-└─ architecture.md        # This document
-
-frontend/
-└─ src/                   # React app (not integrated)
+┌─────────────────────────────────────────────────────────┐
+│                   Systemd Service                       │
+│              (thumbsup.service)                         │
+└────────────────┬────────────────────────────────────────┘
+                 │ manages
+┌────────────────▼────────────────────────────────────────┐
+│                Docker Compose                           │
+│  ┌─────────────────┐      ┌─────────────────┐         │
+│  │ Flask Container │      │  SMB Container  │         │
+│  │   (Port 8443)   │      │  (Port 445)     │         │
+│  └────────┬────────┘      └────────┬────────┘         │
+│           │                         │                   │
+│           └──────────┬──────────────┘                   │
+│                      │                                   │
+│           ┌──────────▼──────────┐                      │
+│           │   Shared Volume     │                      │
+│           │  (Persistent Data)  │                      │
+│           └─────────────────────┘                      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### State Machine Implementation
+## Core Components
 
-The server implements a robust state machine with 4 states:
+### 1. Web Server (`core/server.py`)
 
-1. **DORMANT** (Initial)
-   - No services running
-   - Storage locked
-   - Minimal network presence
-   - Waiting for activation signal
+**Purpose**: Flask-based HTTPS server providing RESTful API and web interface for file operations.
 
-2. **ADVERTISING** (Post-activation)
-   - Firewall initialized
-   - Storage unlocked
-   - mTLS server listening
-   - mDNS broadcasting service
-   - Waiting for first client
+**Key Features**:
+- HTTPS-only (port 8443) with self-signed certificates
+- JWT token-based authentication
+- File browsing, upload, download, and deletion
+- Admin dashboard with token management
+- QR code generation for mobile access
+- CORS support for cross-origin requests
 
-3. **ACTIVE** (Client connected)
-   - Multiple clients supported
-   - Per-client firewall rules
-   - Per-client NFS exports
-   - Activity monitoring
-   - Inactivity timer running
+**Endpoints**:
+- `/` - File browser interface
+- `/api/v2/files` - File listing and operations
+- `/api/v2/upload` - File upload handler
+- `/api/v2/download/<path>` - File download
+- `/admin` - Admin dashboard
+- `/admin/login` - PIN-based admin authentication
 
-4. **SHUTDOWN** (Graceful cleanup)
-   - All clients disconnected
-   - Firewall rules removed
-   - NFS exports cleared
-   - Storage locked
-   - Services stopped
+### 2. Authentication System (`core/auth.py`)
 
-**State Transitions:**
-```
-DORMANT → ADVERTISING     (Button press / manual activation)
-ADVERTISING → ACTIVE      (First client authenticates)
-ACTIVE → ADVERTISING      (Last client disconnects)
-ADVERTISING → DORMANT     (Timeout / no connections)
-ANY → SHUTDOWN            (Termination signal)
-```
-
-### Security Implementation
-
-#### Authentication Flow
-
-1. **Client Discovery**
-   - Client runs `avahi-browse` to find `_thumbsup._tcp` service
-   - Server advertises hostname, IP, port, and status via TXT records
-
-2. **mTLS Handshake**
-   - Client connects to server on port 8443
-   - Server requests client certificate
-   - Client verifies server certificate against CA
-   - Server verifies client certificate against CA
-   - Both sides validate certificate chains
-
-3. **Access Grant**
-   - Server extracts client IP and Common Name from certificate
-   - Server adds iptables rule allowing client IP → NFS port 2049
-   - Server adds `/etc/exports` entry for client IP
-   - Server runs `exportfs -ra` to refresh NFS exports
-   - Client can now mount NFS share at `/app/demo_storage`
-
-4. **Session Management**
-   - Server tracks active clients in dictionary
-   - Each client has session object with metadata
-   - Inactivity timeout per client (300 seconds default)
-   - Last activity timestamp updated on messages
-
-5. **Cleanup**
-   - On disconnect: remove firewall rule, remove NFS export
-   - On last client disconnect: start inactivity timer
-   - On timeout: transition to DORMANT state
-
-#### Certificate Structure
-
-**Server Certificate:**
-- Common Name: `localhost`
-- Extended Key Usage: `SERVER_AUTH`
-- Self-signed (for MVP)
-- Validity: 365 days
-
-**Client Certificate:**
-- Common Name: `python-client`
-- Extended Key Usage: `CLIENT_AUTH`
-- Self-signed (for MVP)
-- Validity: 365 days
-
-**Production Concerns:**
-- No proper CA hierarchy
-- No certificate revocation mechanism
-- No certificate renewal process
-- Self-signed certs unsuitable for production
-
-### Network Architecture
-
-**Container Networking:**
-```
-Docker Bridge Network (nas-network)
-│
-├─ Server Container (secure-nas-server)
-│   ├─ Port 8443 → mTLS
-│   ├─ Port 2049 → NFS
-│   ├─ Port 5353/udp → mDNS (mapped to 5354 to avoid macOS conflict)
-│   └─ Capabilities: NET_ADMIN, SYS_ADMIN
-│
-└─ Client Container (secure-nas-client)
-    ├─ No port mappings
-    ├─ Capabilities: SYS_ADMIN (for NFS mount)
-    └─ Profile: client (manual start)
-```
-
-**Firewall Rules (iptables):**
-```bash
-# Default policies
-ESTABLISHED,RELATED → ACCEPT
-lo → ACCEPT
-
-# mTLS always accessible
-tcp/8443 → ACCEPT (comment: NAS_mTLS_Port)
-
-# NFS per-client (dynamically added)
-tcp/2049 -s <client_ip> → ACCEPT (comment: NAS_Client_<ip>)
-```
-
-### Data Flow
-
-**File Access Flow:**
-```
-1. Client mounts NFS: mount -t nfs <server>:/app/demo_storage /mnt/nas
-2. Client reads file: cat /mnt/nas/document1.txt
-3. NFS request → Server NFS daemon
-4. iptables checks source IP against rules
-5. If allowed, NFS serves file from /app/demo_storage
-6. Response → Client
-7. Server logs access in Python application
-```
-
-**Current Logging:**
-- Authentication events (success/failure)
-- Client connection/disconnection
-- Firewall rule changes
-- NFS export modifications
-- State transitions
-- Command execution
-
----
-
-## Component Details
-
-### Server Components
-
-**State Machine (`SecureNASServer`)**
-- Manages four states: DORMANT, ADVERTISING, ACTIVE, SHUTDOWN
-- Handles state transitions based on events
-- Coordinates all server subsystems
-
-**Storage Management**
-- Placeholder methods for LUKS encryption (`_lock_storage()`, `_unlock_storage()`)
-- Currently simulated with log messages
-- Storage path: `/app/demo_storage`
-
-**Firewall (`iptables`)**
-- Default ACCEPT policy for established connections
-- Port 8443 always open for mTLS
-- Port 2049 restricted per-client using source IP rules
-- Rules tagged with comments for identification
-
-**NFS Server**
-- NFSv3 implementation
-- Dynamic exports via `/etc/exports`
-- Exports refreshed with `exportfs -ra`
-- One export entry per authenticated client
-
-**mDNS Service (`avahi-daemon`)**
-- Service type: `_thumbsup._tcp`
-- Publishes hostname, IP, port, and status
-- Started in ADVERTISING state
-- Stopped in DORMANT state
-
-**Session Management**
-- Tracks active clients in dictionary
-- Stores client IP, Common Name, connection time
-- Monitors last activity timestamp
-- 300-second inactivity timeout
-
-### Client Components
-
-**Discovery**
-- Uses `avahi-browse` to find `_thumbsup._tcp` services
-- Parses service records for connection details
-
-**Authentication**
-- Initiates mTLS connection to server port 8443
-- Presents client certificate
-- Validates server certificate
-
-**File Access**
-- Mounts NFS share after successful authentication
-- Mount point: `/mnt/nas` (configurable)
-- Uses standard NFS mount command
-
----
-
-## Implementation Notes
-
-### Certificate Details
-
-Self-signed certificates used for MVP:
-- **Server**: CN=localhost, 365-day validity
-- **Client**: CN=python-client, 365-day validity
-- Generated using `cryptography` library in Python
-- No certificate revocation mechanism
-- No CA hierarchy (single-level trust)
-
-### Container Configuration
-
-**Docker Compose Network**: `nas-network` (bridge mode)
-
-**Server Container Capabilities**:
-- `NET_ADMIN` - For iptables firewall management
-- `SYS_ADMIN` - For NFS server operations
-
-**Client Container Capabilities**:
-- `SYS_ADMIN` - For NFS mount operations
-
-**Port Mappings**:
-- 8443 → mTLS server
-- 2049 → NFS server
-- 5354 → mDNS (avoiding macOS conflict on 5353)
-
-### Known Limitations
-
-**Security**:
-- Storage encryption is simulated (no actual LUKS)
-- No certificate revocation checking
-- No persistent audit logging
-- Hostname verification disabled in client
-- NFS traffic not encrypted
+**Purpose**: JWT-based token authentication with dual-role support (admin/guest).
 
 **Architecture**:
-- Single-threaded client handling
-- No persistent state across restarts
-- Hardcoded configuration values
-- Limited error recovery
-- No rate limiting
-- No health monitoring endpoints
+- **Admin Role**: PIN-protected, 2-hour session tokens, full system access
+- **Guest Role**: Time-limited tokens (24hr default), file access only
+- **Token Storage**: In-memory for guest tokens, cookie-based for admin sessions
+- **Security**: SHA256 PIN hashing, HS256 JWT signing
+
+**Token Lifecycle**:
+1. Admin authenticates with PIN → receives session cookie
+2. Admin generates guest token → stored in active token registry
+3. Guest uses token → validated against registry and expiry
+4. Admin can revoke tokens → removed from registry
+
+### 3. SMB Manager (`services/smb_manager.py`)
+
+**Purpose**: Manages Samba server configuration and lifecycle for native file sharing.
+
+**Key Features**:
+- Dynamic `smb.conf` generation
+- Guest user account management
+- SMB3 protocol with optional encryption
+- Port auto-detection (445 for Linux, 4450 for WSL)
+- Integrated recycle bin
+- mDNS service advertisement
+
+**Configuration**:
+- Workgroup: `WORKGROUP`
+- Share name: `thumbsup`
+- Security: User-level authentication
+- Default credentials: `guest:guest` (overridable via env vars)
+
+### 4. mDNS Service Discovery (`services/mdns_advertiser.py`)
+
+**Purpose**: Platform-agnostic service advertisement for zero-configuration networking.
+
+**Platform Support**:
+- **Linux**: Avahi via D-Bus
+- **macOS**: Bonjour/Zeroconf
+- **Windows**: Fallback to manual IP/hostname
+
+**Service Types**:
+- Web: `_https._tcp`
+- SMB: `_smb._tcp`
+
+### 5. Certificate Management (`utils/generate_certs.py`, `gen_selfsigned.py`)
+
+**Purpose**: Self-signed X.509 certificate generation for TLS encryption.
+
+**Features**:
+- RSA 2048-bit keys
+- Server certificates with SERVER_AUTH extension
+- Client certificates with CLIENT_AUTH extension
+- Subject Alternative Name (SAN) support
+- Automatic certificate lifecycle (365-day validity)
+
+### 6. QR Code Generator (`utils/qr_generator.py`)
+
+**Purpose**: Generate scannable QR codes embedding access URLs with authentication tokens.
+
+**Use Case**: Mobile device onboarding without manual URL entry.
+
+## Data Flow
+
+### Web Access Flow
+```
+1. User → Admin Login (PIN)
+2. Admin Dashboard → Generate Guest Token
+3. QR Code → Mobile Device Scan
+4. Token Validation → Cookie Set
+5. File Browser → Authenticated File Operations
+```
+
+### SMB Access Flow
+```
+1. SMB Client → Network Browse
+2. mDNS Discovery → thumbsup.local
+3. Credential Prompt → guest:guest
+4. Mount Share → Direct File System Access
+```
+
+## Security Model
+
+### Transport Security
+- **TLS 1.2+**: All web traffic encrypted (HTTPS)
+- **SMB3 Encryption**: Optional for SMB connections
+- **Self-Signed Certificates**: Bootstrap trust model (suitable for closed networks)
+
+### Authentication
+- **Admin**: PIN-based (SHA256 hashed)
+- **Guest**: JWT tokens (HMAC-SHA256 signed)
+- **SMB**: Samba user authentication (tdbsam backend)
+
+### Authorization
+- **Admin**: Full system control, token management, file operations
+- **Guest**: Read/write file access only (no token management)
+- **Token Revocation**: In-memory registry allows immediate invalidation
+
+### Attack Surface Mitigation
+- No external dependencies (self-hosted)
+- Network-isolated (local WiFi only)
+- Ephemeral tokens (time-limited access)
+- Admin session timeout (2 hours)
+- Upload size limits (100MB default)
+
+## Deployment Architecture
+
+### Current Deployment
+- **Standalone Mode**: Direct Python execution
+- **Configuration**: `startup.py` interactive wizard
+- **Storage**: Local file system directories
+- **Status**: Currently implemented and functional
+
+### Planned: Docker Compose Deployment (In Progress)
+
+**Architecture**:
+```yaml
+services:
+  web:
+    # Flask Web Server
+    - Port 8443 (HTTPS)
+    - Certificate auto-generation
+    
+  smb:
+    # Samba File Sharing
+    - Port 445/4450
+    - Dynamic configuration
+    
+  storage:
+    # Shared volume across services
+    - Persistent data volume
+    - Mounted to both web and SMB containers
+```
+
+**Systemd Integration**:
+- `thumbsup.service`: Systemd unit file to manage docker-compose
+- Automatic startup on boot
+- Lifecycle management (start/stop/restart)
+
+**Environment Variables** (planned):
+- `ADMIN_PIN`: Required, admin authentication
+- `STORAGE_PATH`: Storage directory path
+- `PORT`: HTTPS port (default 8443)
+- `TOKEN_EXPIRY_HOURS`: Guest token lifetime
+- `ENABLE_UPLOADS`, `ENABLE_DELETE`: Feature flags
+- `SMB_GUEST_USER`, `SMB_GUEST_PASSWORD`: SMB credentials
+
+## Storage Structure
+
+```
+storage/
+├── documents/          # Document files
+│   ├── README.txt
+│   └── bee-movie-script.txt
+├── music/              # Media files
+└── [dynamic uploads]   # User-uploaded content
+```
+
+## Network Configuration
+
+### Ports
+- **8443**: HTTPS web server
+- **445/4450**: SMB file sharing
+- **5353**: mDNS service discovery (UDP)
+
+### Discovery
+- **Hostname**: `<hostname>.local` (mDNS)
+- **Service**: Auto-advertised via Avahi/Bonjour
+- **Fallback**: Direct IP access
+
+## Extensibility Points
+
+### Current Extension Mechanisms
+1. **Service Abstraction**: Modular services (`services/` directory)
+2. **Template System**: Flask Jinja2 templates for UI customization
+3. **Environment Configuration**: Runtime behavior via env vars
+4. **Plugin-ready**: Services can be toggled (web, SMB, or both)
+
+### Future Enhancement Opportunities
+- P2P synchronization (per SRS vision)
+- Attribute-based access control (ABE)
+- Encrypted storage at rest (LUKS integration)
+- Activity monitoring and anomaly detection
+- Certificate Authority (CA) integration for mutual TLS
+
+## Technology Stack
+
+### Backend
+- **Python 3.11+**: Core language
+- **Flask**: Web framework
+- **PyJWT**: Token authentication
+- **Cryptography**: Certificate generation
+- **Samba**: SMB file sharing
+
+### Frontend
+- **HTML/Jinja2**: Templates
+- **Bootstrap**: UI framework (assumed from admin templates)
+
+### Infrastructure
+- **Docker** (planned): Containerization via docker-compose
+- **Systemd** (planned): Service lifecycle management
+- **Avahi/Bonjour**: Service discovery
+- **TLS/SSL**: Transport encryption
+
+## Design Principles
+
+1. **Zero Configuration**: mDNS eliminates manual IP management
+2. **Security by Default**: HTTPS-only, authenticated access
+3. **Platform Agnostic**: Linux, macOS, Windows support
+4. **Ephemeral by Design**: On-demand activation, time-limited tokens
+5. **Self-Contained**: No external cloud dependencies
+6. **Open Standards**: SMB, HTTPS, mDNS, JWT, X.509
+
+## Operational Modes
+
+### Mode 1: Web Only
+- Environment: `PREFERENCE=web`
+- Services: Flask server + mDNS
+- Use Case: Browser-based access, mobile devices
+
+### Mode 2: SMB Only
+- Environment: `PREFERENCE=smb`
+- Services: Samba server + mDNS
+- Use Case: Native file system integration
+
+### Mode 3: Hybrid (Both)
+- Environment: `PREFERENCE=both`
+- Services: Flask + Samba + mDNS
+- Use Case: Maximum compatibility, all device types
+
+## Performance Considerations
+
+- **Concurrent Access**: Flask built-in server (single-threaded), suitable for personal use
+- **File Size**: 100MB upload limit (configurable)
+- **Token Overhead**: In-memory storage, O(1) validation
+- **SMB Performance**: Optimized socket options (TCP_NODELAY, buffer tuning)
+
+## Monitoring & Logging
+
+- **SMB Logs**: `services/smb_config/smb.log`
+- **Flask Logs**: Stdout/stderr (containerized)
+- **Log Rotation**: 1000KB max per Samba log
+- **Log Level**: Configurable per service
+
+## Compliance & Standards
+
+- **SMB3**: Microsoft file sharing protocol
+- **JWT (RFC 7519)**: Token format
+- **X.509**: Certificate standard
+- **mDNS (RFC 6762)**: Service discovery
+- **TLS 1.2+**: Transport security
 
 ---
 
-## Usage Example
-
-**Starting the Server:**
-```bash
-docker-compose up server
-```
-Server transitions: DORMANT → ADVERTISING (waits for clients)
-
-**Connecting a Client:**
-```bash
-docker-compose run --rm client
-```
-Client discovers service, authenticates, mounts NFS, accesses files
-
-**State Transitions:**
-- First client connects: ADVERTISING → ACTIVE
-- Last client disconnects: ACTIVE → ADVERTISING
-- Inactivity timeout (300s): ADVERTISING → DORMANT
-- SIGTERM/SIGINT: ANY → SHUTDOWN
-
----
-
-## File Organization
-
-```
-backend/api/
-├─ server/
-│   ├─ server.py          # Main server implementation
-│   ├─ state_machine.py   # State machine logic
-│   ├─ firewall.py        # iptables management
-│   ├─ nfs.py             # NFS export management
-│   ├─ mdns_service.py    # Avahi mDNS integration
-│   └─ storage.py         # Storage lock/unlock (simulated)
-├─ client/
-│   └─ client.py          # Client application
-└─ docker-compose.yml     # Container orchestration
-
-backend/pki/
-├─ gen_selfsigned.py      # Certificate generation script
-├─ server_cert.pem        # Server certificate
-├─ server_key.pem         # Server private key
-├─ client_cert.pem        # Client certificate
-└─ client_key.pem         # Client private key
-
-backend/config/
-├─ avahi-daemon.conf      # mDNS daemon configuration
-└─ dbus-system.conf       # D-Bus system configuration
-
-backend/scripts/
-├─ entrypoint_server.sh   # Server container entrypoint
-└─ entrypoint_client.sh   # Client container entrypoint
-```
-
----
-
-## Summary
-
-ThumbsUp is a working MVP that demonstrates secure, on-demand file sharing over Wi-Fi using industry-standard protocols (mTLS, NFS, mDNS). The state machine architecture provides clean lifecycle management, and the per-client access control ensures security through dynamic firewall rules and NFS exports. The system is containerized for easy deployment and testing, with a clear path for future enhancements.
-
-
+**Document Version**: 1.0  
+**Last Updated**: February 10, 2026  
+**Maintained By**: ThumbsUp Development Team
