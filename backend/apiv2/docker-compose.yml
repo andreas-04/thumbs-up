@@ -1,27 +1,55 @@
 version: '3.8'
 
 services:
-  thumbsup:
+  # Backend API Service
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: thumbsup-webserver
+    container_name: thumbsup-backend
     ports:
       - "8443:8443"
     environment:
-      - ADMIN_PIN=1234  
+      - ADMIN_PIN=${ADMIN_PIN:-1234}
       - HOST=0.0.0.0
       - PORT=8443
       - TOKEN_EXPIRY_HOURS=24
       - ENABLE_UPLOADS=true
       - ENABLE_DELETE=false
       - SERVICE_NAME=ThumbsUp File Share
+      - CORS_ORIGINS=*
     volumes:
-      - ./storage:/app/storage  # Persistent file storage
-      - thumbsup-db:/app/data  # Persistent database directory
+      - ./storage:/app/storage
+      - thumbsup-db:/app/data
     restart: unless-stopped
     networks:
       - thumbsup-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:8443/health', context=__import__('ssl')._create_unverified_context())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Web Service
+  frontend:
+    build:
+      context: ../../frontend/app
+      dockerfile: Dockerfile
+    container_name: thumbsup-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - thumbsup-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 volumes:
   thumbsup-db:

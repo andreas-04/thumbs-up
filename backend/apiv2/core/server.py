@@ -42,6 +42,7 @@ CONFIG = {
     'MAX_UPLOAD_SIZE': int(os.getenv('MAX_UPLOAD_SIZE', 100 * 1024 * 1024)),  # 100MB
     'ADMIN_PIN': os.getenv('ADMIN_PIN'),  # Must be set via environment
     'DATABASE_URI': os.getenv('DATABASE_URI', f'sqlite:///{BASE_DIR}/data/thumbsup.db'),
+    'CORS_ORIGINS': os.getenv('CORS_ORIGINS', '*'),  # Comma-separated origins or '*'
 }
 
 # Initialize Flask app with explicit template folder
@@ -51,7 +52,14 @@ app = Flask(__name__,
 app.config['MAX_CONTENT_LENGTH'] = CONFIG['MAX_UPLOAD_SIZE']
 app.config['SQLALCHEMY_DATABASE_URI'] = CONFIG['DATABASE_URI']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-CORS(app)
+
+# Configure CORS
+cors_origins = CONFIG['CORS_ORIGINS']
+if cors_origins == '*':
+    CORS(app)
+else:
+    origins = [origin.strip() for origin in cors_origins.split(',')]
+    CORS(app, origins=origins)
 
 # Initialize database
 db.init_app(app)
@@ -129,13 +137,16 @@ def get_file_list(path=''):
                 continue
                 
             stat = os.stat(item_path)
+            is_directory = os.path.isdir(item_path)
             
             items.append({
+                'id': rel_path,  # Use path as unique ID
                 'name': item,
                 'path': rel_path,
-                'is_dir': os.path.isdir(item_path),
-                'size': stat.st_size if os.path.isfile(item_path) else 0,
-                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                'type': 'folder' if is_directory else 'file',
+                'size': stat.st_size if not is_directory else 0,
+                'modifiedAt': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                'parentPath': '/' + path if path else '/',
             })
         except (PermissionError, OSError, FileNotFoundError) as e:
             # Skip files we can't access
@@ -143,10 +154,719 @@ def get_file_list(path=''):
             continue
     
     # Sort: directories first, then files alphabetically
-    items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+    items.sort(key=lambda x: (x['type'] != 'folder', x['name'].lower()))
     
     return items
 
+
+# =============================================================================
+# REST API v1 Endpoints
+# =============================================================================
+
+@app.route('/api/v1/auth/login', methods=['POST'])
+def api_login():
+    """Authenticate user and return JWT token."""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password required', 'code': 'MISSING_CREDENTIALS'}), 400
+    
+    # Authenticate user
+    user = auth.authenticate_user(email, password)
+    
+    if not user:
+        return jsonify({'error': 'Invalid credentials', 'code': 'INVALID_CREDENTIALS'}), 401
+    
+    # Update last login
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+    
+    # Generate JWT token
+    token = auth.generate_session_token(user)
+    
+    return jsonify({
+        'token': token,
+        'user': user.to_dict()
+    }), 200
+
+
+@app.route('/api/v1/auth/signup', methods=['POST'])
+def api_signup():
+    """Register new user account."""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+    username = data.get('username', '').strip()
+    
+    # Validation
+    if not email or '@' not in email:
+        return jsonify({'error': 'Valid email required', 'code': 'INVALID_EMAIL'}), 400
+    
+    if not password or len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters', 'code': 'INVALID_PASSWORD'}), 400
+    
+    # Check if email already exists
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({'error': 'Email already registered', 'code': 'EMAIL_EXISTS'}), 409
+    
+    # Create new user (no admin approval required in protected mode)
+    new_user = User(
+        email=email,
+        password_hash=auth.hash_password(password),
+        role='user',
+        is_default_pin=False
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    
+    # Generate token for immediate login
+    token = auth.generate_session_token(new_user)
+    
+    return jsonify({
+        'token': token,
+        'user': new_user.to_dict()
+    }), 201
+
+
+@app.route('/api/v1/auth/logout', methods=['POST'])
+@auth.require_auth()
+def api_logout():
+    """Logout current user."""
+    # JWT tokens are stateless, so we just return success
+    # Frontend should delete the token
+    return jsonify({'success': True}), 200
+
+
+@app.route('/api/v1/auth/me', methods=['GET'])
+@auth.require_auth()
+def api_get_current_user():
+    """Get current authenticated user info."""
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+    
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    return jsonify({'user': user.to_dict(include_permissions=True)}), 200
+
+
+@app.route('/api/v1/auth/refresh', methods=['POST'])
+@auth.require_auth()
+def api_refresh_token():
+    """Refresh JWT token."""
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Invalid token', 'code': 'INVALID_TOKEN'}), 401
+    
+    # Generate new token
+    new_token = auth.generate_session_token(user)
+    
+    return jsonify({'token': new_token}), 200
+
+
+@app.route('/api/v1/auth/change-password', methods=['POST'])
+@auth.require_auth()
+def api_change_password():
+    """Change user password."""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    current_password = data.get('currentPassword', '').strip()
+    new_password = data.get('newPassword', '').strip()
+    
+    if not new_password or len(new_password) < 6:
+        return jsonify({'error': 'New password must be at least 6 characters', 'code': 'INVALID_PASSWORD'}), 400
+    
+    # Get current user
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+    
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    # For first-time password change, allow skipping current password check
+    if not user.is_default_pin:
+        if not current_password:
+            return jsonify({'error': 'Current password required', 'code': 'MISSING_CURRENT_PASSWORD'}), 400
+        
+        # Verify current password
+        if not auth.verify_password(current_password, user.password_hash):
+            return jsonify({'error': 'Current password is incorrect', 'code': 'INVALID_CURRENT_PASSWORD'}), 401
+    
+    # Update password
+    user.password_hash = auth.hash_password(new_password)
+    user.is_default_pin = False  # Clear the flag
+    db.session.commit()
+    
+    # Generate new token
+    new_token = auth.generate_session_token(user)
+    
+    return jsonify({
+        'token': new_token,
+        'user': user.to_dict()
+    }), 200
+
+
+@app.route('/api/v1/settings', methods=['GET'])
+def api_get_settings():
+    """Get system settings (public endpoint)."""
+    from models import SystemSettings
+    
+    settings = SystemSettings.query.first()
+    if not settings:
+        return jsonify({'error': 'Settings not found', 'code': 'SETTINGS_NOT_FOUND'}), 404
+    
+    return jsonify(settings.to_dict()), 200
+
+
+@app.route('/api/v1/settings', methods=['PUT'])
+@auth.require_admin()
+def api_update_settings():
+    """Update system settings (admin only)."""
+    from models import SystemSettings
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    settings = SystemSettings.query.first()
+    if not settings:
+        return jsonify({'error': 'Settings not found', 'code': 'SETTINGS_NOT_FOUND'}), 404
+    
+    # Update allowed fields
+    if 'mode' in data:
+        if data['mode'] not in ['open', 'protected']:
+            return jsonify({'error': 'Invalid mode value', 'code': 'INVALID_MODE'}), 400
+        settings.mode = data['mode']
+    
+    if 'authMethod' in data:
+        if data['authMethod'] not in ['email', 'email+password', 'username+password']:
+            return jsonify({'error': 'Invalid authMethod value', 'code': 'INVALID_AUTH_METHOD'}), 400
+        settings.auth_method = data['authMethod']
+    
+    if 'tlsEnabled' in data:
+        settings.tls_enabled = bool(data['tlsEnabled'])
+    
+    if 'httpsPort' in data:
+        port = int(data['httpsPort'])
+        if port < 1 or port > 65535:
+            return jsonify({'error': 'Invalid port number', 'code': 'INVALID_PORT'}), 400
+        settings.https_port = port
+    
+    if 'deviceName' in data:
+        settings.device_name = data['deviceName'].strip()
+    
+    settings.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify(settings.to_dict()), 200
+
+
+@app.route('/api/v1/users', methods=['GET'])
+@auth.require_admin()
+def api_list_users():
+    """List all users with optional search and pagination (admin only)."""
+    search = request.args.get('search', '').strip()
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 50))
+    
+    query = User.query
+    
+    if search:
+        query = query.filter(User.email.ilike(f'%{search}%'))
+    
+    # Paginate
+    total = query.count()
+    users = query.offset((page - 1) * limit).limit(limit).all()
+    
+    return jsonify({
+        'users': [user.to_dict() for user in users],
+        'total': total,
+        'page': page,
+        'limit': limit
+    }), 200
+
+
+@app.route('/api/v1/users', methods=['POST'])
+@auth.require_admin()
+def api_create_user():
+    """Create new user (admin only)."""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+    role = data.get('role', 'user').strip()
+    
+    # Validation
+    if not email or '@' not in email:
+        return jsonify({'error': 'Valid email required', 'code': 'INVALID_EMAIL'}), 400
+    
+    if role not in ['admin', 'user']:
+        return jsonify({'error': 'Invalid role', 'code': 'INVALID_ROLE'}), 400
+    
+    # Check if email already exists
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({'error': 'Email already exists', 'code': 'EMAIL_EXISTS'}), 409
+    
+    # Create user
+    new_user = User(
+        email=email,
+        password_hash=auth.hash_password(password) if password else auth.hash_password('changeme'),
+        role=role,
+        is_default_pin=False
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    
+    return jsonify({'user': new_user.to_dict()}), 201
+
+
+@app.route('/api/v1/users/<int:user_id>', methods=['GET'])
+@auth.require_admin()
+def api_get_user(user_id):
+    """Get user by ID (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    return jsonify({'user': user.to_dict(include_permissions=True)}), 200
+
+
+@app.route('/api/v1/users/<int:user_id>', methods=['PUT'])
+@auth.require_admin()
+def api_update_user(user_id):
+    """Update user (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    # Update allowed fields
+    if 'email' in data:
+        email = data['email'].strip()
+        if not email or '@' not in email:
+            return jsonify({'error': 'Valid email required', 'code': 'INVALID_EMAIL'}), 400
+        
+        # Check if email is taken by another user
+        existing = User.query.filter_by(email=email).first()
+        if existing and existing.id != user_id:
+            return jsonify({'error': 'Email already exists', 'code': 'EMAIL_EXISTS'}), 409
+        
+        user.email = email
+    
+    if 'password' in data and data['password']:
+        if len(data['password']) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters', 'code': 'INVALID_PASSWORD'}), 400
+        user.password_hash = auth.hash_password(data['password'])
+    
+    if 'role' in data:
+        if data['role'] not in ['admin', 'user']:
+            return jsonify({'error': 'Invalid role', 'code': 'INVALID_ROLE'}), 400
+        user.role = data['role']
+    
+    db.session.commit()
+    
+    return jsonify({'user': user.to_dict()}), 200
+
+
+@app.route('/api/v1/users/<int:user_id>', methods=['DELETE'])
+@auth.require_admin()
+def api_delete_user(user_id):
+    """Delete user (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    # Prevent deleting yourself
+    token = auth.get_token_from_request()
+    current_user = auth.get_user_from_token(token)
+    if current_user and current_user.id == user_id:
+        return jsonify({'error': 'Cannot delete yourself', 'code': 'CANNOT_DELETE_SELF'}), 400
+    
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify({'success': True}), 200
+
+
+@app.route('/api/v1/users/<int:user_id>/permissions', methods=['GET'])
+@auth.require_admin()
+def api_get_user_permissions(user_id):
+    """Get user folder permissions (admin only)."""
+    from models import FolderPermission
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    permissions = FolderPermission.query.filter_by(user_id=user_id).all()
+    
+    return jsonify({
+        'permissions': [p.to_dict() for p in permissions]
+    }), 200
+
+
+@app.route('/api/v1/users/<int:user_id>/permissions', methods=['PUT'])
+@auth.require_admin()
+def api_update_user_permissions(user_id):
+    """Update user folder permissions (admin only)."""
+    from models import FolderPermission
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+    
+    data = request.get_json()
+    if not data or 'permissions' not in data:
+        return jsonify({'error': 'Permissions array required', 'code': 'MISSING_PERMISSIONS'}), 400
+    
+    # Delete existing permissions
+    FolderPermission.query.filter_by(user_id=user_id).delete()
+    
+    # Add new permissions
+    for perm_data in data['permissions']:
+        permission = FolderPermission(
+            user_id=user_id,
+            folder_path=perm_data.get('path', '/'),
+            can_read=perm_data.get('read', True),
+            can_write=perm_data.get('write', False)
+        )
+        db.session.add(permission)
+    
+    db.session.commit()
+    
+    # Return updated permissions
+    permissions = FolderPermission.query.filter_by(user_id=user_id).all()
+    return jsonify({
+        'permissions': [p.to_dict() for p in permissions]
+    }), 200
+
+
+@app.route('/api/v1/folders', methods=['GET'])
+@auth.require_admin()
+def api_list_folders():
+    """List all folders in storage for permission management (admin only)."""
+    storage_path = Path(CONFIG['STORAGE_PATH'])
+    folders = [{'path': '/', 'name': 'Root'}]
+    
+    try:
+        for item in storage_path.rglob('*'):
+            if item.is_dir():
+                rel_path = '/' + str(item.relative_to(storage_path))
+                folders.append({
+                    'path': rel_path,
+                    'name': item.name
+                })
+    except Exception as e:
+        return jsonify({'error': str(e), 'code': 'FOLDER_SCAN_ERROR'}), 500
+    
+    return jsonify({'folders': folders}), 200
+
+
+@app.route('/api/v1/files', methods=['GET'])
+def api_list_files():
+    """List files in directory (respects permissions in protected mode)."""
+    from models import SystemSettings, FolderPermission
+    
+    path = request.args.get('path', '')
+    search = request.args.get('search', '').strip()
+    
+    # Check system mode and permissions
+    settings = SystemSettings.query.first()
+    if settings and settings.mode == 'protected':
+        # Require authentication in protected mode
+        token = auth.get_token_from_request()
+        if not token:
+            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+        
+        user = auth.get_user_from_token(token)
+        if not user:
+            return jsonify({'error': 'Invalid token', 'code': 'INVALID_TOKEN'}), 401
+        
+        # Check folder permissions (admin has full access)
+        if user.role != 'admin':
+            permission = FolderPermission.query.filter_by(
+                user_id=user.id,
+                folder_path='/' + path if path else '/'
+            ).first()
+            
+            if not permission or not permission.can_read:
+                return jsonify({'error': 'Access denied', 'code': 'ACCESS_DENIED'}), 403
+    
+    # Get file list
+    try:
+        files = get_file_list(path)
+        
+        # Filter by search if provided
+        if search:
+            files = [f for f in files if search.lower() in f['name'].lower()]
+        
+        # Format response
+        return jsonify({
+            'files': files,
+            'currentPath': '/' + path if path else '/',
+            'parentPath': '/' + str(Path(path).parent) if path and path != '.' else None
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'code': 'FILE_LIST_ERROR'}), 500
+
+
+@app.route('/api/v1/files/upload', methods=['POST'])
+def api_upload_file():
+    """Upload file (respects permissions in protected mode)."""
+    from models import SystemSettings, FolderPermission
+    
+    if not CONFIG['ENABLE_UPLOADS']:
+        return jsonify({'error': 'Uploads are disabled', 'code': 'UPLOADS_DISABLED'}), 403
+    
+    # Check system mode and permissions
+    settings = SystemSettings.query.first()
+    path = request.form.get('path', '')
+    
+    if settings and settings.mode == 'protected':
+        token = auth.get_token_from_request()
+        if not token:
+            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+        
+        user = auth.get_user_from_token(token)
+        if not user:
+            return jsonify({'error': 'Invalid token', 'code': 'INVALID_TOKEN'}), 401
+        
+        # Check write permissions (admin has full access)
+        if user.role != 'admin':
+            permission = FolderPermission.query.filter_by(
+                user_id=user.id,
+                folder_path='/' + path if path else '/'
+            ).first()
+            
+            if not permission or not permission.can_write:
+                return jsonify({'error': 'Write access denied', 'code': 'WRITE_ACCESS_DENIED'}), 403
+    
+    # Handle upload
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided', 'code': 'NO_FILE'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected', 'code': 'NO_FILE'}), 400
+    
+    # Secure filename and save
+    filename = secure_filename(file.filename)
+    target_dir = Path(CONFIG['STORAGE_PATH']) / path
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+    
+    file.save(str(target_path))
+    
+    # Return file info
+    stat = target_path.stat()
+    return jsonify({
+        'file': {
+            'name': filename,
+            'path': str(Path(path) / filename) if path else filename,
+            'size': stat.st_size,
+            'modifiedAt': datetime.fromtimestamp(stat.st_mtime).isoformat()
+        }
+    }), 201
+
+
+@app.route('/api/v1/files/download', methods=['GET'])
+def api_download_file():
+    """Download file (respects permissions in protected mode)."""
+    from models import SystemSettings, FolderPermission
+    
+    path = request.args.get('path', '')
+    if not path:
+        return jsonify({'error': 'Path required', 'code': 'MISSING_PATH'}), 400
+    
+    # Check system mode and permissions
+    settings = SystemSettings.query.first()
+    
+    if settings and settings.mode == 'protected':
+        token = auth.get_token_from_request()
+        if not token:
+            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+        
+        user = auth.get_user_from_token(token)
+        if not user:
+            return jsonify({'error': 'Invalid token', 'code': 'INVALID_TOKEN'}), 401
+        
+        # Check read permissions
+        if user.role != 'admin':
+            folder_path = '/' + str(Path(path).parent)
+            permission = FolderPermission.query.filter_by(
+                user_id=user.id,
+                folder_path=folder_path
+            ).first()
+            
+            if not permission or not permission.can_read:
+                return jsonify({'error': 'Read access denied', 'code': 'READ_ACCESS_DENIED'}), 403
+    
+    # Serve file
+    file_path = Path(CONFIG['STORAGE_PATH']) / path
+    
+    if not file_path.exists() or not file_path.is_file():
+        return jsonify({'error': 'File not found', 'code': 'FILE_NOT_FOUND'}), 404
+    
+    return send_file(str(file_path), as_attachment=True)
+
+
+@app.route('/api/v1/files/mkdir', methods=['POST'])
+@auth.require_auth()
+def api_create_directory():
+    """Create directory (respects permissions in protected mode)."""
+    from models import SystemSettings, FolderPermission
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body required', 'code': 'MISSING_BODY'}), 400
+    
+    path = data.get('path', '')
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Directory name required', 'code': 'MISSING_NAME'}), 400
+    
+    # Check permissions
+    settings = SystemSettings.query.first()
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+    
+    if settings and settings.mode == 'protected' and user.role != 'admin':
+        permission = FolderPermission.query.filter_by(
+            user_id=user.id,
+            folder_path='/' + path if path else '/'
+        ).first()
+        
+        if not permission or not permission.can_write:
+            return jsonify({'error': 'Write access denied', 'code': 'WRITE_ACCESS_DENIED'}), 403
+    
+    # Create directory
+    target_dir = Path(CONFIG['STORAGE_PATH']) / path / secure_filename(name)
+    
+    try:
+        target_dir.mkdir(parents=True, exist_ok=False)
+        return jsonify({
+            'folder': {
+                'name': name,
+                'path': str(Path(path) / name) if path else name
+            }
+        }), 201
+    except FileExistsError:
+        return jsonify({'error': 'Directory already exists', 'code': 'DIR_EXISTS'}), 409
+    except Exception as e:
+        return jsonify({'error': str(e), 'code': 'CREATE_DIR_ERROR'}), 500
+
+
+@app.route('/api/v1/files', methods=['DELETE'])
+@auth.require_auth()
+def api_delete_file():
+    """Delete file or directory (respects permissions in protected mode)."""
+    from models import SystemSettings, FolderPermission
+    
+    if not CONFIG['ENABLE_DELETE']:
+        return jsonify({'error': 'Delete is disabled', 'code': 'DELETE_DISABLED'}), 403
+    
+    path = request.args.get('path', '')
+    if not path:
+        return jsonify({'error': 'Path required', 'code': 'MISSING_PATH'}), 400
+    
+    # Check permissions
+    settings = SystemSettings.query.first()
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+    
+    if settings and settings.mode == 'protected' and user.role != 'admin':
+        folder_path = '/' + str(Path(path).parent)
+        permission = FolderPermission.query.filter_by(
+            user_id=user.id,
+            folder_path=folder_path
+        ).first()
+        
+        if not permission or not permission.can_write:
+            return jsonify({'error': 'Write access denied', 'code': 'WRITE_ACCESS_DENIED'}), 403
+    
+    # Delete file/directory
+    target_path = Path(CONFIG['STORAGE_PATH']) / path
+    
+    if not target_path.exists():
+        return jsonify({'error': 'File not found', 'code': 'FILE_NOT_FOUND'}), 404
+    
+    try:
+        if target_path.is_dir():
+            import shutil
+            shutil.rmtree(target_path)
+        else:
+            target_path.unlink()
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'code': 'DELETE_ERROR'}), 500
+
+
+@app.route('/api/v1/stats/dashboard', methods=['GET'])
+@auth.require_admin()
+def api_get_dashboard_stats():
+    """Get dashboard statistics (admin only)."""
+    from models import SystemSettings
+    
+    # Count users
+    user_count = User.query.filter_by(role='user').count()
+    
+    # Count files and folders
+    storage_path = Path(CONFIG['STORAGE_PATH'])
+    file_count = 0
+    folder_count = 0
+    total_size = 0
+    
+    try:
+        for item in storage_path.rglob('*'):
+            if item.is_file():
+                file_count += 1
+                total_size += item.stat().st_size
+            elif item.is_dir():
+                folder_count += 1
+    except Exception:
+        pass
+    
+    # Get system settings
+    settings = SystemSettings.query.first()
+    
+    return jsonify({
+        'userCount': user_count,
+        'fileCount': file_count,
+        'folderCount': folder_count,
+        'totalSize': total_size,
+        'mode': settings.mode if settings else 'open',
+        'tlsEnabled': settings.tls_enabled if settings else True
+    }), 200
+
+
+# =============================================================================
+# Legacy HTML Endpoints (for backward compatibility)
+# =============================================================================
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -656,6 +1376,35 @@ def main():
     with app.app_context():
         db.create_all()
         print("✅ Database initialized")
+        
+        # Create default system settings if not exists
+        from models import SystemSettings
+        if not SystemSettings.query.first():
+            default_settings = SystemSettings(
+                mode='open',
+                auth_method='email+password',
+                tls_enabled=True,
+                https_port=CONFIG['PORT'],
+                device_name=CONFIG['SERVICE_NAME']
+            )
+            db.session.add(default_settings)
+            db.session.commit()
+            print("✅ Default system settings created")
+        
+        # Create default admin user if no admin exists
+        admin_user = User.query.filter_by(role='admin').first()
+        if not admin_user:
+            # Use ADMIN_PIN as temporary password for default admin
+            default_admin = User(
+                email='admin@thumbsup.local',
+                password_hash=auth.hash_password(CONFIG['ADMIN_PIN']),
+                role='admin',
+                is_default_pin=True  # Flag to force password change on first login
+            )
+            db.session.add(default_admin)
+            db.session.commit()
+            print("✅ Default admin user created (admin@thumbsup.local)")
+            print(f"   Password: {CONFIG['ADMIN_PIN']} (must be changed on first login)")
     
     # Generate initial access token
     token = auth.generate_guest_token(read_only=not CONFIG['ENABLE_UPLOADS'])
