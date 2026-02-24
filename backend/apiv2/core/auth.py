@@ -12,7 +12,6 @@ from functools import wraps
 from flask import request, jsonify
 from models import db, User
 
-
 class TokenAuth:
     """Handle JWT token generation and validation with database-backed authentication."""
     
@@ -198,6 +197,30 @@ class TokenAuth:
         """
         return request.cookies.get('admin_token')
     
+    def get_token_from_request(self):
+        """
+        Extract token from request (Authorization header, cookie, or URL param).
+        
+        Returns:
+            Token string or None
+        """
+        # Try Authorization header first (Bearer token)
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            return auth_header[7:]
+        
+        # Fall back to cookies
+        token = request.cookies.get('auth_token') or request.cookies.get('admin_token')
+        if token:
+            return token
+        
+        # Check URL parameter (legacy support)
+        token = request.args.get('token')
+        if token:
+            return token
+        
+        return None
+    
     def require_admin(self):
         """
         Decorator to require admin authentication for Flask routes.
@@ -205,13 +228,14 @@ class TokenAuth:
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                token = self.get_admin_token_from_request()
+                token = self.get_token_from_request()
                 
                 if not token:
-                    return jsonify({'error': 'Admin authentication required'}), 401
+                    return jsonify({'error': 'Admin authentication required', 'code': 'ADMIN_AUTH_REQUIRED'}), 401
                 
-                if not self.is_admin(token):
-                    return jsonify({'error': 'Invalid admin session'}), 401
+                user = self.get_user_from_token(token)
+                if not user or user.role != 'admin':
+                    return jsonify({'error': 'Admin access required', 'code': 'ADMIN_ACCESS_REQUIRED'}), 403
                 
                 return f(*args, **kwargs)
             
@@ -266,31 +290,12 @@ class TokenAuth:
         except jwt.InvalidTokenError:
             return None
     
-    def get_token_from_request(self):
-        """
-        Extract token from request (cookie or URL param for /auth endpoint).
-        
-        Returns:
-            Token string or None
-        """
-        # Check cookie (primary method after authentication)
-        token = request.cookies.get('auth_token')
-        if token:
-            return token
-        
-        # Check URL parameter (only for /auth endpoint)
-        token = request.args.get('token')
-        if token:
-            return token
-        
-        return None
-    
     def require_auth(self, permission=None):
         """
         Decorator to require authentication for Flask routes.
         
         Args:
-            permission: Required permission (read, write, delete)
+            permission: Required permission (read, write, delete). None means any authenticated user.
         """
         def decorator(f):
             @wraps(f)
@@ -298,23 +303,31 @@ class TokenAuth:
                 token = self.get_token_from_request()
                 
                 if not token:
-                    return jsonify({'error': 'No token provided'}), 401
+                    return jsonify({'error': 'No token provided', 'code': 'NO_TOKEN'}), 401
                 
+                # Try user-based auth first (new system with DB-backed users)
+                user = self.get_user_from_token(token)
+                if user:
+                    # Authenticated DB user - attach info and allow
+                    request.user = {
+                        'user_id': user.id,
+                        'email': user.email,
+                        'role': user.role,
+                    }
+                    return f(*args, **kwargs)
+                
+                # Fall back to payload-based auth (legacy guest tokens)
                 payload = self.validate_token(token)
-                
                 if not payload:
-                    return jsonify({'error': 'Invalid or expired token'}), 401
+                    return jsonify({'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}), 401
                 
-                # New token format: all authenticated users have read/write access
-                # (Admin and regular users both get full access)
-                # Old token format: check permissions array
+                # Check permissions for legacy tokens
                 if permission:
                     permissions = payload.get('permissions', [])
                     role = payload.get('role')
                     
                     # New format: authenticated users have all permissions
                     if role in ('admin', 'user'):
-                        # All authenticated users have read/write access
                         pass
                     # Old format: check permissions array
                     elif permission not in permissions:

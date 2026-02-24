@@ -27,6 +27,7 @@ RUN mkdir -p ./certs ./storage ./data
 EXPOSE 8443
 
 # Environment variables (default values, override with docker run -e)
+ENV PYTHONUNBUFFERED=1
 ENV HOST=0.0.0.0
 ENV PORT=8443
 ENV STORAGE_PATH=/app/storage
