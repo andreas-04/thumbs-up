@@ -38,16 +38,20 @@ import {
 } from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, Pencil, Trash2, Search, Shield, Mail, Key } from 'lucide-react';
+import { Plus, Trash2, Search, Shield, Mail, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserManagement() {
-  const { settings, users, addUser, updateUser, deleteUser } = useData();
+  const { settings, users, addUser, deleteUser, refreshUsers } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // Refresh users whenever this page is visited
+  React.useEffect(() => {
+    refreshUsers().catch((err) => console.error('Failed to refresh users:', err));
+  }, []);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -61,14 +65,6 @@ export default function UserManagement() {
       user.username?.toLowerCase().includes(searchLower)
     );
   });
-
-  const openEditDialog = (user: User) => {
-    setSelectedUser(user);
-    setFormData({
-      email: user.email || '',
-    });
-    setShowEditDialog(true);
-  };
 
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
@@ -87,7 +83,7 @@ export default function UserManagement() {
     return true;
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!validateForm()) return;
 
     // Check for duplicates
@@ -98,33 +94,35 @@ export default function UserManagement() {
       return;
     }
 
-    addUser({ email: formData.email });
-    toast.success('Email approved successfully');
-    setShowAddDialog(false);
-    resetForm();
+    try {
+      await addUser({ email: formData.email });
+      toast.success('Email approved successfully');
+      setShowAddDialog(false);
+      resetForm();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to approve email');
+    }
   };
 
-  const handleEdit = () => {
-    if (!selectedUser || !validateForm()) return;
-
-    updateUser(selectedUser.id, { email: formData.email });
-    toast.success('Email updated successfully');
-    setShowEditDialog(false);
-    setSelectedUser(null);
-    resetForm();
-  };
-
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selectedUser) return;
-    deleteUser(selectedUser.id);
-    toast.success('User removed successfully');
-    setShowDeleteDialog(false);
-    setSelectedUser(null);
+    try {
+      await deleteUser(selectedUser.id);
+      toast.success('User removed successfully');
+      setShowDeleteDialog(false);
+      setSelectedUser(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove user');
+    }
   };
 
   const getUserIdentifier = (user: User): string => {
     return user.email || 'N/A';
   };
+
+  if (!settings) {
+    return null;
+  }
 
   if (settings.mode === 'open') {
     return (
@@ -238,24 +236,14 @@ export default function UserManagement() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(user)}
-                            className="text-gray-400 hover:text-white"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteDialog(user)}
-                            className="text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteDialog(user)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -293,36 +281,6 @@ export default function UserManagement() {
               Cancel
             </Button>
             <Button onClick={handleAdd}>Approve Email</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit User Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Edit User</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Update user information
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-email" className="text-gray-200">Email Address *</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)} className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">
-              Cancel
-            </Button>
-            <Button onClick={handleEdit}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

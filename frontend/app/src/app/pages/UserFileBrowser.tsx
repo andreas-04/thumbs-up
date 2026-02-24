@@ -1,6 +1,37 @@
 import { useState, useEffect } from 'react';
-import { Folder, FileText, Upload, Settings, Download, User, ChevronLeft, RefreshCw, Loader2 } from 'lucide-react';
+import {
+  FolderOpen,
+  File,
+  Home,
+  ChevronRight,
+  Search,
+  Download,
+  Upload,
+  RefreshCw,
+  Loader2,
+  Lock,
+  HardDrive,
+} from 'lucide-react';
 import { api, FileItem as ApiFileItem } from '../../services/api';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 interface FileItem {
   id: string;
@@ -18,6 +49,7 @@ export default function UserFileBrowser() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadFiles = async (path: string = '/') => {
     setLoading(true);
@@ -55,7 +87,7 @@ export default function UserFileBrowser() {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
-    
+
     setUploading(true);
     try {
       const uploadPath = currentPath === '/' ? '' : currentPath.replace(/^\//, '');
@@ -74,6 +106,7 @@ export default function UserFileBrowser() {
     if (item.type === 'folder') {
       const newPath = item.path.startsWith('/') ? item.path : '/' + item.path;
       loadFiles(newPath);
+      setSearchQuery('');
     }
   };
 
@@ -81,7 +114,7 @@ export default function UserFileBrowser() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const url = `${baseUrl}/api/v1/files/download?path=${encodeURIComponent(item.path)}`;
     const token = localStorage.getItem('auth_token');
-    
+
     if (token) {
       fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -105,7 +138,6 @@ export default function UserFileBrowser() {
           setError('Download failed');
         });
     } else {
-      // No auth needed, direct download
       const link = document.createElement('a');
       link.href = url;
       link.download = item.name;
@@ -119,6 +151,7 @@ export default function UserFileBrowser() {
     if (currentPath === '/') return;
     const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
     loadFiles(parentPath);
+    setSearchQuery('');
   };
 
   const formatFileSize = (bytes?: number): string => {
@@ -131,142 +164,242 @@ export default function UserFileBrowser() {
     return `${gb.toFixed(1)} GB`;
   };
 
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch {
-      return dateString;
-    }
-  };
+  const pathParts = currentPath.split('/').filter(Boolean);
+
+  const filteredFiles = fileItems
+    .filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const folderCount = filteredFiles.filter((f) => f.type === 'folder').length;
+  const fileCount = filteredFiles.filter((f) => f.type === 'file').length;
 
   return (
-    <div className="h-screen flex flex-col dark bg-gray-900">
+    <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <header className="bg-gray-800 border-gray-700 border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Folder className="w-8 h-8 text-gray-400" />
-          <h1 className="text-2xl font-semibold text-white">ThumbsUp File Share</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => loadFiles(currentPath)}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-all hover:scale-110"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button className="p-2 hover:bg-gray-700 rounded-lg transition-all hover:scale-110">
-            <Settings className="w-6 h-6 text-gray-400" />
-          </button>
+      <header className="border-b border-gray-800 bg-gray-900">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-950 flex items-center justify-center">
+              <HardDrive className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">ThumbsUp File Share</h1>
+              <p className="text-xs text-gray-400">Browse &amp; download shared files</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => loadFiles(currentPath)}
+              className="text-gray-400 hover:text-white"
+              title="Refresh"
+            >
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
       </header>
 
-      {/* Breadcrumb / Current Path */}
-      <div className="bg-gray-800 border-gray-700 border-b px-6 py-2 flex items-center gap-2">
-        <button
-          onClick={goBack}
-          disabled={currentPath === '/'}
-          className="p-1 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          <ChevronLeft className="w-5 h-5 text-gray-400" />
-        </button>
-        <span className="text-gray-300 font-mono text-sm">{currentPath}</span>
-      </div>
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        {/* Error */}
+        {error && (
+          <Alert className="bg-red-950 border-red-900">
+            <AlertDescription className="text-red-300 flex items-center justify-between">
+              {error}
+              <Button variant="ghost" size="sm" onClick={() => setError(null)} className="text-red-400 hover:text-red-300 ml-4">
+                Dismiss
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {/* Upload Area */}
-      <div className="bg-gray-800 border-gray-700 border-b px-6 py-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-gray-300">
-            <Upload className="w-5 h-5 text-blue-400" />
-            <span className="font-medium">Upload File</span>
-          </div>
-          <label className="px-4 py-2 bg-gray-700 border-gray-600 hover:bg-gray-600 border rounded cursor-pointer transition-all hover:scale-105">
-            <span className="text-gray-200">Browse...</span>
-            <input
-              type="file"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-          </label>
-          <span className="text-gray-400 text-sm">
-            {selectedFile ? selectedFile.name : 'No file selected.'}
-          </span>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploading}
-            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed transition-all hover:scale-105 disabled:hover:scale-100 flex items-center gap-2"
-          >
-            {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-            Upload
-          </button>
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-900 border-red-700 border-b px-6 py-3 text-red-200">
-          {error}
-          <button onClick={() => setError(null)} className="ml-4 text-red-400 hover:text-red-300">×</button>
-        </div>
-      )}
-
-      {/* File List */}
-      <div className="flex-1 overflow-auto px-6 py-4 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-        <div className="bg-gray-800 border-gray-700 rounded-lg border">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-            </div>
-          ) : fileItems.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-gray-400">
-              This folder is empty
-            </div>
-          ) : (
-            fileItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-4 px-6 py-4 border-gray-700 hover:bg-gray-700 border-b last:border-b-0 transition-all hover:scale-[1.02] cursor-pointer"
-                onClick={() => handleItemClick(item)}
-              >
-                {/* Icon and Name */}
-                <div className="flex items-center gap-3 min-w-[300px]">
-                  {item.type === 'folder' ? (
-                    <Folder className="w-6 h-6 text-gray-400 flex-shrink-0" />
-                  ) : (
-                    <FileText className="w-6 h-6 text-gray-400 flex-shrink-0" />
-                  )}
-                  <span className="font-medium text-white">{item.name}</span>
-                </div>
-
-                {/* Modified Date and Size */}
-                <div className="flex flex-col min-w-[200px]">
-                  <span className="text-sm text-gray-400">Modified: {formatDate(item.modifiedAt)}</span>
-                  {item.type === 'file' && (
-                    <span className="text-sm text-gray-400">{formatFileSize(item.size)}</span>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-3 ml-auto">
-                  {item.type === 'file' && (
-                    <button 
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-all hover:scale-110"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(item);
-                      }}
-                    >
-                      <Download className="w-4 h-4 inline mr-1" />
-                      Download
-                    </button>
-                  )}
-                </div>
+        {/* Upload Card */}
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 text-gray-300">
+                <Upload className="h-4 w-4 text-blue-400" />
+                <span className="font-medium text-sm">Upload File</span>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+              <label>
+                <Button variant="outline" size="sm" className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700 cursor-pointer" asChild>
+                  <span>Browse…</span>
+                </Button>
+                <input type="file" className="hidden" onChange={handleFileSelect} />
+              </label>
+              <span className="text-sm text-gray-400 truncate max-w-[200px]">
+                {selectedFile ? selectedFile.name : 'No file selected'}
+              </span>
+              <Button
+                size="sm"
+                onClick={handleUpload}
+                disabled={!selectedFile || uploading}
+              >
+                {uploading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Upload
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* File Browser Card */}
+        <Card className="bg-gray-900 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-white">Files</CardTitle>
+            <CardDescription className="text-gray-400">
+              Browse shared files and folders
+            </CardDescription>
+
+            {/* Breadcrumb */}
+            <div className="pt-4 flex items-center gap-1 text-sm flex-wrap">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { loadFiles('/'); setSearchQuery(''); }}
+                className="text-gray-300 hover:text-white"
+              >
+                <Home className="h-4 w-4" />
+              </Button>
+              {pathParts.map((part, index) => {
+                const path = '/' + pathParts.slice(0, index + 1).join('/');
+                return (
+                  <div key={path} className="flex items-center gap-1">
+                    <ChevronRight className="h-4 w-4 text-gray-600" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { loadFiles(path); setSearchQuery(''); }}
+                      className="text-gray-300 hover:text-white"
+                    >
+                      {part}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Search */}
+            <div className="pt-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search files and folders…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <div className="border border-gray-800 rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-gray-800 hover:bg-gray-800/50">
+                    <TableHead className="text-gray-300">Name</TableHead>
+                    <TableHead className="text-gray-300">Type</TableHead>
+                    <TableHead className="text-gray-300">Size</TableHead>
+                    <TableHead className="text-gray-300">Modified</TableHead>
+                    <TableHead className="text-right text-gray-300">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* Parent directory row */}
+                  {currentPath !== '/' && (
+                    <TableRow
+                      className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                      onClick={goBack}
+                    >
+                      <TableCell colSpan={5} className="text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <FolderOpen className="h-4 w-4" />
+                          <span>.. (Parent Directory)</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {loading ? (
+                    <TableRow className="border-gray-800">
+                      <TableCell colSpan={5} className="text-center py-12">
+                        <Loader2 className="h-6 w-6 text-gray-400 animate-spin mx-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredFiles.length === 0 ? (
+                    <TableRow className="border-gray-800">
+                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        {searchQuery ? 'No files found matching your search' : 'This folder is empty'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredFiles.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                        onClick={() => handleItemClick(item)}
+                      >
+                        <TableCell className="font-medium text-white">
+                          <div className="flex items-center gap-2">
+                            {item.type === 'folder' ? (
+                              <FolderOpen className="h-4 w-4 text-orange-400" />
+                            ) : (
+                              <File className="h-4 w-4 text-blue-400" />
+                            )}
+                            {item.name}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={item.type === 'folder' ? 'default' : 'secondary'}>
+                            {item.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-gray-400">
+                          {formatFileSize(item.size)}
+                        </TableCell>
+                        <TableCell className="text-gray-400">
+                          {new Date(item.modifiedAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.type === 'file' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownload(item);
+                              }}
+                              className="text-blue-400 hover:text-blue-300"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Footer stats */}
+            <div className="mt-4 flex items-center justify-between text-sm text-gray-400">
+              <div>
+                {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
+                {' '}({folderCount} folder{folderCount !== 1 ? 's' : ''}, {fileCount} file{fileCount !== 1 ? 's' : ''})
+              </div>
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-green-400" />
+                <span>Secure Connection</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }

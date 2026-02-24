@@ -3,3 +3,4 @@
 *.crt
 *.db
 config.env
+**/node_modules/

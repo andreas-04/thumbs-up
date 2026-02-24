@@ -395,7 +395,7 @@ def api_list_users():
     users = query.offset((page - 1) * limit).limit(limit).all()
     
     return jsonify({
-        'users': [user.to_dict() for user in users],
+        'users': [user.to_dict(include_permissions=True) for user in users],
         'total': total,
         'page': page,
         'limit': limit
@@ -585,6 +585,30 @@ def api_list_folders():
     return jsonify({'folders': folders}), 200
 
 
+def user_has_access(user, folder_path, require_write=False):
+    """Check if a user can access a folder.
+
+    If the user has NO FolderPermission rows at all, they get full default
+    access (the UI shows this as "Default").  If at least one row exists the
+    explicit entry for *this* path must grant the required permission.
+    """
+    from models import FolderPermission
+
+    any_permissions = FolderPermission.query.filter_by(user_id=user.id).first()
+    if not any_permissions:
+        # No restrictions configured – allow everything
+        return True
+
+    permission = FolderPermission.query.filter_by(
+        user_id=user.id,
+        folder_path=folder_path
+    ).first()
+
+    if not permission:
+        return False
+    return permission.can_write if require_write else permission.can_read
+
+
 @app.route('/api/v1/files', methods=['GET'])
 def api_list_files():
     """List files in directory (respects permissions in protected mode)."""
@@ -607,12 +631,8 @@ def api_list_files():
         
         # Check folder permissions (admin has full access)
         if user.role != 'admin':
-            permission = FolderPermission.query.filter_by(
-                user_id=user.id,
-                folder_path='/' + path if path else '/'
-            ).first()
-            
-            if not permission or not permission.can_read:
+            check_path = '/' + path if path else '/'
+            if not user_has_access(user, check_path):
                 return jsonify({'error': 'Access denied', 'code': 'ACCESS_DENIED'}), 403
     
     # Get file list
@@ -656,12 +676,8 @@ def api_upload_file():
         
         # Check write permissions (admin has full access)
         if user.role != 'admin':
-            permission = FolderPermission.query.filter_by(
-                user_id=user.id,
-                folder_path='/' + path if path else '/'
-            ).first()
-            
-            if not permission or not permission.can_write:
+            check_path = '/' + path if path else '/'
+            if not user_has_access(user, check_path, require_write=True):
                 return jsonify({'error': 'Write access denied', 'code': 'WRITE_ACCESS_DENIED'}), 403
     
     # Handle upload
@@ -716,12 +732,7 @@ def api_download_file():
         # Check read permissions
         if user.role != 'admin':
             folder_path = '/' + str(Path(path).parent)
-            permission = FolderPermission.query.filter_by(
-                user_id=user.id,
-                folder_path=folder_path
-            ).first()
-            
-            if not permission or not permission.can_read:
+            if not user_has_access(user, folder_path):
                 return jsonify({'error': 'Read access denied', 'code': 'READ_ACCESS_DENIED'}), 403
     
     # Serve file
@@ -755,12 +766,8 @@ def api_create_directory():
     user = auth.get_user_from_token(token)
     
     if settings and settings.mode == 'protected' and user.role != 'admin':
-        permission = FolderPermission.query.filter_by(
-            user_id=user.id,
-            folder_path='/' + path if path else '/'
-        ).first()
-        
-        if not permission or not permission.can_write:
+        check_path = '/' + path if path else '/'
+        if not user_has_access(user, check_path, require_write=True):
             return jsonify({'error': 'Write access denied', 'code': 'WRITE_ACCESS_DENIED'}), 403
     
     # Create directory
