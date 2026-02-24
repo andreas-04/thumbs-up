@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData, User, FolderPermission } from '../contexts/DataContext';
+import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import {
   Card,
@@ -48,13 +49,18 @@ import {
 import { toast } from 'sonner';
 
 export default function FolderPermissions() {
-  const { settings, users, files, updateUser } = useData();
+  const { settings, users, refreshUsers, updateUserPermissions } = useData();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [permissions, setPermissions] = useState<FolderPermission[]>([]);
+  const [allFolders, setAllFolders] = useState<Array<{ path: string; name: string }>>([]);
 
-  // Get unique folders from files
-  const folders = files.filter((f) => f.type === 'folder');
+  useEffect(() => {
+    refreshUsers().catch((err) => console.error('Failed to refresh users:', err));
+    api.listFolders()
+      .then(({ folders }) => setAllFolders(folders))
+      .catch((err) => console.error('Failed to load folders:', err));
+  }, []);
 
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
@@ -91,17 +97,23 @@ export default function FolderPermissions() {
     return permissions.find((p) => p.path === folderPath) || null;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedUser) return;
-    
+
     // Filter out permissions where both read and write are false
-    const cleanedPermissions = permissions.filter((p) => p.read || p.write);
-    
-    updateUser(selectedUser.id, { folderPermissions: cleanedPermissions });
-    toast.success('Folder permissions updated successfully');
-    setShowEditDialog(false);
-    setSelectedUser(null);
-    setPermissions([]);
+    const cleanedPermissions = permissions
+      .filter((p) => p.read || p.write)
+      .map((p) => ({ path: p.path, read: p.read, write: p.write }));
+
+    try {
+      await updateUserPermissions(selectedUser.id, cleanedPermissions);
+      toast.success('Folder permissions updated successfully');
+      setShowEditDialog(false);
+      setSelectedUser(null);
+      setPermissions([]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update permissions');
+    }
   };
 
   const getUserIdentifier = (user: User): string => {
@@ -121,6 +133,10 @@ export default function FolderPermissions() {
     
     return `${user.folderPermissions.length} folders - ${readCount} read, ${writeCount} write`;
   };
+
+  if (!settings) {
+    return null;
+  }
 
   if (settings.mode === 'open') {
     return (
@@ -285,10 +301,10 @@ export default function FolderPermissions() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {folders.map((folder) => {
+                    {allFolders.map((folder) => {
                       const perm = getPermission(folder.path);
                       return (
-                        <TableRow key={folder.id} className="border-gray-800">
+                        <TableRow key={folder.path} className="border-gray-800">
                           <TableCell className="text-white">
                             <div className="flex items-center gap-2">
                               <FolderOpen className="h-4 w-4 text-orange-400" />

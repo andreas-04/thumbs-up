@@ -86,22 +86,17 @@ class ApiClient {
     this.baseUrl = baseUrl;
     // Load token from localStorage on init
     this.token = localStorage.getItem('auth_token');
-    console.log('[API] ApiClient initialized with baseUrl:', baseUrl);
-    console.log('[API] Token loaded from localStorage:', this.token ? `${this.token.substring(0, 20)}...` : 'null');
   }
 
   /**
    * Set authentication token
    */
   setToken(token: string | null) {
-    console.log('[API] Setting token:', token ? `${token.substring(0, 20)}...` : 'null');
     this.token = token;
     if (token) {
       localStorage.setItem('auth_token', token);
-      console.log('[API] Token saved to localStorage');
     } else {
       localStorage.removeItem('auth_token');
-      console.log('[API] Token removed from localStorage');
     }
   }
 
@@ -121,31 +116,36 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
+    // Normalize headers to a plain object
+    let normalizedHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((value, key) => {
+          normalizedHeaders[key] = value;
+        });
+      } else if (Array.isArray(options.headers)) {
+        options.headers.forEach(([key, value]) => {
+          normalizedHeaders[key] = value;
+        });
+      } else {
+        normalizedHeaders = { ...normalizedHeaders, ...(options.headers as Record<string, string>) };
+      }
+    }
 
     // Add Authorization header if token exists
     // Reload token from localStorage in case it was set after initialization
     if (!this.token) {
       this.token = localStorage.getItem('auth_token');
-      console.log('[API] Reloaded token from localStorage:', this.token ? `${this.token.substring(0, 20)}...` : 'null');
     }
     
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-      console.log('[API] Request to', endpoint, 'with auth token:', `${this.token.substring(0, 20)}...`);
-    } else {
-      console.log('[API] Request to', endpoint, 'WITHOUT auth token');
+      normalizedHeaders['Authorization'] = `Bearer ${this.token}`;
     }
-
-    console.log('[API] Full headers being sent:', headers);
 
     try {
       const response = await fetch(url, {
         ...options,
-        headers,
+        headers: normalizedHeaders,
       });
 
       // Handle non-JSON responses (like file downloads)
