@@ -48,11 +48,13 @@ class TestGenerateAndValidateToken:
         assert auth_instance.validate_token(token) is None
 
     def test_validate_token_wrong_key(self, auth_instance):
+        import secrets
+
         token = auth_instance.generate_token()
         # Validate with a different secret key
         from core.auth import TokenAuth
 
-        other = TokenAuth(secret_key="different-key")
+        other = TokenAuth(secret_key=secrets.token_hex(16))
         assert other.validate_token(token) is None
 
     def test_validate_malformed_token(self, auth_instance):

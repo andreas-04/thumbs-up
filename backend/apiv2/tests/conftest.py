@@ -3,6 +3,7 @@ Shared pytest fixtures for ThumbsUp backend tests.
 """
 
 import os
+import secrets
 import sys
 
 import pytest
@@ -10,9 +11,12 @@ import pytest
 # Ensure apiv2 is on the path so imports work the same way as in production
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Randomly generated at import time so no hardcoded secret-like literals exist in source.
+_TEST_JWT_SECRET = secrets.token_hex(32)
+
 # Set required env vars BEFORE importing server (server.py exits if ADMIN_PIN missing,
 # and DATABASE_URI must point to an in-memory DB so tests don't touch the filesystem).
-os.environ["ADMIN_PIN"] = "test-pin-1234"
+os.environ["ADMIN_PIN"] = secrets.token_hex(4)
 os.environ["DATABASE_URI"] = "sqlite:///:memory:"
 
 
@@ -55,7 +59,7 @@ def auth_instance():
     """Return a standalone TokenAuth instance (no Flask context needed)."""
     from core.auth import TokenAuth
 
-    return TokenAuth(secret_key="test-secret-key", token_expiry_hours=1)
+    return TokenAuth(secret_key=_TEST_JWT_SECRET, token_expiry_hours=1)
 
 
 @pytest.fixture
@@ -64,7 +68,7 @@ def admin_user(app):
     from core.auth import TokenAuth
     from models import User, db
 
-    _auth = TokenAuth(secret_key="test-secret-key")
+    _auth = TokenAuth(secret_key=_TEST_JWT_SECRET)
     user = User(
         email="admin@test.com",
         password_hash=_auth.hash_password("adminpass"),
@@ -82,7 +86,7 @@ def regular_user(app):
     from core.auth import TokenAuth
     from models import User, db
 
-    _auth = TokenAuth(secret_key="test-secret-key")
+    _auth = TokenAuth(secret_key=_TEST_JWT_SECRET)
     user = User(
         email="user@test.com",
         password_hash=_auth.hash_password("userpass"),
