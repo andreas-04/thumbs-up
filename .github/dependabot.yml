@@ -1,7 +1,5 @@
-# Dependabot configuration for automatic dependency updates
 version: 2
 updates:
-  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -11,9 +9,8 @@ updates:
       - "dependencies"
       - "github-actions"
 
-  # Frontend npm dependencies
   - package-ecosystem: "npm"
-    directory: "/frontend"
+    directory: "/frontend/app"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -21,15 +18,13 @@ updates:
       - "dependencies"
       - "frontend"
     ignore:
-      # Ignore major version updates for React (manual review recommended)
       - dependency-name: "react"
         update-types: ["version-update:semver-major"]
       - dependency-name: "react-dom"
         update-types: ["version-update:semver-major"]
 
-  # Python dependencies (if you add a requirements.txt or pyproject.toml)
   - package-ecosystem: "pip"
-    directory: "/backend/scripts"
+    directory: "/backend/apiv2"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -37,9 +32,8 @@ updates:
       - "dependencies"
       - "backend"
 
-  # Docker dependencies
   - package-ecosystem: "docker"
-    directory: "/backend/api/server"
+    directory: "/backend/apiv2"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -48,7 +42,7 @@ updates:
       - "docker"
 
   - package-ecosystem: "docker"
-    directory: "/backend/api/client"
+    directory: "/frontend/app"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
