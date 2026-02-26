@@ -100,9 +100,9 @@ export default function FolderPermissions() {
   const handleSave = async () => {
     if (!selectedUser) return;
 
-    // Filter out permissions where both read and write are false
+    // Include all permissions that were explicitly configured (even if both are false = deny all)
+    // Only exclude folders that were never touched (not in the permissions array at all)
     const cleanedPermissions = permissions
-      .filter((p) => p.read || p.write)
       .map((p) => ({ path: p.path, read: p.read, write: p.write }));
 
     try {

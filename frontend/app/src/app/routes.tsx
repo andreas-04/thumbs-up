@@ -30,7 +30,13 @@ export const router = createBrowserRouter([
   },
   {
     path: '/files',
-    Component: UserFileBrowser,
+    Component: ProtectedRoute,
+    children: [
+      {
+        path: '',
+        Component: UserFileBrowser,
+      },
+    ],
   },
   {
     path: '/admin',

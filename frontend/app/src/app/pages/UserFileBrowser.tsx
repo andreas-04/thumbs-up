@@ -11,7 +11,9 @@ import {
   Loader2,
   Lock,
   HardDrive,
+  LogOut,
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { api, FileItem as ApiFileItem } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,6 +34,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FileItem {
   id: string;
@@ -43,6 +46,8 @@ interface FileItem {
 }
 
 export default function UserFileBrowser() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -199,6 +204,16 @@ export default function UserFileBrowser() {
               title="Refresh"
             >
               <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => { await logout(); navigate('/'); }}
+              className="text-gray-400 hover:text-white"
+              title="Logout"
+            >
+              <LogOut className="h-5 w-5 mr-1" />
+              Logout
             </Button>
           </div>
         </div>

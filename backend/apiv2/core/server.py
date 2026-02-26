@@ -589,24 +589,40 @@ def user_has_access(user, folder_path, require_write=False):
     """Check if a user can access a folder.
 
     If the user has NO FolderPermission rows at all, they get full default
-    access (the UI shows this as "Default").  If at least one row exists the
-    explicit entry for *this* path must grant the required permission.
+    access (the UI shows this as "Default").  If at least one row exists we
+    look for the most specific matching permission – i.e. the longest
+    folder_path that is a prefix of the requested path.  A permission on '/'
+    therefore covers every sub-folder unless a more specific row overrides it.
     """
     from models import FolderPermission
 
-    any_permissions = FolderPermission.query.filter_by(user_id=user.id).first()
-    if not any_permissions:
+    all_permissions = FolderPermission.query.filter_by(user_id=user.id).all()
+    if not all_permissions:
         # No restrictions configured – allow everything
         return True
 
-    permission = FolderPermission.query.filter_by(
-        user_id=user.id,
-        folder_path=folder_path
-    ).first()
+    # Normalise the requested path so it always starts with '/' and has no
+    # trailing slash (except for root itself).
+    normalised = '/' + folder_path.strip('/')
+    if normalised != '/':
+        normalised = normalised.rstrip('/')
 
-    if not permission:
+    # Find the most specific (longest) permission whose path is a prefix of
+    # the requested folder_path.
+    best_match = None
+    for perm in all_permissions:
+        perm_path = '/' + perm.folder_path.strip('/')
+        if perm_path != '/':
+            perm_path = perm_path.rstrip('/')
+        # Check if this permission path is a prefix of the requested path
+        if normalised == perm_path or normalised.startswith(perm_path + '/'):
+            if best_match is None or len(perm_path) > len(best_match.folder_path.strip('/')):
+                best_match = perm
+
+    if not best_match:
+        # User has ACL rows but none cover this path – deny
         return False
-    return permission.can_write if require_write else permission.can_read
+    return best_match.can_write if require_write else best_match.can_read
 
 
 @app.route('/api/v1/files', methods=['GET'])
@@ -731,7 +747,8 @@ def api_download_file():
         
         # Check read permissions
         if user.role != 'admin':
-            folder_path = '/' + str(Path(path).parent)
+            parent = str(Path(path).parent)
+            folder_path = '/' if parent == '.' else '/' + parent
             if not user_has_access(user, folder_path):
                 return jsonify({'error': 'Read access denied', 'code': 'READ_ACCESS_DENIED'}), 403
     
