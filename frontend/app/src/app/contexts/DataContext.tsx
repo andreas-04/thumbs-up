@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api, SystemSettings, User as ApiUser, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { api, SystemSettings, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
 import { useAuth } from './AuthContext';
 
 export type SystemMode = 'open' | 'protected';
 export type AuthMethod = 'email' | 'email+password' | 'username+password';
 
 // Re-export API types for backward compatibility
-export interface FolderPermission extends ApiFolderPermission {}
+export type FolderPermission = ApiFolderPermission;
 
 export interface User {
   id: number;
@@ -19,9 +19,9 @@ export interface User {
   last_login?: string | null;
 }
 
-export interface SystemSettingsType extends SystemSettings {}
+export type SystemSettingsType = SystemSettings;
 
-export interface FileItem extends ApiFileItem {}
+export type FileItem = ApiFileItem;
 
 interface DataContextType {
   // System settings
@@ -110,7 +110,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     loadInitialData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refreshFiles]);
 
   const refreshSettings = async () => {
     try {
@@ -132,7 +132,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshUsers = async () => {
+  const refreshUsers = useCallback(async () => {
     try {
       const { users: usersData } = await api.listUsers();
       // Convert API user format to context format
@@ -149,7 +149,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Failed to refresh users:', err);
       throw err;
     }
-  };
+  }, []);
 
   const addUser = async (userData: { email: string; password?: string; role?: 'admin' | 'user' }) => {
     try {
@@ -195,7 +195,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshFiles = async (path?: string) => {
+  const refreshFiles = useCallback(async (path?: string) => {
     try {
       const targetPath = path || currentPath;
       // Remove leading slash for API call
@@ -211,7 +211,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // In open mode, this might fail without auth - set empty files
       setFiles([]);
     }
-  };
+  }, [currentPath]);
 
   return (
     <DataContext.Provider

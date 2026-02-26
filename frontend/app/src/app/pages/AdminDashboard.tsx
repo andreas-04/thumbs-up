@@ -5,7 +5,6 @@ import { Badge } from '../components/ui/badge';
 import { Link } from 'react-router';
 import {
   Shield,
-  ShieldOff,
   Users,
   FolderOpen,
   Lock,

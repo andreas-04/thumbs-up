@@ -25,13 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
@@ -60,7 +53,7 @@ export default function FolderPermissions() {
     api.listFolders()
       .then(({ folders }) => setAllFolders(folders))
       .catch((err) => console.error('Failed to load folders:', err));
-  }, []);
+  }, [refreshUsers]);
 
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
@@ -121,17 +114,6 @@ export default function FolderPermissions() {
       return user.username || 'N/A';
     }
     return user.email || 'N/A';
-  };
-
-  const getPermissionSummary = (user: User): string => {
-    if (user.folderPermissions.length === 0) {
-      return 'Full access (default)';
-    }
-    
-    const readCount = user.folderPermissions.filter((p) => p.read).length;
-    const writeCount = user.folderPermissions.filter((p) => p.write).length;
-    
-    return `${user.folderPermissions.length} folders - ${readCount} read, ${writeCount} write`;
   };
 
   if (!settings) {

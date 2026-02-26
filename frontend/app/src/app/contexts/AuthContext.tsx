@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      const { token, user: userData } = await api.login({ email, password });
+      const { user: userData } = await api.login({ email, password });
       
       // Token is automatically set in api client
       setUser(userData);
