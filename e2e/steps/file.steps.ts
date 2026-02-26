@@ -57,7 +57,8 @@ Then('I should see the file browser', async ({ page }) => {
 });
 
 Then('I should see {string} in the file list', async ({ page }, filename: string) => {
-  await expect(page.getByText(filename, { exact: false })).toBeVisible({ timeout: 10_000 });
+  // Scope to the table to avoid matching the upload status area (which also shows the filename)
+  await expect(page.getByRole('table').getByText(filename, { exact: false })).toBeVisible({ timeout: 10_000 });
 });
 
 Then('the download should start', async () => {
@@ -87,4 +88,7 @@ async function uploadTempFile(page: import('@playwright/test').Page, filename: s
   // Click the Upload button to submit
   const uploadButton = page.getByRole('button', { name: /^upload$/i });
   await uploadButton.click();
+
+  // Wait for the file to appear in the table (upload is asynchronous)
+  await expect(page.getByRole('table').getByText(filename, { exact: false })).toBeVisible({ timeout: 10_000 });
 }

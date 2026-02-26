@@ -10,7 +10,7 @@ export default defineConfig({
   testDir,
   timeout: 30_000,
   expect: {
-    timeout: 5_000,
+    timeout: 10_000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

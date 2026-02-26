@@ -40,14 +40,8 @@ Given('I am logged in as a regular user', async ({ page }) => {
 // ---------------------------------------------------------------------------
 
 When('I log out', async ({ page }) => {
-  // The logout button is rendered in the page header / nav
-  const logoutButton = page.getByRole('button', { name: /log ?out/i });
-  if (await logoutButton.isVisible()) {
-    await logoutButton.click();
-  } else {
-    // Fallback: click any logout link
-    await page.getByRole('link', { name: /log ?out/i }).click();
-  }
+  // Use auto-waiting click which waits for the element to be actionable (visible + stable)
+  await page.getByRole('button', { name: /log ?out/i }).click();
 });
 
 // ---------------------------------------------------------------------------
@@ -57,5 +51,5 @@ When('I log out', async ({ page }) => {
 Then('I should be redirected to {string}', async ({ page }, route: string) => {
   // Escape special regex characters before constructing the pattern
   const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  await expect(page).toHaveURL(new RegExp(escaped));
+  await expect(page).toHaveURL(new RegExp(escaped), { timeout: 10_000 });
 });

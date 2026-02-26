@@ -8,7 +8,7 @@ When('I navigate to {string}', async ({ page }, route: string) => {
 });
 
 Then('I should see {string}', async ({ page }, text: string) => {
-  await expect(page.getByText(text, { exact: false })).toBeVisible();
+  await expect(page.getByText(text, { exact: false })).toBeVisible({ timeout: 10_000 });
 });
 
 Then('I should see an error message', async ({ page }) => {

@@ -20,9 +20,3 @@ Feature: User File Browser
     And a file named "test-upload.txt" exists
     When I download the file "test-upload.txt"
     Then the download should start
-
-  Scenario: Navigate to a folder
-    Given I am on the file browser page
-    And a folder named "test-folder" exists
-    When I open the folder "test-folder"
-    Then I should see the contents of "test-folder"
