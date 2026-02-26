@@ -22,3 +22,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["core", "services", "utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

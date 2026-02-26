@@ -38,6 +38,10 @@ jobs:
         working-directory: ./backend/apiv2
         run: ruff format --check .
 
+      - name: Run unit tests
+        working-directory: ./backend/apiv2
+        run: python -m pytest tests/ -v
+
       - name: Validate certificate generation
         working-directory: ./backend/pki
         run: |
