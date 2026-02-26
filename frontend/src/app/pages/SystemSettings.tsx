@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useData, AuthMethod, SystemMode } from '../contexts/DataContext';
+import { useData, AuthMethod, SystemMode, SystemSettingsType } from '../contexts/DataContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -36,9 +36,11 @@ export default function SystemSettings() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const handleChange = <K extends keyof typeof localSettings>(
+  if (!localSettings) return null;
+
+  const handleChange = <K extends keyof SystemSettingsType>(
     key: K,
-    value: typeof localSettings[K]
+    value: SystemSettingsType[K]
   ) => {
     setLocalSettings({ ...localSettings, [key]: value });
     setHasChanges(true);
@@ -50,6 +52,7 @@ export default function SystemSettings() {
   };
 
   const handleSave = () => {
+    if (!localSettings) return;
     updateSettings(localSettings);
     setHasChanges(false);
     setShowSuccess(true);

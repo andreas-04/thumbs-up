@@ -34,7 +34,7 @@ services:
   # Frontend Web Service
   frontend:
     build:
-      context: ../../frontend/app
+      context: ../../frontend
       dockerfile: Dockerfile
     container_name: thumbsup-frontend
     ports:

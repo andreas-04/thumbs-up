@@ -14,7 +14,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { api, FileItem as ApiFileItem } from '../../services/api';
+import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';

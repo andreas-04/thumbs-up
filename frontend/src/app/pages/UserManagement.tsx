@@ -51,7 +51,7 @@ export default function UserManagement() {
   // Refresh users whenever this page is visited
   React.useEffect(() => {
     refreshUsers().catch((err) => console.error('Failed to refresh users:', err));
-  }, []);
+  }, [refreshUsers]);
 
   // Form state
   const [formData, setFormData] = useState({

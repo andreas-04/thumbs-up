@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api, SystemSettings, User as ApiUser, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { api, SystemSettings, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
 import { useAuth } from './AuthContext';
 
 export type SystemMode = 'open' | 'protected';
 export type AuthMethod = 'email' | 'email+password' | 'username+password';
 
 // Re-export API types for backward compatibility
-export interface FolderPermission extends ApiFolderPermission {}
+export type FolderPermission = ApiFolderPermission;
 
 export interface User {
   id: number;
@@ -19,9 +19,9 @@ export interface User {
   last_login?: string | null;
 }
 
-export interface SystemSettingsType extends SystemSettings {}
+export type SystemSettingsType = SystemSettings;
 
-export interface FileItem extends ApiFileItem {}
+export type FileItem = ApiFileItem;
 
 interface DataContextType {
   // System settings
@@ -60,6 +60,107 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [currentPath, setCurrentPath] = useState('/');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshSettings = async () => {
+    try {
+      const settingsData = await api.getSettings();
+      setSettings(settingsData);
+    } catch (err) {
+      console.error('Failed to refresh settings:', err);
+      throw err;
+    }
+  };
+
+  const updateSettings = async (newSettings: Partial<SystemSettingsType>) => {
+    try {
+      const updated = await api.updateSettings(newSettings);
+      setSettings(updated);
+    } catch (err) {
+      console.error('Failed to update settings:', err);
+      throw err;
+    }
+  };
+
+  const refreshUsers = useCallback(async () => {
+    try {
+      const { users: usersData } = await api.listUsers();
+      // Convert API user format to context format
+      const formattedUsers: User[] = usersData.map(u => ({
+        id: u.id,
+        email: u.email,
+        role: u.role,
+        createdAt: u.created_at,
+        last_login: u.last_login,
+        folderPermissions: u.folderPermissions || [],
+      }));
+      setUsers(formattedUsers);
+    } catch (err) {
+      console.error('Failed to refresh users:', err);
+      throw err;
+    }
+  }, []);
+
+  const addUser = async (userData: { email: string; password?: string; role?: 'admin' | 'user' }) => {
+    try {
+      await api.createUser(userData);
+      // Refresh user list
+      await refreshUsers();
+    } catch (err) {
+      console.error('Failed to add user:', err);
+      throw err;
+    }
+  };
+
+  const updateUser = async (id: number, updates: Partial<{ email: string; password: string; role: 'admin' | 'user' }>) => {
+    try {
+      await api.updateUser(id, updates);
+      // Refresh user list
+      await refreshUsers();
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      throw err;
+    }
+  };
+
+  const deleteUser = async (id: number) => {
+    try {
+      await api.deleteUser(id);
+      // Update local state
+      setUsers(prev => prev.filter(user => user.id !== id));
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      throw err;
+    }
+  };
+
+  const updateUserPermissions = async (userId: number, permissions: Array<{ path: string; read: boolean; write: boolean }>) => {
+    try {
+      await api.updateUserPermissions(userId, permissions);
+      // Refresh users to get updated permissions
+      await refreshUsers();
+    } catch (err) {
+      console.error('Failed to update permissions:', err);
+      throw err;
+    }
+  };
+
+  const refreshFiles = useCallback(async (path?: string) => {
+    try {
+      const targetPath = path || currentPath;
+      // Remove leading slash for API call
+      const apiPath = targetPath === '/' ? '' : targetPath.replace(/^\//, '');
+      
+      const { files: filesData } = await api.listFiles({ path: apiPath });
+      setFiles(filesData);
+      if (path !== undefined) {
+        setCurrentPath(targetPath);
+      }
+    } catch (err) {
+      console.error('Failed to refresh files:', err);
+      // In open mode, this might fail without auth - set empty files
+      setFiles([]);
+    }
+  }, [currentPath]);
 
   // Re-run whenever authentication state changes so that data is always
   // fresh after login (avoids the "shows 0 until reload" race condition).
@@ -110,108 +211,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     loadInitialData();
-  }, [isAuthenticated]);
-
-  const refreshSettings = async () => {
-    try {
-      const settingsData = await api.getSettings();
-      setSettings(settingsData);
-    } catch (err) {
-      console.error('Failed to refresh settings:', err);
-      throw err;
-    }
-  };
-
-  const updateSettings = async (newSettings: Partial<SystemSettingsType>) => {
-    try {
-      const updated = await api.updateSettings(newSettings);
-      setSettings(updated);
-    } catch (err) {
-      console.error('Failed to update settings:', err);
-      throw err;
-    }
-  };
-
-  const refreshUsers = async () => {
-    try {
-      const { users: usersData } = await api.listUsers();
-      // Convert API user format to context format
-      const formattedUsers: User[] = usersData.map(u => ({
-        id: u.id,
-        email: u.email,
-        role: u.role,
-        createdAt: u.created_at,
-        last_login: u.last_login,
-        folderPermissions: u.folderPermissions || [],
-      }));
-      setUsers(formattedUsers);
-    } catch (err) {
-      console.error('Failed to refresh users:', err);
-      throw err;
-    }
-  };
-
-  const addUser = async (userData: { email: string; password?: string; role?: 'admin' | 'user' }) => {
-    try {
-      await api.createUser(userData);
-      // Refresh user list
-      await refreshUsers();
-    } catch (err) {
-      console.error('Failed to add user:', err);
-      throw err;
-    }
-  };
-
-  const updateUser = async (id: number, updates: Partial<{ email: string; password: string; role: 'admin' | 'user' }>) => {
-    try {
-      await api.updateUser(id, updates);
-      // Refresh user list
-      await refreshUsers();
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      throw err;
-    }
-  };
-
-  const deleteUser = async (id: number) => {
-    try {
-      await api.deleteUser(id);
-      // Update local state
-      setUsers(prev => prev.filter(user => user.id !== id));
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      throw err;
-    }
-  };
-
-  const updateUserPermissions = async (userId: number, permissions: Array<{ path: string; read: boolean; write: boolean }>) => {
-    try {
-      await api.updateUserPermissions(userId, permissions);
-      // Refresh users to get updated permissions
-      await refreshUsers();
-    } catch (err) {
-      console.error('Failed to update permissions:', err);
-      throw err;
-    }
-  };
-
-  const refreshFiles = async (path?: string) => {
-    try {
-      const targetPath = path || currentPath;
-      // Remove leading slash for API call
-      const apiPath = targetPath === '/' ? '' : targetPath.replace(/^\//, '');
-      
-      const { files: filesData } = await api.listFiles({ path: apiPath });
-      setFiles(filesData);
-      if (path !== undefined) {
-        setCurrentPath(targetPath);
-      }
-    } catch (err) {
-      console.error('Failed to refresh files:', err);
-      // In open mode, this might fail without auth - set empty files
-      setFiles([]);
-    }
-  };
+  }, [isAuthenticated, refreshFiles]);
 
   return (
     <DataContext.Provider

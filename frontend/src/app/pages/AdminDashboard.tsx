@@ -5,7 +5,6 @@ import { Badge } from '../components/ui/badge';
 import { Link } from 'react-router';
 import {
   Shield,
-  ShieldOff,
   Users,
   FolderOpen,
   Lock,
@@ -16,6 +15,8 @@ import {
 
 export default function AdminDashboard() {
   const { settings, users, files } = useData();
+
+  if (!settings) return null;
 
   const folderCount = files.filter((f) => f.type === 'folder').length;
   const fileCount = files.filter((f) => f.type === 'file').length;
