@@ -80,6 +80,7 @@ jobs:
           npx tsx fixtures/seed.ts
         env:
           BASE_URL: 'http://localhost'
+          ADMIN_PIN: '0000'
           ADMIN_EMAIL: 'admin@thumbsup.local'
           ADMIN_PASSWORD: 'admin-secret-pw'
           TEST_USER_EMAIL: 'testuser@thumbsup.local'

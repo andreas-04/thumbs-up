@@ -15,10 +15,10 @@ Feature: Admin Dashboard
 
   Scenario: Admin can navigate to user management
     When I navigate to "/admin/dashboard"
-    And I click "Users"
+    And I click "Manage Users"
     Then I should be redirected to "/admin/users"
 
-  Scenario: Admin can navigate to file management
+  Scenario: Admin can navigate to file browser
     When I navigate to "/admin/dashboard"
-    And I click "Files"
+    And I click "File Browser"
     Then I should be redirected to "/admin/files"

@@ -9,7 +9,7 @@ Feature: User Registration
     And I fill in "Email" with "newuser@thumbsup.local"
     And I fill in "Password" with "Password123!"
     And I fill in "Confirm Password" with "Password123!"
-    And I click "Create Account"
+    And I click "Sign Up"
     Then I should be redirected to "/login"
 
   Scenario: Registration fails when passwords do not match
@@ -18,7 +18,7 @@ Feature: User Registration
     And I fill in "Email" with "another@thumbsup.local"
     And I fill in "Password" with "Password123!"
     And I fill in "Confirm Password" with "Different456!"
-    And I click "Create Account"
+    And I click "Sign Up"
     Then I should see an error message
 
   Scenario: Registration fails with a short password
@@ -27,5 +27,5 @@ Feature: User Registration
     And I fill in "Email" with "shortpw@thumbsup.local"
     And I fill in "Password" with "abc"
     And I fill in "Confirm Password" with "abc"
-    And I click "Create Account"
+    And I click "Sign Up"
     Then I should see an error message

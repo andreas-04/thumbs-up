@@ -51,6 +51,7 @@ wget --spider http://localhost/
 ```bash
 cd e2e
 BASE_URL=http://localhost \
+  ADMIN_PIN=0000 \
   ADMIN_EMAIL=admin@thumbsup.local \
   ADMIN_PASSWORD=admin-secret-pw \
   TEST_USER_EMAIL=testuser@thumbsup.local \
@@ -58,7 +59,7 @@ BASE_URL=http://localhost \
   npx tsx fixtures/seed.ts
 ```
 
-> **Note**: The admin user must exist in the backend. If the backend starts fresh, create the admin account through the `/signup` endpoint or the admin setup flow first.
+> **Note**: The seed script logs in as the default admin (using `ADMIN_PIN`), changes the password to `ADMIN_PASSWORD`, and clears the `is_default_pin` flag so the frontend won't force a password-reset redirect. It also creates the regular test user.
 
 ### 4. Run the tests
 
@@ -121,8 +122,9 @@ e2e/
 | Variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost` | URL of the running frontend |
+| `ADMIN_PIN` | `0000` | Default admin password set in docker-compose |
 | `ADMIN_EMAIL` | `admin@thumbsup.local` | Admin account email |
-| `ADMIN_PASSWORD` | `admin-secret-pw` | Admin account password |
+| `ADMIN_PASSWORD` | `admin-secret-pw` | Admin password (after seed changes it from PIN) |
 | `TEST_USER_EMAIL` | `testuser@thumbsup.local` | Regular test user email |
 | `TEST_USER_PASSWORD` | `user-secret-pw` | Regular test user password |
 

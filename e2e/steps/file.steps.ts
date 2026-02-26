@@ -32,13 +32,14 @@ When('I upload a file named {string}', async ({ page }, filename: string) => {
 });
 
 When('I download the file {string}', async ({ page }, filename: string) => {
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByText(filename, { exact: false }).click();
-  const downloadButton = page.getByRole('button', { name: /download/i });
-  if (await downloadButton.isVisible()) {
-    await downloadButton.click();
-  }
-  await downloadPromise;
+  // Find the table row containing the file name and click the download button
+  const row = page.locator('tr', { hasText: filename });
+  // Wait for the API response that delivers the file content
+  const responsePromise = page.waitForResponse(
+    (resp) => resp.url().includes('/api/v1/files/download') && resp.status() === 200,
+  );
+  await row.getByRole('button').click();
+  await responsePromise;
 });
 
 When('I open the folder {string}', async ({ page }, folderName: string) => {
@@ -79,17 +80,11 @@ async function uploadTempFile(page: import('@playwright/test').Page, filename: s
     fs.writeFileSync(tmpFile, `Test content for ${filename}\n`);
   }
 
+  // Playwright can set files on hidden inputs directly
   const fileInput = page.locator('input[type="file"]');
-  // The upload input may be hidden; make it visible before setting file
-  await fileInput.evaluate((el: HTMLInputElement) => {
-    el.style.display = 'block';
-    el.style.opacity = '1';
-  });
   await fileInput.setInputFiles(tmpFile);
 
-  // Click the upload button if it is separate from the input
-  const uploadButton = page.getByRole('button', { name: /upload/i });
-  if (await uploadButton.isVisible()) {
-    await uploadButton.click();
-  }
+  // Click the Upload button to submit
+  const uploadButton = page.getByRole('button', { name: /^upload$/i });
+  await uploadButton.click();
 }

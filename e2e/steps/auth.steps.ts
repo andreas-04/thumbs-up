@@ -18,7 +18,8 @@ Given('I am on the signup page', async ({ page }) => {
 });
 
 Given('I am not logged in', async ({ page }) => {
-  // Clear any stored auth so we start unauthenticated
+  // Navigate to the login page first (so we have a browsing context), then clear auth
+  await page.goto('/login');
   await page.context().clearCookies();
   await page.evaluate(() => window.localStorage.clear());
 });

@@ -29,6 +29,7 @@ export default defineConfig({
   projects: [
     {
       name: 'setup',
+      testDir: './fixtures',
       testMatch: /.*\.setup\.ts/,
     },
     {
@@ -46,10 +47,6 @@ export default defineConfig({
         storageState: 'fixtures/.auth/admin.json',
       },
       dependencies: ['setup'],
-    },
-    {
-      name: 'chromium-unauthenticated',
-      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });
