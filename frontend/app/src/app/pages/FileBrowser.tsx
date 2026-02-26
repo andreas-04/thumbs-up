@@ -35,6 +35,8 @@ export default function FileBrowser() {
   const { files, currentPath, refreshFiles, settings } = useData();
   const [searchQuery, setSearchQuery] = useState('');
 
+  if (!settings) return null;
+
   // Files from API are already for the current directory, no filtering needed
   // Filter by search
   const filteredFiles = files.filter((f) =>

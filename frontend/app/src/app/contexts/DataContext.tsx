@@ -61,57 +61,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Re-run whenever authentication state changes so that data is always
-  // fresh after login (avoids the "shows 0 until reload" race condition).
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Settings are a public endpoint – always load them.
-        try {
-          const settingsData = await api.getSettings();
-          setSettings(settingsData);
-        } catch (err) {
-          console.error('Failed to load settings:', err);
-        }
-
-        if (isAuthenticated) {
-          // Load users (admin only, fails silently for regular users).
-          try {
-            const { users: usersData } = await api.listUsers();
-            const formattedUsers: User[] = usersData.map(u => ({
-              id: u.id,
-              email: u.email,
-              role: u.role,
-              createdAt: u.created_at,
-              last_login: u.last_login,
-              folderPermissions: u.folderPermissions || [],
-            }));
-            setUsers(formattedUsers);
-          } catch (err) {
-            console.error('Failed to load users:', err);
-          }
-
-          // Load files for root directory.
-          await refreshFiles('/');
-        } else {
-          // Clear protected data when logged out.
-          setUsers([]);
-          setFiles([]);
-        }
-      } catch (err) {
-        console.error('Failed to load initial data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadInitialData();
-  }, [isAuthenticated, refreshFiles]);
-
   const refreshSettings = async () => {
     try {
       const settingsData = await api.getSettings();
@@ -212,6 +161,57 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setFiles([]);
     }
   }, [currentPath]);
+
+  // Re-run whenever authentication state changes so that data is always
+  // fresh after login (avoids the "shows 0 until reload" race condition).
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Settings are a public endpoint – always load them.
+        try {
+          const settingsData = await api.getSettings();
+          setSettings(settingsData);
+        } catch (err) {
+          console.error('Failed to load settings:', err);
+        }
+
+        if (isAuthenticated) {
+          // Load users (admin only, fails silently for regular users).
+          try {
+            const { users: usersData } = await api.listUsers();
+            const formattedUsers: User[] = usersData.map(u => ({
+              id: u.id,
+              email: u.email,
+              role: u.role,
+              createdAt: u.created_at,
+              last_login: u.last_login,
+              folderPermissions: u.folderPermissions || [],
+            }));
+            setUsers(formattedUsers);
+          } catch (err) {
+            console.error('Failed to load users:', err);
+          }
+
+          // Load files for root directory.
+          await refreshFiles('/');
+        } else {
+          // Clear protected data when logged out.
+          setUsers([]);
+          setFiles([]);
+        }
+      } catch (err) {
+        console.error('Failed to load initial data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, [isAuthenticated, refreshFiles]);
 
   return (
     <DataContext.Provider

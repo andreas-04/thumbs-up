@@ -77,9 +77,12 @@ export default function FolderPermissions() {
         return [
           ...prev,
           {
+            id: 0,
+            userId: 0,
             path: folderPath,
             read: permType === 'read',
             write: permType === 'write',
+            createdAt: new Date().toISOString(),
           },
         ];
       }
@@ -109,16 +112,16 @@ export default function FolderPermissions() {
     }
   };
 
+  if (!settings) {
+    return null;
+  }
+
   const getUserIdentifier = (user: User): string => {
     if (settings.authMethod === 'username+password') {
       return user.username || 'N/A';
     }
     return user.email || 'N/A';
   };
-
-  if (!settings) {
-    return null;
-  }
 
   if (settings.mode === 'open') {
     return (

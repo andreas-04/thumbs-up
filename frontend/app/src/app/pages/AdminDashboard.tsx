@@ -16,6 +16,8 @@ import {
 export default function AdminDashboard() {
   const { settings, users, files } = useData();
 
+  if (!settings) return null;
+
   const folderCount = files.filter((f) => f.type === 'folder').length;
   const fileCount = files.filter((f) => f.type === 'file').length;
 
