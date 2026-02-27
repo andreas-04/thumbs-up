@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useData, AuthMethod, SystemMode, SystemSettingsType } from '../contexts/DataContext';
+import { useData, SystemMode, SystemSettingsType } from '../contexts/DataContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -12,13 +12,6 @@ import {
 } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { 
   Shield, 
   Globe, 
@@ -26,7 +19,6 @@ import {
   CheckCircle, 
   AlertTriangle,
   Server,
-  Key,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -73,7 +65,7 @@ export default function SystemSettings() {
       <div>
         <h1 className="text-3xl font-semibold text-white">System Settings</h1>
         <p className="text-gray-400 mt-1">
-          Configure access mode, authentication, and security
+          Configure access mode and device settings
         </p>
       </div>
 
@@ -163,78 +155,12 @@ export default function SystemSettings() {
             <Alert className="bg-blue-950 border-blue-900">
               <AlertTriangle className="h-4 w-4 text-blue-400" />
               <AlertDescription className="text-blue-300">
-                Protected Mode is enabled. Users must be added to the approved list to access files.
-                Configure authentication method below.
+                Protected Mode is enabled. Only approved users can access files.
               </AlertDescription>
             </Alert>
           )}
         </CardContent>
       </Card>
-
-      {/* Authentication Method (only visible in Protected Mode) */}
-      {localSettings.mode === 'protected' && (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-purple-400" />
-              <CardTitle className="text-white">Authentication Method</CardTitle>
-            </div>
-            <CardDescription className="text-gray-400">
-              Choose how users authenticate when accessing files
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-gray-200">Authentication Type</Label>
-              <Select
-                value={localSettings.authMethod}
-                onValueChange={(value: AuthMethod) => handleChange('authMethod', value)}
-              >
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700 text-white">
-                  <SelectItem value="email">Email Only</SelectItem>
-                  <SelectItem value="email+password">Email + Password</SelectItem>
-                  <SelectItem value="username+password">Username + Password</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-3">
-              <div className="p-3 bg-gray-800 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`h-2 w-2 rounded-full ${localSettings.authMethod === 'email' ? 'bg-blue-500' : 'bg-gray-600'}`} />
-                  <span className="text-sm font-medium text-white">Email Only</span>
-                </div>
-                <p className="text-xs text-gray-400 ml-4">
-                  Users authenticate with just their email address. Quick access with minimal friction.
-                </p>
-              </div>
-
-              <div className="p-3 bg-gray-800 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`h-2 w-2 rounded-full ${localSettings.authMethod === 'email+password' ? 'bg-blue-500' : 'bg-gray-600'}`} />
-                  <span className="text-sm font-medium text-white">Email + Password</span>
-                </div>
-                <p className="text-xs text-gray-400 ml-4">
-                  Standard authentication with email and password. Recommended for most use cases.
-                </p>
-              </div>
-
-              <div className="p-3 bg-gray-800 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`h-2 w-2 rounded-full ${localSettings.authMethod === 'username+password' ? 'bg-blue-500' : 'bg-gray-600'}`} />
-                  <span className="text-sm font-medium text-white">Username + Password</span>
-                </div>
-                <p className="text-xs text-gray-400 ml-4">
-                  Traditional username and password authentication. No email required.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Security & Network */}
       <Card className="bg-gray-900 border-gray-800">
@@ -244,40 +170,10 @@ export default function SystemSettings() {
             <CardTitle className="text-white">Security & Network</CardTitle>
           </div>
           <CardDescription className="text-gray-400">
-            Configure TLS encryption and network settings
+            Configure network settings
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
-            <div className="space-y-0.5">
-              <Label htmlFor="tls-enabled" className="text-white">Enable TLS/HTTPS Encryption</Label>
-              <p className="text-sm text-gray-400">
-                Secure all file transfers with TLS encryption
-              </p>
-            </div>
-            <Switch
-              id="tls-enabled"
-              checked={localSettings.tlsEnabled}
-              onCheckedChange={(checked) => handleChange('tlsEnabled', checked)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="https-port" className="text-gray-200">HTTPS Port</Label>
-            <Input
-              id="https-port"
-              type="number"
-              min="1024"
-              max="65535"
-              value={localSettings.httpsPort}
-              onChange={(e) => handleChange('httpsPort', parseInt(e.target.value))}
-              className="bg-gray-800 border-gray-700 text-white"
-            />
-            <p className="text-xs text-gray-500">
-              Port for HTTPS file access (1024-65535)
-            </p>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="device-name" className="text-gray-200">Device Name</Label>
             <Input

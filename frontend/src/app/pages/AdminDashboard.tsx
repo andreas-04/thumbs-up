@@ -1,15 +1,12 @@
 import React from 'react';
 import { useData } from '../contexts/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import { Link } from 'react-router';
 import {
   Shield,
   Users,
   FolderOpen,
-  Lock,
   Activity,
-  Server,
   Globe,
 } from 'lucide-react';
 
@@ -49,15 +46,6 @@ export default function AdminDashboard() {
       bgColor: 'bg-orange-950',
       link: '/admin/files',
     },
-    {
-      title: 'TLS Status',
-      value: settings.tlsEnabled ? 'Enabled' : 'Disabled',
-      description: `Port ${settings.httpsPort}`,
-      icon: Lock,
-      color: settings.tlsEnabled ? 'text-green-400' : 'text-red-400',
-      bgColor: settings.tlsEnabled ? 'bg-green-950' : 'bg-red-950',
-      link: '/admin/settings',
-    },
   ];
 
   return (
@@ -91,97 +79,6 @@ export default function AdminDashboard() {
             </Card>
           </Link>
         ))}
-      </div>
-
-      {/* Quick Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-400" />
-              Current Configuration
-            </CardTitle>
-            <CardDescription className="text-gray-400">Active system settings</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-300">Access Mode</span>
-              <Badge variant={settings.mode === 'open' ? 'default' : 'secondary'} className="gap-1">
-                {settings.mode === 'open' ? <Globe className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
-                {settings.mode === 'open' ? 'Open' : 'Protected'}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-300">Authentication</span>
-              <Badge variant="outline" className="text-gray-300 border-gray-700">
-                {settings.authMethod.split('+').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' + ')}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-300">TLS Encryption</span>
-              <Badge variant={settings.tlsEnabled ? 'default' : 'destructive'}>
-                {settings.tlsEnabled ? 'Enabled' : 'Disabled'}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-300">HTTPS Port</span>
-              <span className="text-sm font-mono text-white">{settings.httpsPort}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Server className="h-5 w-5 text-green-400" />
-              Quick Actions
-            </CardTitle>
-            <CardDescription className="text-gray-400">Common administrative tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Link to="/admin/settings">
-              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
-                {settings.mode === 'open' ? (
-                  <Globe className="h-5 w-5 text-green-400" />
-                ) : (
-                  <Shield className="h-5 w-5 text-blue-400" />
-                )}
-                <div>
-                  <p className="font-medium text-white">
-                    {settings.mode === 'open' ? 'Switch to Protected Mode' : 'Switch to Open Mode'}
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    {settings.mode === 'open' 
-                      ? 'Restrict access to approved users'
-                      : 'Allow anyone to access files'}
-                  </p>
-                </div>
-              </div>
-            </Link>
-            <Link to="/admin/users">
-              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
-                <Users className="h-5 w-5 text-purple-400" />
-                <div>
-                  <p className="font-medium text-white">Manage Users</p>
-                  <p className="text-sm text-gray-400">
-                    Add or remove approved users
-                  </p>
-                </div>
-              </div>
-            </Link>
-            <Link to="/admin/permissions">
-              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
-                <FolderOpen className="h-5 w-5 text-orange-400" />
-                <div>
-                  <p className="font-medium text-white">Folder Permissions</p>
-                  <p className="text-sm text-gray-400">
-                    Configure per-user access control
-                  </p>
-                </div>
-              </div>
-            </Link>
-          </CardContent>
-        </Card>
       </div>
 
       {/* System Status */}
