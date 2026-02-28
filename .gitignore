@@ -4,3 +4,4 @@
 *.db
 config.env
 **/node_modules/
+**/dist/

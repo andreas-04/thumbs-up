@@ -18,7 +18,6 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   FolderOpen,
   File,
@@ -28,7 +27,6 @@ import {
   Download,
   Upload,
   Lock,
-  Info,
 } from 'lucide-react';
 
 export default function FileBrowser() {
@@ -47,8 +45,18 @@ export default function FileBrowser() {
   const pathParts = currentPath.split('/').filter(Boolean);
 
   const navigateToFolder = (path: string) => {
-    refreshFiles(path);
+    // Normalize path to always have a leading slash
+    const normalizedPath = path === '/' ? '/' : '/' + path.replace(/^\/+/, '');
+    refreshFiles(normalizedPath);
     setSearchQuery('');
+  };
+
+  const goBack = () => {
+    if (currentPath === '/') return;
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    const parentPath = parts.length === 0 ? '/' : '/' + parts.join('/');
+    navigateToFolder(parentPath);
   };
 
   const formatFileSize = (bytes?: number): string => {
@@ -109,30 +117,9 @@ export default function FileBrowser() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-white">File Browser</h1>
-        <p className="text-gray-400 mt-1">
-          Browse and manage shared files
-        </p>
-      </div>
-
-      <Alert className="bg-blue-950 border-blue-900">
-        <Info className="h-4 w-4 text-blue-400" />
-        <AlertDescription className="text-blue-300">
-          <strong>Access Mode: {settings.mode === 'open' ? 'Open' : 'Protected'}</strong>
-          {' - '}
-          {settings.mode === 'open' 
-            ? 'All users can access files via HTTPS without authentication.'
-            : 'Only approved users can access files. Authentication required.'}
-        </AlertDescription>
-      </Alert>
-
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
           <CardTitle className="text-white">Shared Files</CardTitle>
-          <CardDescription className="text-gray-400">
-            Files available over HTTPS/TLS
-          </CardDescription>
           
           {/* Breadcrumb Navigation */}
           <div className="pt-4 flex items-center gap-2 text-sm">
@@ -204,10 +191,7 @@ export default function FileBrowser() {
                 {currentPath !== '/' && (
                   <TableRow 
                     className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
-                    onClick={() => {
-                      const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
-                      navigateToFolder(parentPath);
-                    }}
+                    onClick={goBack}
                   >
                     <TableCell colSpan={5} className="text-gray-400">
                       <div className="flex items-center gap-2">
@@ -235,7 +219,7 @@ export default function FileBrowser() {
                     })
                     .map((file) => (
                       <TableRow 
-                        key={file.id} 
+                        key={file.id || file.path} 
                         className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
                         onClick={() => handleFileClick(file)}
                       >
@@ -292,46 +276,6 @@ export default function FileBrowser() {
               {' '}
               {filteredFiles.filter((f) => f.type === 'file').length} file
               {filteredFiles.filter((f) => f.type === 'file').length !== 1 ? 's' : ''})
-            </div>
-            <div className="flex items-center gap-2">
-              <Lock className="h-4 w-4 text-green-400" />
-              <span>TLS {settings.tlsEnabled ? 'Enabled' : 'Disabled'}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Connection Info */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Access Information</CardTitle>
-          <CardDescription className="text-gray-400">
-            How users can access these files
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="p-3 bg-gray-800 rounded-lg">
-            <div className="text-sm text-gray-300 mb-1">HTTPS URL:</div>
-            <code className="text-sm text-blue-400">
-              https://raspberrypi.local:{settings.httpsPort}/files
-            </code>
-          </div>
-          <div className="p-3 bg-gray-800 rounded-lg">
-            <div className="text-sm text-gray-300 mb-1">Access Mode:</div>
-            <div className="text-sm text-white">
-              {settings.mode === 'open' ? (
-                <span className="text-green-400">Open Mode - No authentication required</span>
-              ) : (
-                <span className="text-blue-400">
-                  Protected Mode - {settings.authMethod.split('+').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' + ')} required
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="p-3 bg-gray-800 rounded-lg">
-            <div className="text-sm text-gray-300 mb-1">Security:</div>
-            <div className="text-sm text-green-400">
-              {settings.tlsEnabled ? '🔒 TLS/HTTPS encryption enabled' : '⚠️ TLS encryption disabled'}
             </div>
           </div>
         </CardContent>

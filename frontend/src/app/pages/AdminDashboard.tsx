@@ -1,6 +1,7 @@
 import React from 'react';
 import { useData } from '../contexts/DataContext';
 import SystemStatus from '../components/SystemStatus';
+import FileBrowser from './FileBrowser';
 
 export default function AdminDashboard() {
   const { settings, users, files } = useData();
@@ -15,8 +16,10 @@ export default function AdminDashboard() {
           {settings.deviceName} - File Sharing System
         </p>
       </div>
-
-      <SystemStatus settings={settings} users={users} files={files} />
+        <FileBrowser />
+      <div>
+        <SystemStatus settings={settings} users={users} files={files} />
+      </div>
     </div>
   );
 }

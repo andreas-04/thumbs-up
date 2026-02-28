@@ -6,7 +6,6 @@ import AdminDashboard from './pages/AdminDashboard';
 import SystemSettings from './pages/SystemSettings';
 import UserManagement from './pages/UserManagement';
 import FolderPermissions from './pages/FolderPermissions';
-import FileBrowser from './pages/FileBrowser';
 import UserFileBrowser from './pages/UserFileBrowser';
 import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
@@ -61,10 +60,6 @@ export const router = createBrowserRouter([
           {
             path: 'permissions',
             Component: FolderPermissions,
-          },
-          {
-            path: 'files',
-            Component: FileBrowser,
           },
         ],
       },

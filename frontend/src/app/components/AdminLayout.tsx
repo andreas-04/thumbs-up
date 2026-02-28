@@ -5,7 +5,6 @@ import { Button } from './ui/button';
 import {
   LayoutDashboard,
   Users,
-  FolderOpen,
   Settings,
   LogOut,
   Menu,
@@ -24,7 +23,6 @@ export function AdminLayout() {
     { path: '/admin/settings', label: 'System Settings', icon: Settings },
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/permissions', label: 'Permissions', icon: Shield },
-    { path: '/admin/files', label: 'File Browser', icon: FolderOpen },
   ];
 
   const isActive = (path: string) => location.pathname === path;
