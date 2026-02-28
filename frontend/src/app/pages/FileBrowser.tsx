@@ -45,8 +45,18 @@ export default function FileBrowser() {
   const pathParts = currentPath.split('/').filter(Boolean);
 
   const navigateToFolder = (path: string) => {
-    refreshFiles(path);
+    // Normalize path to always have a leading slash
+    const normalizedPath = path === '/' ? '/' : '/' + path.replace(/^\/+/, '');
+    refreshFiles(normalizedPath);
     setSearchQuery('');
+  };
+
+  const goBack = () => {
+    if (currentPath === '/') return;
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    const parentPath = parts.length === 0 ? '/' : '/' + parts.join('/');
+    navigateToFolder(parentPath);
   };
 
   const formatFileSize = (bytes?: number): string => {
@@ -110,9 +120,6 @@ export default function FileBrowser() {
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
           <CardTitle className="text-white">Shared Files</CardTitle>
-          <CardDescription className="text-gray-400">
-            Files available over HTTPS/TLS
-          </CardDescription>
           
           {/* Breadcrumb Navigation */}
           <div className="pt-4 flex items-center gap-2 text-sm">
@@ -184,10 +191,7 @@ export default function FileBrowser() {
                 {currentPath !== '/' && (
                   <TableRow 
                     className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
-                    onClick={() => {
-                      const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
-                      navigateToFolder(parentPath);
-                    }}
+                    onClick={goBack}
                   >
                     <TableCell colSpan={5} className="text-gray-400">
                       <div className="flex items-center gap-2">
@@ -215,7 +219,7 @@ export default function FileBrowser() {
                     })
                     .map((file) => (
                       <TableRow 
-                        key={file.id} 
+                        key={file.id || file.path} 
                         className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
                         onClick={() => handleFileClick(file)}
                       >
@@ -272,10 +276,6 @@ export default function FileBrowser() {
               {' '}
               {filteredFiles.filter((f) => f.type === 'file').length} file
               {filteredFiles.filter((f) => f.type === 'file').length !== 1 ? 's' : ''})
-            </div>
-            <div className="flex items-center gap-2">
-              <Lock className="h-4 w-4 text-green-400" />
-              <span>TLS {settings.tlsEnabled ? 'Enabled' : 'Disabled'}</span>
             </div>
           </div>
         </CardContent>

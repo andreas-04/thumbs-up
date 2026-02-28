@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { api, SystemSettings, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
 import { useAuth } from './AuthContext';
 
@@ -58,6 +58,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState('/');
+  const currentPathRef = useRef(currentPath);
+  currentPathRef.current = currentPath;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,21 +148,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const refreshFiles = useCallback(async (path?: string) => {
     try {
-      const targetPath = path || currentPath;
+      const targetPath = path || currentPathRef.current;
+      // Normalize: ensure leading slash
+      const normalizedPath = targetPath === '/' ? '/' : '/' + targetPath.replace(/^\/+/, '');
       // Remove leading slash for API call
-      const apiPath = targetPath === '/' ? '' : targetPath.replace(/^\//, '');
+      const apiPath = normalizedPath === '/' ? '' : normalizedPath.replace(/^\//, '');
       
       const { files: filesData } = await api.listFiles({ path: apiPath });
       setFiles(filesData);
       if (path !== undefined) {
-        setCurrentPath(targetPath);
+        setCurrentPath(normalizedPath);
       }
     } catch (err) {
       console.error('Failed to refresh files:', err);
       // In open mode, this might fail without auth - set empty files
       setFiles([]);
     }
-  }, [currentPath]);
+  }, []);
 
   // Re-run whenever authentication state changes so that data is always
   // fresh after login (avoids the "shows 0 until reload" race condition).
@@ -211,7 +215,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     loadInitialData();
-  }, [isAuthenticated, refreshFiles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   return (
     <DataContext.Provider

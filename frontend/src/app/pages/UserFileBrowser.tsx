@@ -154,7 +154,9 @@ export default function UserFileBrowser() {
 
   const goBack = () => {
     if (currentPath === '/') return;
-    const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    const parentPath = parts.length === 0 ? '/' : '/' + parts.join('/');
     loadFiles(parentPath);
     setSearchQuery('');
   };

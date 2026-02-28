@@ -16,12 +16,9 @@ export default function AdminDashboard() {
           {settings.deviceName} - File Sharing System
         </p>
       </div>
-
-      <SystemStatus settings={settings} users={users} files={files} />
-
-      <div>
-        <h2 className="text-xl font-semibold text-white mb-4">File Browser</h2>
         <FileBrowser />
+      <div>
+        <SystemStatus settings={settings} users={users} files={files} />
       </div>
     </div>
   );
