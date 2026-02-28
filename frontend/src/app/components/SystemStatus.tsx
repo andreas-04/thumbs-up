@@ -2,17 +2,16 @@ import React from 'react';
 import { Link } from 'react-router';
 import { Shield, Users, FolderOpen, Activity, Globe } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import type { SystemSettingsType, User, FileItem } from '../contexts/DataContext';
+import type { SystemSettingsType, User } from '../contexts/DataContext';
 
 interface SystemStatusProps {
   settings: SystemSettingsType;
   users: User[];
-  files: FileItem[];
+  fileCount: number;
+  folderCount: number;
 }
 
-export default function SystemStatus({ settings, users, files }: SystemStatusProps) {
-  const folderCount = files.filter((f) => f.type === 'folder').length;
-  const fileCount = files.filter((f) => f.type === 'file').length;
+export default function SystemStatus({ settings, users, fileCount, folderCount }: SystemStatusProps) {
 
   const items = [
     {
