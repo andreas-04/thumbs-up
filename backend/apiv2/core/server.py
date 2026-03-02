@@ -94,17 +94,18 @@ def get_server_url():
         return f"https://{hostname}.local:{CONFIG['PORT']}"
 
 
-def get_file_list(path=""):
+def _list_directory(base_path, path=""):
     """
-    Get list of files in directory.
+    List files in a single directory.
 
     Args:
-        path: Relative path within storage
+        base_path: Absolute base directory
+        path: Relative path within the base directory
 
     Returns:
         List of file/directory info dicts
     """
-    full_path = os.path.join(CONFIG["STORAGE_PATH"], path)
+    full_path = os.path.join(base_path, path)
 
     if not os.path.exists(full_path):
         return []
@@ -149,10 +150,63 @@ def get_file_list(path=""):
             print(f"Skipping {item}: {e}")
             continue
 
+    return items
+
+
+def get_file_list(path="", include_protected=True):
+    """
+    Get a unified list of files from protected and unprotected subdirectories.
+
+    The storage directory is expected to contain two subdirectories:
+      - ``protected/``  – only visible to authenticated users
+      - ``unprotected/`` – visible to everyone (including guests)
+
+    Files from both directories are merged into a single flat view so that
+    callers never see the ``protected/`` or ``unprotected/`` prefix.
+
+    Args:
+        path: Relative path within the virtual merged view.
+        include_protected: If True, include files from the protected directory.
+
+    Returns:
+        Sorted list of file/directory info dicts (folders first, then files).
+    """
+    protected_base = os.path.join(CONFIG["STORAGE_PATH"], "protected")
+    unprotected_base = os.path.join(CONFIG["STORAGE_PATH"], "unprotected")
+
+    # Ensure subdirectories exist
+    os.makedirs(protected_base, exist_ok=True)
+    os.makedirs(unprotected_base, exist_ok=True)
+
+    # Always include unprotected files
+    items_map: dict = {}
+    for item in _list_directory(unprotected_base, path):
+        items_map[item["name"]] = item
+
+    # Merge protected files (protected entries override unprotected if same name)
+    if include_protected:
+        for item in _list_directory(protected_base, path):
+            items_map[item["name"]] = item
+
+    items = list(items_map.values())
+
     # Sort: directories first, then files alphabetically
     items.sort(key=lambda x: (x["type"] != "folder", x["name"].lower()))
 
     return items
+
+
+def resolve_file_path(rel_path):
+    """Resolve a virtual path to the actual filesystem path.
+
+    Looks in ``protected/`` first, then ``unprotected/``.  Returns the first
+    match or ``None`` if neither directory contains the path.
+    """
+    for subdir in ("protected", "unprotected"):
+        candidate = Path(CONFIG["STORAGE_PATH"]) / subdir / rel_path
+        if candidate.exists():
+            return candidate
+    return None
 
 
 # =============================================================================
@@ -331,12 +385,7 @@ def api_update_settings():
     if not settings:
         return jsonify({"error": "Settings not found", "code": "SETTINGS_NOT_FOUND"}), 404
 
-    # Update allowed fields
-    if "mode" in data:
-        if data["mode"] not in ["open", "protected"]:
-            return jsonify({"error": "Invalid mode value", "code": "INVALID_MODE"}), 400
-        settings.mode = data["mode"]
-
+    # Update allowed fields (mode toggle removed – access is now directory-based)
     if "authMethod" in data:
         if data["authMethod"] not in ["email", "email+password", "username+password"]:
             return jsonify({"error": "Invalid authMethod value", "code": "INVALID_AUTH_METHOD"}), 400
@@ -548,17 +597,23 @@ def api_update_user_permissions(user_id):
 @app.route("/api/v1/folders", methods=["GET"])
 @auth.require_admin()
 def api_list_folders():
-    """List all folders in storage for permission management (admin only)."""
-    storage_path = Path(CONFIG["STORAGE_PATH"])
+    """List all folders from protected and unprotected subdirectories (admin only)."""
     folders = [{"path": "/", "name": "Root"}]
+    seen_paths: set = set()
 
-    try:
-        for item in storage_path.rglob("*"):
-            if item.is_dir():
-                rel_path = "/" + str(item.relative_to(storage_path))
-                folders.append({"path": rel_path, "name": item.name})
-    except Exception as e:
-        return jsonify({"error": str(e), "code": "FOLDER_SCAN_ERROR"}), 500
+    for subdir in ("protected", "unprotected"):
+        sub_path = Path(CONFIG["STORAGE_PATH"]) / subdir
+        if not sub_path.exists():
+            continue
+        try:
+            for item in sub_path.rglob("*"):
+                if item.is_dir():
+                    rel_path = "/" + str(item.relative_to(sub_path))
+                    if rel_path not in seen_paths:
+                        seen_paths.add(rel_path)
+                        folders.append({"path": rel_path, "name": item.name})
+        except Exception as e:
+            return jsonify({"error": str(e), "code": "FOLDER_SCAN_ERROR"}), 500
 
     return jsonify({"folders": folders}), 200
 
@@ -605,24 +660,22 @@ def user_has_access(user, folder_path, require_write=False):
 
 @app.route("/api/v1/files", methods=["GET"])
 def api_list_files():
-    """List files in directory (respects permissions in protected mode)."""
-    from models import SystemSettings
+    """List files in directory.
 
+    Authenticated users see a merged view of protected and unprotected files.
+    Unauthenticated (guest) users only see unprotected files.
+    Folder-level ACLs are still enforced for non-admin authenticated users.
+    """
     path = request.args.get("path", "")
     search = request.args.get("search", "").strip()
 
-    # Check system mode and permissions
-    settings = SystemSettings.query.first()
-    if settings and settings.mode == "protected":
-        # Require authentication in protected mode
-        token = auth.get_token_from_request()
-        if not token:
-            return jsonify({"error": "Authentication required", "code": "AUTH_REQUIRED"}), 401
+    # Determine whether the caller is authenticated
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token) if token else None
+    include_protected = False
 
-        user = auth.get_user_from_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
-
+    if user:
+        include_protected = True
         # Check folder permissions (admin has full access)
         if user.role != "admin":
             check_path = "/" + path if path else "/"
@@ -631,7 +684,7 @@ def api_list_files():
 
     # Get file list
     try:
-        files = get_file_list(path)
+        files = get_file_list(path, include_protected=include_protected)
 
         # Filter by search if provided
         if search:
@@ -651,30 +704,26 @@ def api_list_files():
 
 @app.route("/api/v1/files/upload", methods=["POST"])
 def api_upload_file():
-    """Upload file (respects permissions in protected mode)."""
-    from models import SystemSettings
-
+    """Upload file to the protected directory (requires authentication)."""
     if not CONFIG["ENABLE_UPLOADS"]:
         return jsonify({"error": "Uploads are disabled", "code": "UPLOADS_DISABLED"}), 403
 
-    # Check system mode and permissions
-    settings = SystemSettings.query.first()
     path = request.form.get("path", "")
 
-    if settings and settings.mode == "protected":
-        token = auth.get_token_from_request()
-        if not token:
-            return jsonify({"error": "Authentication required", "code": "AUTH_REQUIRED"}), 401
+    # Uploads always require authentication
+    token = auth.get_token_from_request()
+    if not token:
+        return jsonify({"error": "Authentication required", "code": "AUTH_REQUIRED"}), 401
 
-        user = auth.get_user_from_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
+    user = auth.get_user_from_token(token)
+    if not user:
+        return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
 
-        # Check write permissions (admin has full access)
-        if user.role != "admin":
-            check_path = "/" + path if path else "/"
-            if not user_has_access(user, check_path, require_write=True):
-                return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
+    # Check write permissions (admin has full access)
+    if user.role != "admin":
+        check_path = "/" + path if path else "/"
+        if not user_has_access(user, check_path, require_write=True):
+            return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
 
     # Handle upload
     if "file" not in request.files:
@@ -684,9 +733,9 @@ def api_upload_file():
     if file.filename == "":
         return jsonify({"error": "No file selected", "code": "NO_FILE"}), 400
 
-    # Secure filename and save
+    # Secure filename and save to the protected subdirectory
     filename = secure_filename(file.filename)
-    target_dir = Path(CONFIG["STORAGE_PATH"]) / path
+    target_dir = Path(CONFIG["STORAGE_PATH"]) / "protected" / path
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / filename
 
@@ -708,36 +757,37 @@ def api_upload_file():
 
 @app.route("/api/v1/files/download", methods=["GET"])
 def api_download_file():
-    """Download file (respects permissions in protected mode)."""
-    from models import SystemSettings
+    """Download file.
 
+    Authenticated users can download from both protected and unprotected dirs.
+    Guests can only download from the unprotected directory.
+    """
     path = request.args.get("path", "")
     if not path:
         return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
 
-    # Check system mode and permissions
-    settings = SystemSettings.query.first()
+    # Determine caller identity
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token) if token else None
 
-    if settings and settings.mode == "protected":
-        token = auth.get_token_from_request()
-        if not token:
-            return jsonify({"error": "Authentication required", "code": "AUTH_REQUIRED"}), 401
-
-        user = auth.get_user_from_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
-
+    if user and user.role != "admin":
         # Check read permissions
-        if user.role != "admin":
-            parent = str(Path(path).parent)
-            folder_path = "/" if parent == "." else "/" + parent
-            if not user_has_access(user, folder_path):
-                return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
+        parent = str(Path(path).parent)
+        folder_path = "/" if parent == "." else "/" + parent
+        if not user_has_access(user, folder_path):
+            return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
 
-    # Serve file
-    file_path = Path(CONFIG["STORAGE_PATH"]) / path
+    # Resolve file in the correct subdirectory
+    if user:
+        # Authenticated users – look in protected first, then unprotected
+        file_path = resolve_file_path(path)
+    else:
+        # Guest – only unprotected
+        file_path = Path(CONFIG["STORAGE_PATH"]) / "unprotected" / path
+        if not file_path.exists():
+            file_path = None
 
-    if not file_path.exists() or not file_path.is_file():
+    if not file_path or not file_path.is_file():
         return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
 
     return send_file(str(file_path), as_attachment=True)
@@ -746,9 +796,7 @@ def api_download_file():
 @app.route("/api/v1/files/mkdir", methods=["POST"])
 @auth.require_auth()
 def api_create_directory():
-    """Create directory (respects permissions in protected mode)."""
-    from models import SystemSettings
-
+    """Create directory in the protected subdirectory (requires authentication)."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
@@ -760,17 +808,16 @@ def api_create_directory():
         return jsonify({"error": "Directory name required", "code": "MISSING_NAME"}), 400
 
     # Check permissions
-    settings = SystemSettings.query.first()
     token = auth.get_token_from_request()
     user = auth.get_user_from_token(token)
 
-    if settings and settings.mode == "protected" and user.role != "admin":
+    if user.role != "admin":
         check_path = "/" + path if path else "/"
         if not user_has_access(user, check_path, require_write=True):
             return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
 
-    # Create directory
-    target_dir = Path(CONFIG["STORAGE_PATH"]) / path / secure_filename(name)
+    # Create directory in protected subdirectory
+    target_dir = Path(CONFIG["STORAGE_PATH"]) / "protected" / path / secure_filename(name)
 
     try:
         target_dir.mkdir(parents=True, exist_ok=False)
@@ -784,9 +831,7 @@ def api_create_directory():
 @app.route("/api/v1/files", methods=["DELETE"])
 @auth.require_auth()
 def api_delete_file():
-    """Delete file or directory (respects permissions in protected mode)."""
-    from models import FolderPermission, SystemSettings
-
+    """Delete file or directory (requires authentication)."""
     if not CONFIG["ENABLE_DELETE"]:
         return jsonify({"error": "Delete is disabled", "code": "DELETE_DISABLED"}), 403
 
@@ -795,21 +840,18 @@ def api_delete_file():
         return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
 
     # Check permissions
-    settings = SystemSettings.query.first()
     token = auth.get_token_from_request()
     user = auth.get_user_from_token(token)
 
-    if settings and settings.mode == "protected" and user.role != "admin":
-        folder_path = "/" + str(Path(path).parent)
-        permission = FolderPermission.query.filter_by(user_id=user.id, folder_path=folder_path).first()
-
-        if not permission or not permission.can_write:
+    if user.role != "admin":
+        check_path = "/" + str(Path(path).parent)
+        if not user_has_access(user, check_path, require_write=True):
             return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
 
-    # Delete file/directory
-    target_path = Path(CONFIG["STORAGE_PATH"]) / path
+    # Resolve file in the correct subdirectory
+    target_path = resolve_file_path(path)
 
-    if not target_path.exists():
+    if not target_path or not target_path.exists():
         return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
 
     try:
@@ -834,21 +876,24 @@ def api_get_dashboard_stats():
     # Count users
     user_count = User.query.filter_by(role="user").count()
 
-    # Count files and folders
-    storage_path = Path(CONFIG["STORAGE_PATH"])
+    # Count files and folders across protected and unprotected subdirectories
     file_count = 0
     folder_count = 0
     total_size = 0
 
-    try:
-        for item in storage_path.rglob("*"):
-            if item.is_file():
-                file_count += 1
-                total_size += item.stat().st_size
-            elif item.is_dir():
-                folder_count += 1
-    except Exception:
-        pass
+    for subdir in ("protected", "unprotected"):
+        sub_path = Path(CONFIG["STORAGE_PATH"]) / subdir
+        if not sub_path.exists():
+            continue
+        try:
+            for item in sub_path.rglob("*"):
+                if item.is_file():
+                    file_count += 1
+                    total_size += item.stat().st_size
+                elif item.is_dir():
+                    folder_count += 1
+        except Exception:
+            pass
 
     # Get system settings
     settings = SystemSettings.query.first()
@@ -859,7 +904,6 @@ def api_get_dashboard_stats():
             "fileCount": file_count,
             "folderCount": folder_count,
             "totalSize": total_size,
-            "mode": settings.mode if settings else "open",
             "tlsEnabled": settings.tls_enabled if settings else True,
         }
     ), 200
