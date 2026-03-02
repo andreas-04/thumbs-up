@@ -105,7 +105,11 @@ def _list_directory(base_path, path=""):
     Returns:
         List of file/directory info dicts
     """
-    full_path = os.path.join(base_path, path)
+    full_path = os.path.realpath(os.path.join(base_path, path))
+
+    # Guard against directory traversal
+    if not full_path.startswith(os.path.realpath(base_path)):
+        return []
 
     if not os.path.exists(full_path):
         return []
@@ -201,9 +205,17 @@ def resolve_file_path(rel_path):
 
     Looks in ``protected/`` first, then ``unprotected/``.  Returns the first
     match or ``None`` if neither directory contains the path.
+
+    Validates that the resolved path stays within the storage directory to
+    prevent directory traversal attacks.
     """
+    storage = Path(CONFIG["STORAGE_PATH"]).resolve()
     for subdir in ("protected", "unprotected"):
-        candidate = Path(CONFIG["STORAGE_PATH"]) / subdir / rel_path
+        base = (storage / subdir).resolve()
+        candidate = (base / rel_path).resolve()
+        # Guard against directory traversal (e.g. ../../etc/passwd)
+        if not str(candidate).startswith(str(base)):
+            return None
         if candidate.exists():
             return candidate
     return None
@@ -783,8 +795,14 @@ def api_download_file():
         file_path = resolve_file_path(path)
     else:
         # Guest – only unprotected
-        file_path = Path(CONFIG["STORAGE_PATH"]) / "unprotected" / path
-        if not file_path.exists():
+        unprotected_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "unprotected"
+        candidate = (unprotected_base / path).resolve()
+        # Guard against directory traversal
+        if not str(candidate).startswith(str(unprotected_base)):
+            file_path = None
+        elif candidate.exists():
+            file_path = candidate
+        else:
             file_path = None
 
     if not file_path or not file_path.is_file():

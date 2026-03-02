@@ -126,6 +126,71 @@ class TestGetFileList:
         # Only one entry for the same name
         assert names.count("readme.txt") == 1
 
+        # The protected version should win (it is merged last)
+        match = [item for item in result if item["name"] == "readme.txt"][0]
+        resolved = tmp_path / "protected" / match["path"]
+        assert resolved.read_text() == "protected version"
+
+    def test_directory_traversal_blocked(self, app, monkeypatch, tmp_path):
+        from core import server as srv
+
+        monkeypatch.setitem(srv.CONFIG, "STORAGE_PATH", str(tmp_path))
+        (tmp_path / "protected").mkdir()
+        (tmp_path / "unprotected").mkdir()
+        # Create a file outside the storage subdirectories
+        (tmp_path / "secret.txt").write_text("should not be listed")
+
+        result = srv.get_file_list("../../secret.txt")
+        assert result == []
+
+
+class TestResolveFilePath:
+    def test_resolve_finds_protected_file(self, app, monkeypatch, tmp_path):
+        from core import server as srv
+
+        monkeypatch.setitem(srv.CONFIG, "STORAGE_PATH", str(tmp_path))
+        protected = tmp_path / "protected"
+        protected.mkdir()
+        (protected / "secret.txt").write_text("classified")
+
+        result = srv.resolve_file_path("secret.txt")
+        assert result is not None
+        assert result.name == "secret.txt"
+
+    def test_resolve_finds_unprotected_file(self, app, monkeypatch, tmp_path):
+        from core import server as srv
+
+        monkeypatch.setitem(srv.CONFIG, "STORAGE_PATH", str(tmp_path))
+        (tmp_path / "protected").mkdir()
+        unprotected = tmp_path / "unprotected"
+        unprotected.mkdir()
+        (unprotected / "public.txt").write_text("open")
+
+        result = srv.resolve_file_path("public.txt")
+        assert result is not None
+        assert result.name == "public.txt"
+
+    def test_resolve_returns_none_for_missing(self, app, monkeypatch, tmp_path):
+        from core import server as srv
+
+        monkeypatch.setitem(srv.CONFIG, "STORAGE_PATH", str(tmp_path))
+        (tmp_path / "protected").mkdir()
+        (tmp_path / "unprotected").mkdir()
+
+        result = srv.resolve_file_path("nonexistent.txt")
+        assert result is None
+
+    def test_resolve_blocks_traversal(self, app, monkeypatch, tmp_path):
+        from core import server as srv
+
+        monkeypatch.setitem(srv.CONFIG, "STORAGE_PATH", str(tmp_path))
+        (tmp_path / "protected").mkdir()
+        (tmp_path / "unprotected").mkdir()
+        (tmp_path / "outside.txt").write_text("should not be reachable")
+
+        result = srv.resolve_file_path("../outside.txt")
+        assert result is None
+
 
 class TestUserHasAccess:
     def test_no_permissions_allows_all(self, app, regular_user):
