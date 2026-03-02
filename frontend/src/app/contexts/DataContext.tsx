@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { api, SystemSettings, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
 import { useAuth } from './AuthContext';
 
-export type SystemMode = 'open' | 'protected';
 export type AuthMethod = 'email' | 'email+password' | 'username+password';
 
 // Re-export API types for backward compatibility
@@ -53,7 +52,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isGuest } = useAuth();
   const [settings, setSettings] = useState<SystemSettingsType | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -201,6 +200,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
           // Load files for root directory.
           await refreshFiles('/');
+        } else if (isGuest) {
+          // Guests can browse unprotected files (no auth token needed).
+          setUsers([]);
+          await refreshFiles('/');
         } else {
           // Clear protected data when logged out.
           setUsers([]);
@@ -216,7 +219,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     loadInitialData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isGuest]);
 
   return (
     <DataContext.Provider

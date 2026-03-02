@@ -3,8 +3,10 @@ import { api, User } from '../../services/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isGuest: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<User | null>;
+  loginAsGuest: () => void;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
   loading: boolean;
@@ -14,6 +16,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Token is automatically set in api client
       setUser(userData);
       setIsAuthenticated(true);
+      setIsGuest(false);
       return userData;
     } catch (error) {
       console.error('Login failed:', error);
@@ -54,14 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loginAsGuest = () => {
+    setIsGuest(true);
+  };
+
   const logout = async () => {
     try {
-      await api.logout();
+      if (!isGuest) {
+        await api.logout();
+      }
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
       // Always clear local state even if API call fails
       setIsAuthenticated(false);
+      setIsGuest(false);
       setUser(null);
     }
   };
@@ -71,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, updateUser, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, isGuest, user, login, loginAsGuest, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { GuestRoute } from './components/GuestRoute';
 import { AdminLayout } from './components/AdminLayout';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -7,6 +8,7 @@ import SystemSettings from './pages/SystemSettings';
 import UserManagement from './pages/UserManagement';
 import FolderPermissions from './pages/FolderPermissions';
 import UserFileBrowser from './pages/UserFileBrowser';
+import GuestFileBrowser from './pages/GuestFileBrowser';
 import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
 
@@ -26,6 +28,16 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     Component: PasswordReset,
+  },
+  {
+    path: '/guest/files',
+    Component: GuestRoute,
+    children: [
+      {
+        path: '',
+        Component: GuestFileBrowser,
+      },
+    ],
   },
   {
     path: '/files',
