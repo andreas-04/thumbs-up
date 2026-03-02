@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'docker-compose.yml'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'docker-compose.yml'
 
 jobs:
   validate:
@@ -65,5 +67,4 @@ jobs:
           cache-to: type=gha,mode=min
 
       - name: Validate docker compose config
-        working-directory: ./backend/apiv2
         run: docker compose config --quiet

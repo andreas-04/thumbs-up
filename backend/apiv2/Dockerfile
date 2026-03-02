@@ -13,7 +13,6 @@ COPY models.py ./models.py
 COPY core/ ./core/
 COPY services/ ./services/
 COPY utils/ ./utils/
-COPY templates/ ./templates/
 COPY gen_selfsigned.py ./gen_selfsigned.py
 COPY start_webserver.sh ./start_webserver.sh
 
