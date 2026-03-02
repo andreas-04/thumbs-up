@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useData, SystemMode, SystemSettingsType } from '../contexts/DataContext';
+import { useData, SystemSettingsType } from '../contexts/DataContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -10,11 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
-import { Switch } from '../components/ui/switch';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { 
-  Shield, 
-  Globe, 
   Lock, 
   CheckCircle, 
   AlertTriangle,
@@ -36,11 +33,6 @@ export default function SystemSettings() {
   ) => {
     setLocalSettings({ ...localSettings, [key]: value });
     setHasChanges(true);
-  };
-
-  const handleModeToggle = (checked: boolean) => {
-    const newMode: SystemMode = checked ? 'protected' : 'open';
-    handleChange('mode', newMode);
   };
 
   const handleSave = () => {
@@ -65,7 +57,7 @@ export default function SystemSettings() {
       <div>
         <h1 className="text-3xl font-semibold text-white">System Settings</h1>
         <p className="text-gray-400 mt-1">
-          Configure access mode and device settings
+          Configure device settings
         </p>
       </div>
 
@@ -77,90 +69,6 @@ export default function SystemSettings() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Access Mode */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            {localSettings.mode === 'open' ? (
-              <Globe className="h-5 w-5 text-green-400" />
-            ) : (
-              <Shield className="h-5 w-5 text-blue-400" />
-            )}
-            <CardTitle className="text-white">Access Mode</CardTitle>
-          </div>
-          <CardDescription className="text-gray-400">
-            Control who can access shared files on this device
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="mode-toggle" className="text-lg text-white">
-                  Protected Mode
-                </Label>
-                {localSettings.mode === 'protected' && (
-                  <span className="text-xs bg-blue-950 text-blue-300 px-2 py-0.5 rounded-full">
-                    Active
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-400">
-                {localSettings.mode === 'open' 
-                  ? 'Currently in Open Mode - anyone can access files over TLS'
-                  : 'Only pre-approved users can access files'}
-              </p>
-            </div>
-            <Switch
-              id="mode-toggle"
-              checked={localSettings.mode === 'protected'}
-              onCheckedChange={handleModeToggle}
-            />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-4 border border-gray-700 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Globe className="h-5 w-5 text-green-400" />
-                <h3 className="font-medium text-white">Open Mode</h3>
-              </div>
-              <p className="text-sm text-gray-400 mb-2">
-                Any user connected to the device can access shared files over TLS without individual approval.
-              </p>
-              <ul className="text-xs text-gray-500 space-y-1">
-                <li>• No user registration required</li>
-                <li>• Automatic access via HTTPS</li>
-                <li>• Best for trusted networks</li>
-              </ul>
-            </div>
-
-            <div className="p-4 border border-gray-700 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="h-5 w-5 text-blue-400" />
-                <h3 className="font-medium text-white">Protected Mode</h3>
-              </div>
-              <p className="text-sm text-gray-400 mb-2">
-                Only users added to the approved list can access files. Requires authentication.
-              </p>
-              <ul className="text-xs text-gray-500 space-y-1">
-                <li>• User authentication required</li>
-                <li>• Admin must approve each user</li>
-                <li>• Granular access control</li>
-              </ul>
-            </div>
-          </div>
-
-          {localSettings.mode === 'protected' && (
-            <Alert className="bg-blue-950 border-blue-900">
-              <AlertTriangle className="h-4 w-4 text-blue-400" />
-              <AlertDescription className="text-blue-300">
-                Protected Mode is enabled. Only approved users can access files.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Security & Network */}
       <Card className="bg-gray-900 border-gray-800">

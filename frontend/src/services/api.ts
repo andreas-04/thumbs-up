@@ -53,7 +53,6 @@ export interface DashboardStats {
   fileCount: number;
   folderCount: number;
   totalSize: number;
-  mode: 'open' | 'protected';
   tlsEnabled: boolean;
 }
 

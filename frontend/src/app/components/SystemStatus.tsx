@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
-import { Shield, Users, FolderOpen, Activity, Globe } from 'lucide-react';
+import { Users, FolderOpen, Activity } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import type { SystemSettingsType, User } from '../contexts/DataContext';
 
@@ -15,17 +15,9 @@ export default function SystemStatus({ settings, users, fileCount, folderCount }
 
   const items = [
     {
-      title: 'System Mode',
-      value: settings.mode === 'open' ? 'Open' : 'Protected',
-      description: settings.mode === 'open' ? 'All users can access' : 'Approval required',
-      icon: settings.mode === 'open' ? Globe : Shield,
-      color: settings.mode === 'open' ? 'text-green-400' : 'text-blue-400',
-      link: '/admin/settings',
-    },
-    {
       title: 'Registered Users',
       value: users.length,
-      description: 'Can access in Protected Mode',
+      description: 'Authenticated users',
       icon: Users,
       color: 'text-purple-400',
       link: '/admin/users',
