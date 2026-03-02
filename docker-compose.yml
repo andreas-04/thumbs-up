@@ -4,7 +4,7 @@ services:
   # Backend API Service
   backend:
     build:
-      context: .
+      context: ./backend/apiv2
       dockerfile: Dockerfile
     container_name: thumbsup-backend
     ports:
@@ -19,7 +19,7 @@ services:
       - SERVICE_NAME=ThumbsUp File Share
       - CORS_ORIGINS=*
     volumes:
-      - ./storage:/app/storage
+      - ./backend/apiv2/storage:/app/storage
       - thumbsup-db:/app/data
     restart: unless-stopped
     networks:
@@ -34,7 +34,7 @@ services:
   # Frontend Web Service
   frontend:
     build:
-      context: ../../frontend
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: thumbsup-frontend
     ports:
