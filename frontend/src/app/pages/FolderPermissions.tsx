@@ -31,7 +31,6 @@ import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { 
   FolderOpen, 
-  Shield, 
   Edit, 
   Info,
   CheckCircle,
@@ -122,30 +121,6 @@ export default function FolderPermissions() {
     }
     return user.email || 'N/A';
   };
-
-  if (settings.mode === 'open') {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold text-white">Folder Permissions</h1>
-          <p className="text-gray-400 mt-1">
-            Configure per-user folder access control
-          </p>
-        </div>
-
-        <Alert className="bg-yellow-950 border-yellow-900">
-          <Shield className="h-4 w-4 text-yellow-400" />
-          <AlertDescription className="text-yellow-300">
-            Folder permissions are only available in <strong>Protected Mode</strong>.
-            Currently, the system is in <strong>Open Mode</strong> - all users have full access to all folders.
-            <br />
-            <br />
-            Switch to Protected Mode in <a href="/admin/settings" className="underline">System Settings</a> to enable folder permissions.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
 
   if (users.length === 0) {
     return (

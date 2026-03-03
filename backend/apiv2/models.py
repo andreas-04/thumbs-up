@@ -56,13 +56,12 @@ class SystemSettings(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f"<SystemSettings mode={self.mode} auth={self.auth_method}>"
+        return f"<SystemSettings auth={self.auth_method}>"
 
     def to_dict(self):
         """Convert settings to dictionary."""
         return {
             "id": self.id,
-            "mode": self.mode,
             "authMethod": self.auth_method,
             "tlsEnabled": self.tls_enabled,
             "httpsPort": self.https_port,
