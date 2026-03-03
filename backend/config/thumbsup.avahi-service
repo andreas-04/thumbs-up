@@ -1,0 +1,21 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  Avahi mDNS service advertisement for ThumbsUp.
+
+  Install on the Pi host:
+    sudo cp thumbsup.avahi-service /etc/avahi/services/thumbsup.service
+    sudo systemctl restart avahi-daemon
+
+  Also set the Pi hostname to match MDNS_HOSTNAME (default: thumbsup):
+    sudo hostnamectl set-hostname thumbsup
+
+  The device will then be discoverable at https://thumbsup.local
+-->
+<service-group>
+  <name replace-wildcards="yes">ThumbsUp File Share</name>
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+  </service>
+</service-group>

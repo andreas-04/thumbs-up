@@ -4,6 +4,7 @@ mDNS/Avahi service advertiser for ThumbsUp.
 Makes the server discoverable on the local network.
 """
 
+import os
 import platform
 import socket
 
@@ -11,7 +12,7 @@ import socket
 class MDNSAdvertiser:
     """Advertise ThumbsUp service via mDNS/Avahi."""
 
-    def __init__(self, service_name="ThumbsUp File Share", port=445, service_type="_smb._tcp"):
+    def __init__(self, service_name="ThumbsUp File Share", port=445, service_type="_smb._tcp", hostname=None):
         """
         Initialize mDNS advertiser.
 
@@ -19,11 +20,12 @@ class MDNSAdvertiser:
             service_name: Human-readable service name
             port: Service port number
             service_type: Service type (default: _smb._tcp for SMB)
+            hostname: mDNS hostname (default: MDNS_HOSTNAME env var or system hostname)
         """
         self.service_name = service_name
         self.port = port
         self.service_type = service_type
-        self.hostname = socket.gethostname()
+        self.hostname = hostname or os.environ.get("MDNS_HOSTNAME", socket.gethostname())
         self.group = None
         self.server = None
 
@@ -50,6 +52,9 @@ class MDNSAdvertiser:
             import dbus
             from dbus import DBusException
 
+            # Get local IP
+            local_ip = socket.gethostbyname(socket.gethostname())
+
             # Connect to system bus
             bus = dbus.SystemBus()
             server = dbus.Interface(bus.get_object("org.freedesktop.Avahi", "/"), "org.freedesktop.Avahi.Server")
@@ -57,6 +62,16 @@ class MDNSAdvertiser:
             # Create entry group
             group = dbus.Interface(
                 bus.get_object("org.freedesktop.Avahi", server.EntryGroupNew()), "org.freedesktop.Avahi.EntryGroup"
+            )
+
+            # Register hostname -> IP so {hostname}.local resolves on the LAN
+            # without requiring the Pi's system hostname to be changed
+            group.AddAddress(
+                -1,              # Interface (-1 = all)
+                0,               # Protocol (0 = IPv4)
+                dbus.UInt32(0),  # Flags
+                f"{self.hostname}.local",
+                local_ip,
             )
 
             # Add service
@@ -67,7 +82,7 @@ class MDNSAdvertiser:
                 self.service_name,
                 self.service_type,
                 "",  # Domain (empty = default)
-                "",  # Host (empty = localhost)
+                f"{self.hostname}.local",  # Host
                 dbus.UInt16(self.port),
                 [],  # TXT records
             )
@@ -81,20 +96,18 @@ class MDNSAdvertiser:
             print(f"   Service: {self.service_name}")
             print(f"   Type: {self.service_type}")
             print(f"   Port: {self.port}")
-            print(f"   Hostname: {self.hostname}.local")
+            print(f"   Hostname: {self.hostname}.local ({local_ip})")
 
         except ImportError:
-            print("⚠️  Avahi (dbus-python) not available")
-            print("   Install with: pip install dbus-python")
-            print(f"   Service available at: https://{self.hostname}:{self.port}")
+            print("ℹ️  dbus-python not available — mDNS handled by host avahi-daemon")
+            print(f"   Ensure hostname is set: sudo hostnamectl set-hostname {self.hostname}")
+            print(f"   Service available at: https://{self.hostname}.local:{self.port}")
         except DBusException as e:
-            print(f"⚠️  Failed to advertise via Avahi: {e}")
-            print("   Make sure avahi-daemon is running:")
-            print("   sudo systemctl start avahi-daemon")
-            print(f"   Service available at: https://{self.hostname}:{self.port}")
+            print(f"⚠️  Failed to advertise via Avahi D-Bus: {e}")
+            print(f"   Service available at: https://{self.hostname}.local:{self.port}")
         except Exception as e:
             print(f"⚠️  Unexpected error with Avahi: {e}")
-            print(f"   Service available at: https://{self.hostname}:{self.port}")
+            print(f"   Service available at: https://{self.hostname}.local:{self.port}")
 
     def _advertise_macos(self):
         """Advertise service on macOS using Bonjour."""
@@ -104,8 +117,7 @@ class MDNSAdvertiser:
             from zeroconf import ServiceInfo, Zeroconf
 
             # Get local IP
-            hostname = sock.gethostname()
-            local_ip = sock.gethostbyname(hostname)
+            local_ip = sock.gethostbyname(sock.gethostname())
 
             # Create service info
             info = ServiceInfo(
@@ -126,7 +138,7 @@ class MDNSAdvertiser:
             print(f"   Service: {self.service_name}")
             print(f"   Type: {self.service_type}")
             print(f"   Port: {self.port}")
-            print(f"   Hostname: {hostname}.local")
+            print(f"   Hostname: {self.hostname}.local")
 
         except ImportError:
             print("⚠️  Zeroconf not available (optional on macOS)")
