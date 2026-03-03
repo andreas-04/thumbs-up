@@ -21,6 +21,7 @@ services:
     volumes:
       - ./backend/apiv2/storage:/app/storage
       - thumbsup-db:/app/data
+      - thumbsup-certs:/app/certs
     restart: unless-stopped
     networks:
       - thumbsup-net
@@ -38,14 +39,17 @@ services:
       dockerfile: Dockerfile
     container_name: thumbsup-frontend
     ports:
-      - "80:80"
+      - "443:443"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    volumes:
+      - thumbsup-certs:/etc/nginx/certs:ro
     restart: unless-stopped
     networks:
       - thumbsup-net
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=1", "--spider", "https://localhost/"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -53,6 +57,8 @@ services:
 
 volumes:
   thumbsup-db:
+    driver: local
+  thumbsup-certs:
     driver: local
 
 networks:
