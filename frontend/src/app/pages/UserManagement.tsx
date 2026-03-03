@@ -38,7 +38,7 @@ import {
 } from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, Trash2, Search, Shield, Mail, Key } from 'lucide-react';
+import { Plus, Trash2, Search, Mail, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserManagement() {
@@ -122,30 +122,6 @@ export default function UserManagement() {
 
   if (!settings) {
     return null;
-  }
-
-  if (settings.mode === 'open') {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold text-white">User Management</h1>
-          <p className="text-gray-400 mt-1">
-            Manage approved users for file access
-          </p>
-        </div>
-
-        <Alert className="bg-yellow-950 border-yellow-900">
-          <Shield className="h-4 w-4 text-yellow-400" />
-          <AlertDescription className="text-yellow-300">
-            User management is only available in <strong>Protected Mode</strong>.
-            Currently, the system is in <strong>Open Mode</strong> - all users can access files without approval.
-            <br />
-            <br />
-            Switch to Protected Mode in <a href="/admin/settings" className="underline">System Settings</a> to enable user management.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
   }
 
   return (

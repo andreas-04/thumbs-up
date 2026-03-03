@@ -32,7 +32,7 @@ class TestSystemSettingsModel:
 
         settings = SystemSettings.query.first()
         d = settings.to_dict()
-        for key in ("id", "mode", "authMethod", "tlsEnabled", "httpsPort", "deviceName"):
+        for key in ("id", "authMethod", "tlsEnabled", "httpsPort", "deviceName"):
             assert key in d
 
     def test_settings_repr(self, app):
@@ -40,7 +40,7 @@ class TestSystemSettingsModel:
 
         settings = SystemSettings.query.first()
         r = repr(settings)
-        assert "mode=" in r
+        assert "auth=" in r
 
 
 class TestFolderPermissionModel:

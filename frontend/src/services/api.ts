@@ -21,7 +21,6 @@ export interface User {
 
 export interface SystemSettings {
   id: number;
-  mode: 'open' | 'protected';
   authMethod: 'email' | 'email+password' | 'username+password';
   tlsEnabled: boolean;
   httpsPort: number;
