@@ -83,17 +83,30 @@ if [[ "$CURRENT_HOSTNAME" != "$MDNS_HOSTNAME" ]]; then
     echo "Setting hostname: $CURRENT_HOSTNAME -> $MDNS_HOSTNAME"
     hostnamectl set-hostname "$MDNS_HOSTNAME"
 
-    # Update /etc/hosts so sudo and local resolution work without warnings
-    if grep -q "$CURRENT_HOSTNAME" /etc/hosts; then
-        sed -i "s/$CURRENT_HOSTNAME/$MDNS_HOSTNAME/g" /etc/hosts
+    # Update /etc/hosts so sudo and local resolution work without warnings.
+    # Only adjust the 127.0.1.1 line and treat hostnames as tokens to avoid
+    # accidentally changing substrings (e.g., 'pi' in 'pihole').
+    if grep -qE "^127\.0\.1\.1[[:space:]]" /etc/hosts; then
+        awk -v old="$CURRENT_HOSTNAME" -v new="$MDNS_HOSTNAME" '
+            BEGIN { OFS = "\t" }
+            /^127\.0\.1\.1[ \t]/ {
+                found = 0
+                for (i = 2; i <= NF; i++) {
+                    if ($i == old) {
+                        $i = new
+                        found = 1
+                    }
+                }
+                if (found == 0) {
+                    $(NF + 1) = new
+                }
+            }
+            { print }
+        ' /etc/hosts > /etc/hosts.tmp && mv /etc/hosts.tmp /etc/hosts
         echo "Updated /etc/hosts"
     else
         # Ensure 127.0.1.1 entry exists for the new hostname
-        if grep -q "127.0.1.1" /etc/hosts; then
-            sed -i "s/127.0.1.1.*/127.0.1.1\t$MDNS_HOSTNAME/" /etc/hosts
-        else
-            echo -e "127.0.1.1\t$MDNS_HOSTNAME" >> /etc/hosts
-        fi
+        echo -e "127.0.1.1\t$MDNS_HOSTNAME" >> /etc/hosts
         echo "Added $MDNS_HOSTNAME to /etc/hosts"
     fi
 else
