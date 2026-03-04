@@ -63,6 +63,10 @@ fi
 MDNS_HOSTNAME="${MDNS_HOSTNAME:-thumbsup}"
 ADMIN_PIN="${ADMIN_PIN:-}"
 
+if [[ -z "$ADMIN_PIN" || ${#ADMIN_PIN} -lt 4 ]]; then
+    echo "Error: ADMIN_PIN must be set in $ENV_FILE and be at least 4 characters to avoid using an insecure default."
+    exit 1
+fi
 echo
 echo "========================================"
 echo " ThumbsUp Host Setup"
