@@ -1440,6 +1440,7 @@ def main():
         service_name=CONFIG["SERVICE_NAME"],
         port=CONFIG["PORT"],
         hostname=CONFIG["MDNS_HOSTNAME"],
+        service_type="_https._tcp",
     )
     mdns.advertise()
     # Setup SSL context
