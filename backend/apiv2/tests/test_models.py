@@ -102,12 +102,12 @@ class TestPathCertRuleModel:
     def test_path_cert_rule_to_dict(self, app):
         from models import PathCertRule, db
 
-        rule = PathCertRule(path="/secret", attr_name="O", attr_value="AcmeCorp")
+        rule = PathCertRule(dir_path="/secret", attr_name="O", attr_value="AcmeCorp")
         db.session.add(rule)
         db.session.commit()
 
         d = rule.to_dict()
-        assert d["path"] == "/secret"
+        assert d["dirPath"] == "/secret"
         assert d["attrName"] == "O"
         assert d["attrValue"] == "AcmeCorp"
         assert "id" in d
@@ -116,7 +116,7 @@ class TestPathCertRuleModel:
     def test_path_cert_rule_repr(self, app):
         from models import PathCertRule, db
 
-        rule = PathCertRule(path="/docs", attr_name="OU", attr_value="Engineering")
+        rule = PathCertRule(dir_path="/docs", attr_name="OU", attr_value="Engineering")
         db.session.add(rule)
         db.session.commit()
 
@@ -129,28 +129,28 @@ class TestPathCertRuleModel:
         from models import PathCertRule, db
 
         rules = [
-            PathCertRule(path="/restricted", attr_name="O", attr_value="AcmeCorp"),
-            PathCertRule(path="/restricted", attr_name="OU", attr_value="DevOps"),
-            PathCertRule(path="/restricted", attr_name="L", attr_value="Seattle"),
+            PathCertRule(dir_path="/restricted", attr_name="O", attr_value="AcmeCorp"),
+            PathCertRule(dir_path="/restricted", attr_name="OU", attr_value="DevOps"),
+            PathCertRule(dir_path="/restricted", attr_name="L", attr_value="Seattle"),
         ]
         db.session.add_all(rules)
         db.session.commit()
 
-        stored = PathCertRule.query.filter_by(path="/restricted").all()
+        stored = PathCertRule.query.filter_by(dir_path="/restricted").all()
         assert len(stored) == 3
 
     def test_or_logic_multiple_values_same_attr(self, app):
-        """Multiple values for the same attr on the same path = OR logic."""
+        """Multiple values for the same attr on the same dir_path = OR logic."""
         from models import PathCertRule, db
 
         rules = [
-            PathCertRule(path="/shared", attr_name="OU", attr_value="Engineering"),
-            PathCertRule(path="/shared", attr_name="OU", attr_value="Research"),
+            PathCertRule(dir_path="/shared", attr_name="OU", attr_value="Engineering"),
+            PathCertRule(dir_path="/shared", attr_name="OU", attr_value="Research"),
         ]
         db.session.add_all(rules)
         db.session.commit()
 
-        stored = PathCertRule.query.filter_by(path="/shared", attr_name="OU").all()
+        stored = PathCertRule.query.filter_by(dir_path="/shared", attr_name="OU").all()
         values = {r.attr_value for r in stored}
         assert values == {"Engineering", "Research"}
 
@@ -159,10 +159,10 @@ class TestPathCertRuleModel:
 
         from models import PathCertRule, db
 
-        db.session.add(PathCertRule(path="/locked", attr_name="C", attr_value="US"))
+        db.session.add(PathCertRule(dir_path="/locked", attr_name="C", attr_value="US"))
         db.session.commit()
 
-        db.session.add(PathCertRule(path="/locked", attr_name="C", attr_value="US"))
+        db.session.add(PathCertRule(dir_path="/locked", attr_name="C", attr_value="US"))
         with pytest.raises(IntegrityError):
             db.session.commit()
         db.session.rollback()
@@ -171,24 +171,24 @@ class TestPathCertRuleModel:
         from models import PathCertRule, db
 
         rules = [
-            PathCertRule(path="/alpha", attr_name="O", attr_value="MyOrg"),
-            PathCertRule(path="/beta", attr_name="O", attr_value="MyOrg"),
+            PathCertRule(dir_path="/alpha", attr_name="O", attr_value="MyOrg"),
+            PathCertRule(dir_path="/beta", attr_name="O", attr_value="MyOrg"),
         ]
         db.session.add_all(rules)
         db.session.commit()
 
-        assert PathCertRule.query.filter_by(path="/alpha").count() == 1
-        assert PathCertRule.query.filter_by(path="/beta").count() == 1
+        assert PathCertRule.query.filter_by(dir_path="/alpha").count() == 1
+        assert PathCertRule.query.filter_by(dir_path="/beta").count() == 1
 
     def test_attribute_agnostic_arbitrary_attr_name(self, app):
         """Arbitrary/custom attribute names should be stored without schema changes."""
         from models import PathCertRule, db
 
         # 1.2.840.113549.1.9.1 is the OID for the emailAddress DN attribute
-        rule = PathCertRule(path="/custom", attr_name="1.2.840.113549.1.9.1", attr_value="admin@example.com")
+        rule = PathCertRule(dir_path="/custom", attr_name="1.2.840.113549.1.9.1", attr_value="admin@example.com")
         db.session.add(rule)
         db.session.commit()
 
-        stored = PathCertRule.query.filter_by(path="/custom").first()
+        stored = PathCertRule.query.filter_by(dir_path="/custom").first()
         assert stored.attr_name == "1.2.840.113549.1.9.1"
         assert stored.attr_value == "admin@example.com"

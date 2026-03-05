@@ -104,15 +104,22 @@ class FolderPermission(db.Model):
 
 
 class PathCertRule(db.Model):
-    """mTLS certificate attribute rules for file/folder access control.
+    """mTLS certificate attribute rules for directory-level access control.
 
     Each row represents a single required certificate attribute (e.g. O=AcmeCorp)
-    that a connecting client's certificate must satisfy to access the given path.
+    that a connecting client's certificate must satisfy to access the given
+    directory and all of its contents.
 
-    Multiple rows for the same path are evaluated with AND logic — all listed
-    attribute requirements must be satisfied.  Multiple rows with the same path
-    and attr_name but different attr_values are evaluated with OR logic — the
-    certificate's attribute only needs to match one of the listed values.
+    Rules are directory-scoped: a rule on ``dir_path="/docs"`` applies to every
+    file and sub-directory under ``/docs``.  Directories with no rules are
+    **denied by default** — access is only granted when at least one matching
+    rule set exists for the nearest ancestor directory.
+
+    Multiple rows for the same ``dir_path`` are evaluated with AND logic — all
+    listed attribute requirements must be satisfied.  Multiple rows with the same
+    ``dir_path`` and ``attr_name`` but different ``attr_values`` are evaluated
+    with OR logic — the certificate's attribute only needs to match one of the
+    listed values.
 
     This design is intentionally attribute-agnostic: no schema change is needed
     when a new cert template introduces additional DN components or SAN fields.
@@ -121,22 +128,22 @@ class PathCertRule(db.Model):
     __tablename__ = "path_cert_rules"
 
     id = db.Column(db.Integer, primary_key=True)
-    path = db.Column(db.String(1024), nullable=False, index=True)
+    dir_path = db.Column(db.String(1024), nullable=False, index=True)
     attr_name = db.Column(db.String(64), nullable=False)  # e.g. "O", "OU", "CN", "L", "ST", "C"
     attr_value = db.Column(db.String(512), nullable=False)  # required value for the attribute
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Prevent exact duplicate rules for the same path + attribute + value
-    __table_args__ = (db.UniqueConstraint("path", "attr_name", "attr_value", name="unique_path_cert_rule"),)
+    # Prevent exact duplicate rules for the same directory + attribute + value
+    __table_args__ = (db.UniqueConstraint("dir_path", "attr_name", "attr_value", name="unique_path_cert_rule"),)
 
     def __repr__(self):
-        return f"<PathCertRule path={self.path} {self.attr_name}={self.attr_value}>"
+        return f"<PathCertRule dir={self.dir_path} {self.attr_name}={self.attr_value}>"
 
     def to_dict(self):
         """Convert rule to dictionary."""
         return {
             "id": self.id,
-            "path": self.path,
+            "dirPath": self.dir_path,
             "attrName": self.attr_name,
             "attrValue": self.attr_value,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
