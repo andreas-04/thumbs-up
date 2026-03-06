@@ -3,7 +3,7 @@
 # Stage 1: Build the React application
 # node:22-slim (Debian/glibc) required — tailwindcss/vite uses Lightning CSS native
 # binaries that have no linux-arm-musl (Alpine/musl) variant
-FROM node:22-slim AS builder
+FROM node:25-slim AS builder
 
 WORKDIR /app
 
