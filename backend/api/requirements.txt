@@ -19,6 +19,6 @@ qrcode[pil]>=7.4.2
 Pillow>=10.2.0
 
 # Configuration
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 
 bcrypt==5.0.0
