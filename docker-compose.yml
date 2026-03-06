@@ -4,7 +4,7 @@ services:
   # Backend API Service
   backend:
     build:
-      context: ./backend/apiv2
+      context: ./backend/api
       dockerfile: Dockerfile
     container_name: thumbsup-backend
     hostname: ${MDNS_HOSTNAME:-thumbsup}
@@ -20,7 +20,7 @@ services:
       - SERVICE_NAME=ThumbsUp File Share
       - CORS_ORIGINS=*
     volumes:
-      - ./backend/apiv2/storage:/app/storage
+      - ./backend/api/storage:/app/storage
       - thumbsup-db:/app/data
       - thumbsup-certs:/app/certs
     restart: unless-stopped

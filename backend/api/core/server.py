@@ -19,10 +19,9 @@ from werkzeug.utils import secure_filename
 # Local imports
 from core.auth import TokenAuth
 from models import User, db
-from services.mdns_advertiser import MDNSAdvertiser
+from utils.mdns_advertiser import MDNSAdvertiser
 from utils.qr_generator import QRGenerator
 
-# Get the apiv2 directory (parent of core)
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"

@@ -67,8 +67,8 @@ class MDNSAdvertiser:
             # Register hostname -> IP so {hostname}.local resolves on the LAN
             # without requiring the Pi's system hostname to be changed
             group.AddAddress(
-                -1,              # Interface (-1 = all)
-                0,               # Protocol (0 = IPv4)
+                -1,  # Interface (-1 = all)
+                0,  # Protocol (0 = IPv4)
                 dbus.UInt32(0),  # Flags
                 f"{self.hostname}.local",
                 local_ip,
