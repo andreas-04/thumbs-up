@@ -32,9 +32,9 @@ def generate_self_signed_cert(
     # Ensure certs directory exists
     os.makedirs(os.path.dirname(cert_path), exist_ok=True)
 
-    # Get hostname
+    # Get hostname (prefer MDNS_HOSTNAME env var for consistent cert SANs)
     if hostname is None:
-        hostname = socket.gethostname()
+        hostname = os.environ.get("MDNS_HOSTNAME", socket.gethostname())
 
     print(f"🔐 Generating self-signed certificate for '{hostname}'...")
 

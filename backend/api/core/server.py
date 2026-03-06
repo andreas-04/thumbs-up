@@ -19,10 +19,9 @@ from werkzeug.utils import secure_filename
 # Local imports
 from core.auth import TokenAuth
 from models import User, db
-from services.mdns_advertiser import MDNSAdvertiser
+from utils.mdns_advertiser import MDNSAdvertiser
 from utils.qr_generator import QRGenerator
 
-# Get the apiv2 directory (parent of core)
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
@@ -38,6 +37,7 @@ CONFIG = {
     "ENABLE_UPLOADS": os.getenv("ENABLE_UPLOADS", "true").lower() == "true",
     "ENABLE_DELETE": os.getenv("ENABLE_DELETE", "false").lower() == "true",
     "SERVICE_NAME": os.getenv("SERVICE_NAME", "ThumbsUp File Share"),
+    "MDNS_HOSTNAME": os.getenv("MDNS_HOSTNAME", socket.gethostname()),
     "MAX_UPLOAD_SIZE": int(os.getenv("MAX_UPLOAD_SIZE", 100 * 1024 * 1024)),  # 100MB
     "ADMIN_PIN": os.getenv("ADMIN_PIN"),  # Must be set via environment
     "DATABASE_URI": os.getenv("DATABASE_URI", f"sqlite:///{BASE_DIR}/data/thumbsup.db"),
@@ -76,7 +76,7 @@ os.makedirs(CONFIG["STORAGE_PATH"], exist_ok=True)
 
 def get_server_url():
     """Get the server's access URL."""
-    hostname = socket.gethostname()
+    hostname = CONFIG["MDNS_HOSTNAME"]
     # Remove .local suffix if already present to avoid double .local
     if hostname.endswith(".local"):
         hostname = hostname[:-6]
@@ -1435,7 +1435,12 @@ def main():
     token = auth.generate_guest_token(read_only=not CONFIG["ENABLE_UPLOADS"])
 
     # Setup mDNS advertising
-    mdns = MDNSAdvertiser(service_name=CONFIG["SERVICE_NAME"], port=CONFIG["PORT"])
+    mdns = MDNSAdvertiser(
+        service_name=CONFIG["SERVICE_NAME"],
+        port=CONFIG["PORT"],
+        hostname=CONFIG["MDNS_HOSTNAME"],
+        service_type="_https._tcp",
+    )
     mdns.advertise()
     # Setup SSL context
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

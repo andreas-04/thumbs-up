@@ -3,6 +3,7 @@
 # Web Framework
 Flask==3.0.0
 Flask-CORS==4.0.0
+Flask-SQLAlchemy==3.1.1
 Werkzeug==3.0.1
 
 # Async HTTP (for apiv1 if needed)
@@ -19,3 +20,5 @@ Pillow>=10.2.0
 
 # Configuration
 python-dotenv==1.0.0
+
+bcrypt==5.0.0

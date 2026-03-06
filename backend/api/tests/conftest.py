@@ -8,7 +8,6 @@ import sys
 
 import pytest
 
-# Ensure apiv2 is on the path so imports work the same way as in production
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Randomly generated at import time so no hardcoded secret-like literals exist in source.

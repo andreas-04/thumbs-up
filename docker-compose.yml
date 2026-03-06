@@ -4,27 +4,26 @@ services:
   # Backend API Service
   backend:
     build:
-      context: ./backend/apiv2
+      context: ./backend/api
       dockerfile: Dockerfile
     container_name: thumbsup-backend
-    ports:
-      - "8443:8443"
+    hostname: ${MDNS_HOSTNAME:-thumbsup}
+    network_mode: host
     environment:
       - ADMIN_PIN=${ADMIN_PIN:-1234}
       - HOST=0.0.0.0
       - PORT=8443
+      - MDNS_HOSTNAME=${MDNS_HOSTNAME:-thumbsup}
       - TOKEN_EXPIRY_HOURS=24
       - ENABLE_UPLOADS=true
       - ENABLE_DELETE=false
       - SERVICE_NAME=ThumbsUp File Share
       - CORS_ORIGINS=*
     volumes:
-      - ./backend/apiv2/storage:/app/storage
+      - ./backend/api/storage:/app/storage
       - thumbsup-db:/app/data
       - thumbsup-certs:/app/certs
     restart: unless-stopped
-    networks:
-      - thumbsup-net
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:8443/health', context=__import__('ssl')._create_unverified_context())"]
       interval: 30s
@@ -38,16 +37,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: thumbsup-frontend
-    ports:
-      - "443:443"
+    network_mode: host
     depends_on:
       backend:
         condition: service_healthy
     volumes:
       - thumbsup-certs:/etc/nginx/certs:ro
     restart: unless-stopped
-    networks:
-      - thumbsup-net
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=1", "--spider", "https://localhost/"]
       interval: 30s
@@ -60,7 +56,3 @@ volumes:
     driver: local
   thumbsup-certs:
     driver: local
-
-networks:
-  thumbsup-net:
-    driver: bridge

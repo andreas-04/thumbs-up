@@ -24,7 +24,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
-    directory: "/backend/apiv2"
+    directory: "/backend/api"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -33,7 +33,7 @@ updates:
       - "backend"
 
   - package-ecosystem: "docker"
-    directory: "/backend/apiv2"
+    directory: "/backend/api"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

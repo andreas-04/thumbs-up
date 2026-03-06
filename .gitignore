@@ -3,5 +3,6 @@
 *.crt
 *.db
 config.env
+.env
 **/node_modules/
 **/dist/

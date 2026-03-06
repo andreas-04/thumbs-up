@@ -44,17 +44,9 @@ if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
     echo "Generating SSL certificates..."
     $PYTHON utils/generate_certs.py 2>&1
     
-    # Check if generation succeeded
     if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
-        echo "ERROR: Certificate generation failed!"
-        echo "Trying alternative method..."
-        $PYTHON gen_selfsigned.py --output-dir certs 2>&1
-        
-        # Final check
-        if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
-            echo "ERROR: Could not generate certificates"
-            exit 1
-        fi
+        echo "ERROR: Could not generate certificates"
+        exit 1
     fi
     
     echo "   [OK] Certificates generated"

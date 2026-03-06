@@ -1,23 +1,23 @@
 # Dockerfile for ThumbsUp Backend API v2 Webserver
-FROM python:3.11-slim
+FROM python:3.11
 
 # Set working directory
 WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends libjpeg-dev zlib1g-dev \
+    && pip install --no-cache-dir -r requirements.txt \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy backend source code
 COPY models.py ./models.py
 COPY core/ ./core/
-COPY services/ ./services/
 COPY utils/ ./utils/
-COPY gen_selfsigned.py ./gen_selfsigned.py
-COPY start_webserver.sh ./start_webserver.sh
+COPY start.sh ./start.sh
 
 # Make start script executable
-RUN chmod +x ./start_webserver.sh
+RUN chmod +x ./start.sh
 
 # Create necessary directories
 RUN mkdir -p ./certs ./storage ./data
@@ -46,4 +46,4 @@ ENV MAX_UPLOAD_SIZE=104857600
 VOLUME ["/app/storage", "/app/data"]
 
 # Entrypoint runs the start script (generates certs, initializes DB, starts server)
-ENTRYPOINT ["./start_webserver.sh"]
+ENTRYPOINT ["./start.sh"]
