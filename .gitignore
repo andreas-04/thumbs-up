@@ -6,3 +6,5 @@ config.env
 .env
 **/node_modules/
 **/dist/
+**/storage/
+*.pyc

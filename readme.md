@@ -33,9 +33,7 @@ By default, your device is advertised as `thumbsup.local`. To use a different ho
    sudo hostnamectl set-hostname mydevice
    ```
 3. Update `/etc/hosts` so that `127.0.1.1` resolves to the new hostname:
-   ```bash
-   sudo sed -i '/^127\.0\.1\.1/s/\bthumbsup\b/mydevice/g' /etc/hosts
-   ```
+
 4. Restart the services:
    ```bash
    sudo systemctl restart avahi-daemon
