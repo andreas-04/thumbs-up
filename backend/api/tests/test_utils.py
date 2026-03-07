@@ -258,3 +258,40 @@ class TestUserHasAccess:
         db.session.commit()
 
         assert user_has_access(regular_user, "/other") is False
+
+
+class TestAdminEmailUsesHostname:
+    def test_admin_email_uses_configured_hostname(self, app, monkeypatch):
+        """Default admin user email should use the configured MDNS_HOSTNAME."""
+        from core import server as srv
+        from models import User
+
+        monkeypatch.setitem(srv.CONFIG, "MDNS_HOSTNAME", "myraspberrypi")
+
+        created = srv.create_default_admin("myraspberrypi", srv.CONFIG["ADMIN_PIN"])
+        assert created is not None
+        assert created.email == "admin@myraspberrypi.local"
+        assert User.query.filter_by(email="admin@myraspberrypi.local").first() is not None
+
+    def test_admin_email_reflects_different_hostnames(self, app, monkeypatch):
+        """Admin email format should be admin@<hostname>.local for any configured hostname."""
+        from core import server as srv
+        from models import User, db
+
+        for hostname in ("thumbsup", "pi-home", "mydevice"):
+            # Clean up any admin created in a previous iteration
+            User.query.filter_by(role="admin").delete()
+            db.session.commit()
+
+            created = srv.create_default_admin(hostname, srv.CONFIG["ADMIN_PIN"])
+            assert created is not None
+            assert created.email == f"admin@{hostname}.local"
+
+    def test_create_default_admin_skips_if_admin_exists(self, app, admin_user):
+        """create_default_admin should not create a second admin when one already exists."""
+        from core import server as srv
+        from models import User
+
+        result = srv.create_default_admin("newhost", srv.CONFIG["ADMIN_PIN"])
+        assert result is None
+        assert User.query.filter_by(role="admin").count() == 1

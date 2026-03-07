@@ -1378,6 +1378,28 @@ def health():
     return jsonify({"status": "healthy", "version": "2.0", "service": CONFIG["SERVICE_NAME"]})
 
 
+def create_default_admin(hostname, pin):
+    """Create the default admin user with an email derived from the mDNS hostname.
+
+    Returns the created User, or None if an admin already exists.
+    """
+    admin_user = User.query.filter_by(role="admin").first()
+    if admin_user:
+        return None
+    default_admin_email = f"admin@{hostname}.local"
+    default_admin = User(
+        email=default_admin_email,
+        password_hash=auth.hash_password(pin),
+        role="admin",
+        is_default_pin=True,
+    )
+    db.session.add(default_admin)
+    db.session.commit()
+    print(f"✅ Default admin user created ({default_admin_email})")
+    print(f"   Password: {pin} (must be changed on first login)")
+    return default_admin
+
+
 def main():
     """Main server entry point."""
     print("=" * 60)
@@ -1417,19 +1439,7 @@ def main():
             print("✅ Default system settings created")
 
         # Create default admin user if no admin exists
-        admin_user = User.query.filter_by(role="admin").first()
-        if not admin_user:
-            # Use ADMIN_PIN as temporary password for default admin
-            default_admin = User(
-                email="admin@thumbsup.local",
-                password_hash=auth.hash_password(CONFIG["ADMIN_PIN"]),
-                role="admin",
-                is_default_pin=True,  # Flag to force password change on first login
-            )
-            db.session.add(default_admin)
-            db.session.commit()
-            print("✅ Default admin user created (admin@thumbsup.local)")
-            print(f"   Password: {CONFIG['ADMIN_PIN']} (must be changed on first login)")
+        create_default_admin(CONFIG["MDNS_HOSTNAME"], CONFIG["ADMIN_PIN"])
 
     # Generate initial access token
     token = auth.generate_guest_token(read_only=not CONFIG["ENABLE_UPLOADS"])
