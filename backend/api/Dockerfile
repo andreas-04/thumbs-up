@@ -1,5 +1,5 @@
 # Dockerfile for ThumbsUp Backend API v2 Webserver
-FROM python:3.11
+FROM python:3.14
 
 # Set working directory
 WORKDIR /app
