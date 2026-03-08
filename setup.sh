@@ -49,6 +49,25 @@ fi
 
 MDNS_HOSTNAME="${MDNS_HOSTNAME:-thumbsup}"
 
+# ---------------------------------------------------------------------------
+# Require AP_PASSPHRASE — prompt if not already set in .env
+# ---------------------------------------------------------------------------
+if [[ -z "${AP_PASSPHRASE:-}" ]]; then
+    echo
+    echo "WiFi AP passphrase is required (8–63 characters)."
+    while true; do
+        read -r -s -p "Enter AP passphrase: " AP_PASSPHRASE
+        echo
+        if [[ ${#AP_PASSPHRASE} -ge 8 && ${#AP_PASSPHRASE} -le 63 ]]; then
+            break
+        fi
+        echo "Passphrase must be 8–63 characters. Please try again."
+    done
+    # Persist to .env so re-runs are non-interactive
+    printf '\n# WiFi Access Point passphrase\nAP_PASSPHRASE=%s\n' "$AP_PASSPHRASE" >> "$ENV_FILE"
+    echo "AP_PASSPHRASE saved to $ENV_FILE"
+fi
+
 echo
 echo "========================================"
 echo " ThumbsUp Host Setup"
@@ -121,14 +140,13 @@ HOSTAPD_CONF_DST="/etc/hostapd/hostapd.conf"
 if [[ -f "$HOSTAPD_CONF_DST" ]]; then
     echo "Existing $HOSTAPD_CONF_DST kept — edit it to change SSID/password"
 elif [[ -f "$HOSTAPD_CONF_SRC" ]]; then
-    # Generate a random 16-character passphrase so the default AP is not
-    # left with a weak, well-known password.
-    AP_PASS="$(tr -dc 'A-Za-z0-9!@#%^&*' </dev/urandom 2>/dev/null | head -c 16)"
-    sed "s/^wpa_passphrase=.*/wpa_passphrase=${AP_PASS}/" "$HOSTAPD_CONF_SRC" > "$HOSTAPD_CONF_DST"
+    # Substitute the placeholder using awk so special characters in the
+    # passphrase (/, &, \, etc.) are handled safely.
+    awk -v pass="$AP_PASSPHRASE" \
+        '/^wpa_passphrase=AP_PASSPHRASE$/{print "wpa_passphrase=" pass; next} {print}' \
+        "$HOSTAPD_CONF_SRC" > "$HOSTAPD_CONF_DST"
     echo "Installed hostapd.conf -> $HOSTAPD_CONF_DST"
-    echo "  AP SSID:       ThumbsUp-AP"
-    echo "  AP Passphrase: ${AP_PASS}"
-    echo "  (saved in $HOSTAPD_CONF_DST — change SSID/passphrase there if desired)"
+    echo "  AP SSID: ThumbsUp-AP  (change ssid= in $HOSTAPD_CONF_DST if desired)"
 else
     echo "Warning: $HOSTAPD_CONF_SRC not found — skipping hostapd.conf install"
 fi
@@ -171,7 +189,7 @@ echo "   Device will be discoverable at: https://${MDNS_HOSTNAME}.local"
 echo "   (Customize MDNS_HOSTNAME in .env to change the hostname)"
 echo
 echo "WiFi fallback: if the Pi cannot join a known network on boot it will"
-echo "  broadcast an AP — SSID and password are in /etc/hostapd/hostapd.conf"
+echo "  broadcast an AP — SSID is ThumbsUp-AP, passphrase is in $ENV_FILE (AP_PASSPHRASE)"
 echo
 echo "Next steps:"
 echo "  docker compose up -d"
