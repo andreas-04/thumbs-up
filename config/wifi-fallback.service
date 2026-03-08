@@ -1,0 +1,15 @@
+[Unit]
+Description=WiFi Access Point Fallback
+# Run after wpa_supplicant has had a chance to associate
+After=network.target wpa_supplicant.service
+Wants=wpa_supplicant.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wifi-check.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

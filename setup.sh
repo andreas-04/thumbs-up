@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # ThumbsUp Host Setup Script
-# Generates .env and sets up Avahi mDNS on a Debian/Raspberry Pi OS host.
+# Generates .env, sets up Avahi mDNS, and configures the WiFi AP fallback
+# on a Debian/Raspberry Pi OS host.
 #
 # Usage:
 #   sudo ./setup.sh
@@ -86,12 +87,91 @@ systemctl restart avahi-daemon
 echo "avahi-daemon enabled and restarted"
 
 # ---------------------------------------------------------------------------
+# 4. Install WiFi Access Point fallback
+# ---------------------------------------------------------------------------
+echo
+echo "--- WiFi Access Point Fallback Setup ---"
+
+# Install hostapd and dnsmasq if not present
+MISSING_PKGS=()
+command -v hostapd  &>/dev/null || MISSING_PKGS+=(hostapd)
+command -v dnsmasq  &>/dev/null || MISSING_PKGS+=(dnsmasq)
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    echo "Installing: ${MISSING_PKGS[*]}..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends "${MISSING_PKGS[@]}"
+else
+    echo "hostapd and dnsmasq already installed"
+fi
+
+# Install the fallback check script
+WIFI_CHECK_SRC="$SCRIPT_DIR/config/wifi-check.sh"
+WIFI_CHECK_DST="/usr/local/bin/wifi-check.sh"
+if [[ -f "$WIFI_CHECK_SRC" ]]; then
+    cp "$WIFI_CHECK_SRC" "$WIFI_CHECK_DST"
+    chmod +x "$WIFI_CHECK_DST"
+    echo "Installed wifi-check.sh -> $WIFI_CHECK_DST"
+else
+    echo "Warning: $WIFI_CHECK_SRC not found — skipping wifi-check.sh install"
+fi
+
+# Install hostapd configuration (skip if already customized by the user)
+HOSTAPD_CONF_SRC="$SCRIPT_DIR/config/hostapd.conf"
+HOSTAPD_CONF_DST="/etc/hostapd/hostapd.conf"
+if [[ -f "$HOSTAPD_CONF_DST" ]]; then
+    echo "Existing $HOSTAPD_CONF_DST kept — edit it to change SSID/password"
+elif [[ -f "$HOSTAPD_CONF_SRC" ]]; then
+    # Generate a random 16-character passphrase so the default AP is not
+    # left with a weak, well-known password.
+    AP_PASS="$(tr -dc 'A-Za-z0-9!@#%^&*' </dev/urandom 2>/dev/null | head -c 16)"
+    sed "s/^wpa_passphrase=.*/wpa_passphrase=${AP_PASS}/" "$HOSTAPD_CONF_SRC" > "$HOSTAPD_CONF_DST"
+    echo "Installed hostapd.conf -> $HOSTAPD_CONF_DST"
+    echo "  AP SSID:       ThumbsUp-AP"
+    echo "  AP Passphrase: ${AP_PASS}"
+    echo "  (saved in $HOSTAPD_CONF_DST — change SSID/passphrase there if desired)"
+else
+    echo "Warning: $HOSTAPD_CONF_SRC not found — skipping hostapd.conf install"
+fi
+
+# Install dnsmasq configuration (skip if already customized by the user)
+DNSMASQ_CONF_SRC="$SCRIPT_DIR/config/dnsmasq.conf"
+DNSMASQ_CONF_DST="/etc/dnsmasq.conf"
+if [[ -f "$DNSMASQ_CONF_DST" ]]; then
+    echo "Existing $DNSMASQ_CONF_DST kept — edit it to adjust DHCP range"
+elif [[ -f "$DNSMASQ_CONF_SRC" ]]; then
+    cp "$DNSMASQ_CONF_SRC" "$DNSMASQ_CONF_DST"
+    echo "Installed dnsmasq.conf -> $DNSMASQ_CONF_DST"
+else
+    echo "Warning: $DNSMASQ_CONF_SRC not found — skipping dnsmasq.conf install"
+fi
+
+# Disable hostapd and dnsmasq from auto-starting — wifi-check.sh starts them
+# only when the Pi fails to join a known network.
+systemctl disable hostapd dnsmasq 2>/dev/null || true
+echo "hostapd and dnsmasq disabled from auto-start (wifi-check.sh controls them)"
+
+# Install and enable the systemd service
+WIFI_SVC_SRC="$SCRIPT_DIR/config/wifi-fallback.service"
+WIFI_SVC_DST="/etc/systemd/system/wifi-fallback.service"
+if [[ -f "$WIFI_SVC_SRC" ]]; then
+    cp "$WIFI_SVC_SRC" "$WIFI_SVC_DST"
+    systemctl daemon-reload
+    systemctl enable wifi-fallback
+    echo "Installed and enabled wifi-fallback.service -> $WIFI_SVC_DST"
+else
+    echo "Warning: $WIFI_SVC_SRC not found — skipping wifi-fallback.service install"
+fi
+
+# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 echo
 echo "✅ Host setup complete!"
 echo "   Device will be discoverable at: https://${MDNS_HOSTNAME}.local"
 echo "   (Customize MDNS_HOSTNAME in .env to change the hostname)"
+echo
+echo "WiFi fallback: if the Pi cannot join a known network on boot it will"
+echo "  broadcast an AP — SSID and password are in /etc/hostapd/hostapd.conf"
 echo
 echo "Next steps:"
 echo "  docker compose up -d"
