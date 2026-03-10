@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # ThumbsUp Host Setup Script
-# Generates .env and sets up Avahi mDNS on a Debian/Raspberry Pi OS host.
+# Generates .env, sets up Avahi mDNS, and configures the WiFi AP fallback
+# on a Debian/Raspberry Pi OS host.
 #
 # Usage:
 #   sudo ./setup.sh
@@ -48,6 +49,25 @@ fi
 
 MDNS_HOSTNAME="${MDNS_HOSTNAME:-thumbsup}"
 
+# ---------------------------------------------------------------------------
+# Require AP_PASSPHRASE — prompt if not already set in .env
+# ---------------------------------------------------------------------------
+if [[ -z "${AP_PASSPHRASE:-}" ]]; then
+    echo
+    echo "WiFi AP passphrase is required (8–63 characters)."
+    while true; do
+        read -r -s -p "Enter AP passphrase: " AP_PASSPHRASE
+        echo
+        if [[ ${#AP_PASSPHRASE} -ge 8 && ${#AP_PASSPHRASE} -le 63 ]]; then
+            break
+        fi
+        echo "Passphrase must be 8–63 characters. Please try again."
+    done
+    # Persist to .env so re-runs are non-interactive
+    printf '\n# WiFi Access Point passphrase\nAP_PASSPHRASE=%s\n' "$AP_PASSPHRASE" >> "$ENV_FILE"
+    echo "AP_PASSPHRASE saved to $ENV_FILE"
+fi
+
 echo
 echo "========================================"
 echo " ThumbsUp Host Setup"
@@ -86,12 +106,106 @@ systemctl restart avahi-daemon
 echo "avahi-daemon enabled and restarted"
 
 # ---------------------------------------------------------------------------
+# 4. Install WiFi Access Point fallback
+# ---------------------------------------------------------------------------
+echo
+echo "--- WiFi Access Point Fallback Setup ---"
+
+# Install hostapd and dnsmasq if not present
+MISSING_PKGS=()
+command -v hostapd  &>/dev/null || MISSING_PKGS+=(hostapd)
+command -v dnsmasq  &>/dev/null || MISSING_PKGS+=(dnsmasq)
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    echo "Installing: ${MISSING_PKGS[*]}..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends "${MISSING_PKGS[@]}"
+else
+    echo "hostapd and dnsmasq already installed"
+fi
+
+# Install the fallback check script
+WIFI_CHECK_SRC="$SCRIPT_DIR/config/wifi-check.sh"
+WIFI_CHECK_DST="/usr/local/bin/wifi-check.sh"
+if [[ -f "$WIFI_CHECK_SRC" ]]; then
+    cp "$WIFI_CHECK_SRC" "$WIFI_CHECK_DST"
+    chmod +x "$WIFI_CHECK_DST"
+    echo "Installed wifi-check.sh -> $WIFI_CHECK_DST"
+else
+    echo "Warning: $WIFI_CHECK_SRC not found — skipping wifi-check.sh install"
+fi
+
+# Install hostapd configuration (skip if already customized by the user)
+HOSTAPD_CONF_SRC="$SCRIPT_DIR/config/hostapd.conf"
+HOSTAPD_CONF_DST="/etc/hostapd/hostapd.conf"
+if [[ -f "$HOSTAPD_CONF_DST" ]]; then
+    echo "Existing $HOSTAPD_CONF_DST kept — edit it to change SSID/password"
+elif [[ -f "$HOSTAPD_CONF_SRC" ]]; then
+    # Substitute the placeholder using awk so special characters in the
+    # passphrase (/, &, \, etc.) are handled safely.
+    awk -v pass="$AP_PASSPHRASE" \
+        '/^wpa_passphrase=AP_PASSPHRASE$/{print "wpa_passphrase=" pass; next} {print}' \
+        "$HOSTAPD_CONF_SRC" > "$HOSTAPD_CONF_DST"
+    echo "Installed hostapd.conf -> $HOSTAPD_CONF_DST"
+    echo "  AP SSID: ThumbsUp-AP  (change ssid= in $HOSTAPD_CONF_DST if desired)"
+else
+    echo "Warning: $HOSTAPD_CONF_SRC not found — skipping hostapd.conf install"
+fi
+
+# Install dnsmasq configuration (skip if already customized by the user)
+DNSMASQ_CONF_SRC="$SCRIPT_DIR/config/dnsmasq.conf"
+DNSMASQ_CONF_DST="/etc/dnsmasq.conf"
+if [[ -f "$DNSMASQ_CONF_DST" ]]; then
+    echo "Existing $DNSMASQ_CONF_DST kept — edit it to adjust DHCP range"
+elif [[ -f "$DNSMASQ_CONF_SRC" ]]; then
+    cp "$DNSMASQ_CONF_SRC" "$DNSMASQ_CONF_DST"
+    echo "Installed dnsmasq.conf -> $DNSMASQ_CONF_DST"
+else
+    echo "Warning: $DNSMASQ_CONF_SRC not found — skipping dnsmasq.conf install"
+fi
+
+# Unmask hostapd and dnsmasq — on Raspberry Pi OS they ship masked by default,
+# which causes "Unit is masked" errors when wifi-check.sh tries to start them.
+systemctl unmask hostapd dnsmasq 2>/dev/null || true
+
+# Disable hostapd and dnsmasq from auto-starting — wifi-check.sh starts them
+# only when the Pi fails to join a known network.
+systemctl disable hostapd dnsmasq 2>/dev/null || true
+echo "hostapd and dnsmasq unmasked and disabled from auto-start (wifi-check.sh controls them)"
+
+# Install and enable the ThumbsUp docker compose service
+THUMBSUP_SVC_SRC="$SCRIPT_DIR/config/thumbsup.service"
+THUMBSUP_SVC_DST="/etc/systemd/system/thumbsup.service"
+if [[ -f "$THUMBSUP_SVC_SRC" ]]; then
+    cp "$THUMBSUP_SVC_SRC" "$THUMBSUP_SVC_DST"
+    systemctl daemon-reload
+    systemctl enable thumbsup
+    echo "Installed and enabled thumbsup.service -> $THUMBSUP_SVC_DST"
+else
+    echo "Warning: $THUMBSUP_SVC_SRC not found — skipping thumbsup.service install"
+fi
+
+# Install and enable the systemd service
+WIFI_SVC_SRC="$SCRIPT_DIR/config/wifi-fallback.service"
+WIFI_SVC_DST="/etc/systemd/system/wifi-fallback.service"
+if [[ -f "$WIFI_SVC_SRC" ]]; then
+    cp "$WIFI_SVC_SRC" "$WIFI_SVC_DST"
+    systemctl daemon-reload
+    systemctl enable wifi-fallback
+    echo "Installed and enabled wifi-fallback.service -> $WIFI_SVC_DST"
+else
+    echo "Warning: $WIFI_SVC_SRC not found — skipping wifi-fallback.service install"
+fi
+
+# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 echo
 echo "✅ Host setup complete!"
 echo "   Device will be discoverable at: https://${MDNS_HOSTNAME}.local"
 echo "   (Customize MDNS_HOSTNAME in .env to change the hostname)"
+echo
+echo "WiFi fallback: if the Pi cannot join a known network on boot it will"
+echo "  broadcast an AP — SSID is ThumbsUp-AP, passphrase is in $ENV_FILE (AP_PASSPHRASE)"
 echo
 echo "Next steps:"
 echo "  docker compose up -d"
