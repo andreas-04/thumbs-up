@@ -163,10 +163,26 @@ else
     echo "Warning: $DNSMASQ_CONF_SRC not found — skipping dnsmasq.conf install"
 fi
 
+# Unmask hostapd and dnsmasq — on Raspberry Pi OS they ship masked by default,
+# which causes "Unit is masked" errors when wifi-check.sh tries to start them.
+systemctl unmask hostapd dnsmasq 2>/dev/null || true
+
 # Disable hostapd and dnsmasq from auto-starting — wifi-check.sh starts them
 # only when the Pi fails to join a known network.
 systemctl disable hostapd dnsmasq 2>/dev/null || true
-echo "hostapd and dnsmasq disabled from auto-start (wifi-check.sh controls them)"
+echo "hostapd and dnsmasq unmasked and disabled from auto-start (wifi-check.sh controls them)"
+
+# Install and enable the ThumbsUp docker compose service
+THUMBSUP_SVC_SRC="$SCRIPT_DIR/config/thumbsup.service"
+THUMBSUP_SVC_DST="/etc/systemd/system/thumbsup.service"
+if [[ -f "$THUMBSUP_SVC_SRC" ]]; then
+    cp "$THUMBSUP_SVC_SRC" "$THUMBSUP_SVC_DST"
+    systemctl daemon-reload
+    systemctl enable thumbsup
+    echo "Installed and enabled thumbsup.service -> $THUMBSUP_SVC_DST"
+else
+    echo "Warning: $THUMBSUP_SVC_SRC not found — skipping thumbsup.service install"
+fi
 
 # Install and enable the systemd service
 WIFI_SVC_SRC="$SCRIPT_DIR/config/wifi-fallback.service"
