@@ -40,8 +40,10 @@ export default function Signup() {
       await api.signup({ email, password, username });
       
       // Log the user in directly after signup
-      await login(email, password);
-      navigate('/');
+      const loginResult = await login(email, password);
+      if (loginResult) {
+        navigate('/');
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration';
       setError(errorMessage);
