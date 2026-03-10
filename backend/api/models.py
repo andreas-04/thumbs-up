@@ -19,6 +19,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False, default="user")  # 'admin' or 'user'
     is_default_pin = db.Column(db.Boolean, default=False)  # True if using initial PIN
+    is_approved = db.Column(db.Boolean, default=False)  # True if admin-approved for protected files
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 
@@ -32,6 +33,7 @@ class User(db.Model):
             "email": self.email,
             "role": self.role,
             "requiresPasswordChange": self.is_default_pin,  # Frontend-friendly name
+            "isApproved": self.is_approved,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
         }

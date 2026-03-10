@@ -14,6 +14,7 @@ export interface User {
   email: string;
   role: 'admin' | 'user';
   requiresPasswordChange: boolean;
+  isApproved: boolean;
   created_at: string;
   last_login: string | null;
   folderPermissions?: FolderPermission[];
@@ -311,7 +312,7 @@ class ApiClient {
 
   async updateUser(
     userId: number,
-    userData: Partial<{ email: string; password: string; role: 'admin' | 'user' }>
+    userData: Partial<{ email: string; password: string; role: 'admin' | 'user'; approved: boolean }>
   ): Promise<{ user: User }> {
     return this.request<{ user: User }>(`/api/v1/users/${userId}`, {
       method: 'PUT',
