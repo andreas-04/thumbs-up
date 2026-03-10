@@ -278,10 +278,19 @@ def api_signup():
     # Check if email already exists
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
+        # Allow claiming a pre-approved account (admin pre-created with default password)
+        if existing_user.is_approved and auth.verify_password("changeme", existing_user.password_hash):
+            # Claim the pre-approved account: set the user's chosen password
+            existing_user.password_hash = auth.hash_password(password)
+            existing_user.is_default_pin = False
+            existing_user.last_login = datetime.utcnow()
+            db.session.commit()
+            token = auth.generate_session_token(existing_user)
+            return jsonify({"token": token, "user": existing_user.to_dict()}), 200
         return jsonify({"error": "Email already registered", "code": "EMAIL_EXISTS"}), 409
 
-    # Create new user (no admin approval required in protected mode)
-    new_user = User(email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False)
+    # Create new user (self-signup: not approved for protected files)
+    new_user = User(email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False, is_approved=False)
     db.session.add(new_user)
     db.session.commit()
 
@@ -471,14 +480,20 @@ def api_create_user():
     # Check if email already exists
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
-        return jsonify({"error": "Email already exists", "code": "EMAIL_EXISTS"}), 409
+        # Approve the existing user for protected file access
+        existing_user.is_approved = True
+        if role:
+            existing_user.role = role
+        db.session.commit()
+        return jsonify({"user": existing_user.to_dict(include_permissions=True), "approved": True}), 200
 
-    # Create user
+    # Create user (admin-created users are pre-approved for protected files)
     new_user = User(
         email=email,
         password_hash=auth.hash_password(password) if password else auth.hash_password("changeme"),
         role=role,
         is_default_pin=False,
+        is_approved=True,
     )
     db.session.add(new_user)
     db.session.commit()
@@ -531,6 +546,9 @@ def api_update_user(user_id):
         if data["role"] not in ["admin", "user"]:
             return jsonify({"error": "Invalid role", "code": "INVALID_ROLE"}), 400
         user.role = data["role"]
+
+    if "approved" in data:
+        user.is_approved = bool(data["approved"])
 
     db.session.commit()
 
@@ -687,7 +705,7 @@ def api_list_files():
     include_protected = False
 
     if user:
-        include_protected = True
+        include_protected = user.role == "admin" or user.is_approved
         # Check folder permissions (admin has full access)
         if user.role != "admin":
             check_path = "/" + path if path else "/"
@@ -730,6 +748,10 @@ def api_upload_file():
     user = auth.get_user_from_token(token)
     if not user:
         return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
+
+    # Unapproved users cannot upload (they only have access to unprotected files)
+    if user.role != "admin" and not user.is_approved:
+        return jsonify({"error": "Upload requires approved account", "code": "NOT_APPROVED"}), 403
 
     # Check write permissions (admin has full access)
     if user.role != "admin":
@@ -790,11 +812,11 @@ def api_download_file():
             return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
 
     # Resolve file in the correct subdirectory
-    if user:
-        # Authenticated users – look in protected first, then unprotected
+    if user and (user.role == "admin" or user.is_approved):
+        # Approved users – look in protected first, then unprotected
         file_path = resolve_file_path(path)
     else:
-        # Guest – only unprotected
+        # Guest or unapproved user – only unprotected
         unprotected_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "unprotected"
         candidate = (unprotected_base / path).resolve()
         # Guard against directory traversal
@@ -1421,6 +1443,17 @@ def main():
     # Initialize database tables
     with app.app_context():
         db.create_all()
+
+        # Migrate: add is_approved column if missing (for existing databases)
+        from sqlalchemy import inspect as sa_inspect, text
+
+        inspector = sa_inspect(db.engine)
+        user_columns = [col["name"] for col in inspector.get_columns("users")]
+        if "is_approved" not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 0"))
+            db.session.commit()
+            print("✅ Migrated: added is_approved column to users table")
+
         print("✅ Database initialized")
 
         # Create default system settings if not exists
