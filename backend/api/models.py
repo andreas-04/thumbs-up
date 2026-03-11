@@ -57,6 +57,15 @@ class SystemSettings(db.Model):
     device_name = db.Column(db.String(255), default="ThumbsUp File Share")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # SMTP email notification settings
+    smtp_enabled = db.Column(db.Boolean, default=False)
+    smtp_host = db.Column(db.String(255), default="")
+    smtp_port = db.Column(db.Integer, default=587)
+    smtp_username = db.Column(db.String(255), default="")
+    smtp_password = db.Column(db.String(255), default="")
+    smtp_from_email = db.Column(db.String(255), default="")
+    smtp_use_tls = db.Column(db.Boolean, default=True)
+
     def __repr__(self):
         return f"<SystemSettings auth={self.auth_method}>"
 
@@ -69,6 +78,13 @@ class SystemSettings(db.Model):
             "httpsPort": self.https_port,
             "deviceName": self.device_name,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+            "smtpEnabled": self.smtp_enabled or False,
+            "smtpHost": self.smtp_host or "",
+            "smtpPort": self.smtp_port or 587,
+            "smtpUsername": self.smtp_username or "",
+            "smtpPassword": "*****" if self.smtp_password else "",
+            "smtpFromEmail": self.smtp_from_email or "",
+            "smtpUseTls": self.smtp_use_tls if self.smtp_use_tls is not None else True,
         }
 
 

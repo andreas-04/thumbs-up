@@ -16,8 +16,10 @@ import {
   CheckCircle, 
   AlertTriangle,
   Server,
+  Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Switch } from '../components/ui/switch';
 
 export default function SystemSettings() {
   const { settings, updateSettings } = useData();
@@ -124,6 +126,110 @@ export default function SystemSettings() {
           <div className="flex justify-between py-2">
             <span className="text-sm text-gray-400">Last Updated</span>
             <span className="text-sm font-medium text-gray-200">February 16, 2026</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Notifications */}
+      <Card className="bg-gray-900 border-gray-800">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-blue-400" />
+            <CardTitle className="text-white">Email Notifications</CardTitle>
+          </div>
+          <CardDescription className="text-gray-400">
+            Configure SMTP to email users when their account is approved
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-gray-200">Enable SMTP</Label>
+              <p className="text-xs text-gray-500">Send email notifications when accounts are approved</p>
+            </div>
+            <Switch
+              checked={localSettings.smtpEnabled}
+              onCheckedChange={(checked) => handleChange('smtpEnabled', checked)}
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="smtp-host" className="text-gray-200">SMTP Host</Label>
+                <Input
+                  id="smtp-host"
+                  placeholder="smtp.example.com"
+                  value={localSettings.smtpHost}
+                  onChange={(e) => handleChange('smtpHost', e.target.value)}
+                  disabled={!localSettings.smtpEnabled}
+                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtp-port" className="text-gray-200">SMTP Port</Label>
+                <Input
+                  id="smtp-port"
+                  type="number"
+                  value={localSettings.smtpPort}
+                  onChange={(e) => handleChange('smtpPort', parseInt(e.target.value) || 587)}
+                  disabled={!localSettings.smtpEnabled}
+                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp-from" className="text-gray-200">From Email</Label>
+              <Input
+                id="smtp-from"
+                type="email"
+                placeholder="noreply@example.com"
+                value={localSettings.smtpFromEmail}
+                onChange={(e) => handleChange('smtpFromEmail', e.target.value)}
+                disabled={!localSettings.smtpEnabled}
+                className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+              />
+              <p className="text-xs text-gray-500">The sender address for notification emails</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="smtp-username" className="text-gray-200">Username</Label>
+                <Input
+                  id="smtp-username"
+                  placeholder="username"
+                  value={localSettings.smtpUsername}
+                  onChange={(e) => handleChange('smtpUsername', e.target.value)}
+                  disabled={!localSettings.smtpEnabled}
+                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtp-password" className="text-gray-200">Password</Label>
+                <Input
+                  id="smtp-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={localSettings.smtpPassword}
+                  onChange={(e) => handleChange('smtpPassword', e.target.value)}
+                  disabled={!localSettings.smtpEnabled}
+                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-gray-200">Use STARTTLS</Label>
+                <p className="text-xs text-gray-500">Enable TLS encryption for the SMTP connection</p>
+              </div>
+              <Switch
+                checked={localSettings.smtpUseTls}
+                onCheckedChange={(checked) => handleChange('smtpUseTls', checked)}
+                disabled={!localSettings.smtpEnabled}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

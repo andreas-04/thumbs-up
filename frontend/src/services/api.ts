@@ -27,6 +27,13 @@ export interface SystemSettings {
   httpsPort: number;
   deviceName: string;
   updatedAt: string;
+  smtpEnabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpFromEmail: string;
+  smtpUseTls: boolean;
 }
 
 export interface FolderPermission {
