@@ -19,6 +19,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False, default="user")  # 'admin' or 'user'
     is_default_pin = db.Column(db.Boolean, default=False)  # True if using initial PIN
+    is_approved = db.Column(db.Boolean, default=False)  # True if admin-approved for protected files
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 
@@ -32,6 +33,7 @@ class User(db.Model):
             "email": self.email,
             "role": self.role,
             "requiresPasswordChange": self.is_default_pin,  # Frontend-friendly name
+            "isApproved": self.is_approved,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
         }
@@ -55,6 +57,15 @@ class SystemSettings(db.Model):
     device_name = db.Column(db.String(255), default="ThumbsUp File Share")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # SMTP email notification settings
+    smtp_enabled = db.Column(db.Boolean, default=False)
+    smtp_host = db.Column(db.String(255), default="")
+    smtp_port = db.Column(db.Integer, default=587)
+    smtp_username = db.Column(db.String(255), default="")
+    smtp_password = db.Column(db.String(255), default="")
+    smtp_from_email = db.Column(db.String(255), default="")
+    smtp_use_tls = db.Column(db.Boolean, default=True)
+
     def __repr__(self):
         return f"<SystemSettings auth={self.auth_method}>"
 
@@ -67,6 +78,13 @@ class SystemSettings(db.Model):
             "httpsPort": self.https_port,
             "deviceName": self.device_name,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+            "smtpEnabled": self.smtp_enabled or False,
+            "smtpHost": self.smtp_host or "",
+            "smtpPort": self.smtp_port or 587,
+            "smtpUsername": self.smtp_username or "",
+            "smtpPassword": "*****" if self.smtp_password else "",
+            "smtpFromEmail": self.smtp_from_email or "",
+            "smtpUseTls": self.smtp_use_tls if self.smtp_use_tls is not None else True,
         }
 
 

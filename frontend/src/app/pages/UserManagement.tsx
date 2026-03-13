@@ -38,11 +38,11 @@ import {
 } from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, Trash2, Search, Mail, Key } from 'lucide-react';
+import { Plus, Trash2, Search, Mail, Key, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserManagement() {
-  const { settings, users, addUser, deleteUser, refreshUsers } = useData();
+  const { settings, users, addUser, updateUser, deleteUser, refreshUsers } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -86,21 +86,26 @@ export default function UserManagement() {
   const handleAdd = async () => {
     if (!validateForm()) return;
 
-    // Check for duplicates
-    const isDuplicate = users.some((u) => u.email === formData.email);
-
-    if (isDuplicate) {
-      toast.error('This email is already approved');
-      return;
-    }
-
     try {
-      await addUser({ email: formData.email });
-      toast.success('Email approved successfully');
+      const result = await addUser({ email: formData.email });
+      if (result?.approved) {
+        toast.success('User approved for protected file access');
+      } else {
+        toast.success('Email approved successfully');
+      }
       setShowAddDialog(false);
       resetForm();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to approve email');
+    }
+  };
+
+  const handleApprove = async (user: User) => {
+    try {
+      await updateUser(user.id, { approved: true });
+      toast.success(`${user.email} approved for protected file access`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to approve user');
     }
   };
 
@@ -139,20 +144,19 @@ export default function UserManagement() {
         </Button>
       </div>
 
-      {/* Auth Method Info */}
       <Alert className="bg-blue-950 border-blue-900">
         <Key className="h-4 w-4 text-blue-400" />
         <AlertDescription className="text-blue-300">
-          <strong>How it works:</strong> Add email addresses to the approved list below. 
-          Users with approved emails can then create their own accounts via the signup page.
+          <strong>How it works:</strong> Approved users can access protected files. 
+          Users who sign up without approval can only see unprotected files until an admin approves them.
         </AlertDescription>
       </Alert>
 
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
-          <CardTitle className="text-white">Approved Emails</CardTitle>
+          <CardTitle className="text-white">Users</CardTitle>
           <CardDescription className="text-gray-400">
-            Users with these emails can create accounts and access files in Protected Mode
+            Approved users can access protected files. Unapproved users can only see unprotected files.
           </CardDescription>
           <div className="pt-4">
             <div className="relative">
@@ -172,6 +176,7 @@ export default function UserManagement() {
               <TableHeader>
                 <TableRow className="border-gray-800 hover:bg-gray-800/50">
                   <TableHead className="text-gray-300">Email</TableHead>
+                  <TableHead className="text-gray-300">Access</TableHead>
                   <TableHead className="text-gray-300">Status</TableHead>
                   <TableHead className="text-gray-300">Added</TableHead>
                   <TableHead className="text-gray-300">Permissions</TableHead>
@@ -181,8 +186,8 @@ export default function UserManagement() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow className="border-gray-800">
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                      {searchQuery ? 'No users found matching your search' : 'No approved users yet. Add users to grant access.'}
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      {searchQuery ? 'No users found matching your search' : 'No users yet. Approve an email to grant protected file access.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -193,6 +198,17 @@ export default function UserManagement() {
                           <Mail className="h-4 w-4 text-gray-400" />
                           {getUserIdentifier(user)}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {user.isApproved ? (
+                          <Badge variant="default" className="bg-green-700 text-green-100">
+                            Protected
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-amber-900 text-amber-200">
+                            Unprotected Only
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.last_login ? 'default' : 'secondary'}>
@@ -212,14 +228,27 @@ export default function UserManagement() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openDeleteDialog(user)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {!user.isApproved && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleApprove(user)}
+                              className="text-green-400 hover:text-green-300"
+                              title="Approve for protected files"
+                            >
+                              <ShieldCheck className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(user)}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

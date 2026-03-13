@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 # Local imports
 from core.auth import TokenAuth
 from models import User, db
+from utils.email_sender import send_approval_email, send_invite_email
 from utils.mdns_advertiser import MDNSAdvertiser
 from utils.qr_generator import QRGenerator
 
@@ -278,10 +279,21 @@ def api_signup():
     # Check if email already exists
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
+        # Allow claiming a pre-approved account (admin pre-created with default password)
+        if existing_user.is_approved and auth.verify_password("changeme", existing_user.password_hash):
+            # Claim the pre-approved account: set the user's chosen password
+            existing_user.password_hash = auth.hash_password(password)
+            existing_user.is_default_pin = False
+            existing_user.last_login = datetime.utcnow()
+            db.session.commit()
+            token = auth.generate_session_token(existing_user)
+            return jsonify({"token": token, "user": existing_user.to_dict()}), 200
         return jsonify({"error": "Email already registered", "code": "EMAIL_EXISTS"}), 409
 
-    # Create new user (no admin approval required in protected mode)
-    new_user = User(email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False)
+    # Create new user (self-signup: not approved for protected files)
+    new_user = User(
+        email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False, is_approved=False
+    )
     db.session.add(new_user)
     db.session.commit()
 
@@ -415,6 +427,27 @@ def api_update_settings():
     if "deviceName" in data:
         settings.device_name = data["deviceName"].strip()
 
+    # SMTP settings
+    if "smtpEnabled" in data:
+        settings.smtp_enabled = bool(data["smtpEnabled"])
+    if "smtpHost" in data:
+        settings.smtp_host = data["smtpHost"].strip()
+    if "smtpPort" in data:
+        port = int(data["smtpPort"])
+        if port < 1 or port > 65535:
+            return jsonify({"error": "Invalid SMTP port number", "code": "INVALID_SMTP_PORT"}), 400
+        settings.smtp_port = port
+    if "smtpUsername" in data:
+        settings.smtp_username = data["smtpUsername"].strip()
+    if "smtpPassword" in data:
+        # Only update password if it's not the masked placeholder
+        if data["smtpPassword"] != "*****":
+            settings.smtp_password = data["smtpPassword"]
+    if "smtpFromEmail" in data:
+        settings.smtp_from_email = data["smtpFromEmail"].strip()
+    if "smtpUseTls" in data:
+        settings.smtp_use_tls = bool(data["smtpUseTls"])
+
     settings.updated_at = datetime.utcnow()
     db.session.commit()
 
@@ -452,6 +485,8 @@ def api_list_users():
 @auth.require_admin()
 def api_create_user():
     """Create new user (admin only)."""
+    from models import SystemSettings
+
     data = request.get_json()
 
     if not data:
@@ -471,17 +506,36 @@ def api_create_user():
     # Check if email already exists
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
-        return jsonify({"error": "Email already exists", "code": "EMAIL_EXISTS"}), 409
+        # Approve the existing user for protected file access
+        was_approved = existing_user.is_approved
+        existing_user.is_approved = True
+        if role:
+            existing_user.role = role
+        db.session.commit()
 
-    # Create user
+        # Send approval email if user was not previously approved
+        if not was_approved:
+            settings = SystemSettings.query.first()
+            if settings and settings.smtp_enabled:
+                send_approval_email(existing_user.email, settings.device_name or "ThumbsUp", settings)
+
+        return jsonify({"user": existing_user.to_dict(include_permissions=True), "approved": True}), 200
+
+    # Create user (admin-created users are pre-approved for protected files)
     new_user = User(
         email=email,
         password_hash=auth.hash_password(password) if password else auth.hash_password("changeme"),
         role=role,
         is_default_pin=False,
+        is_approved=True,
     )
     db.session.add(new_user)
     db.session.commit()
+
+    # Send invite email for pre-created account
+    settings = SystemSettings.query.first()
+    if settings and settings.smtp_enabled:
+        send_invite_email(new_user.email, settings.device_name or "ThumbsUp", settings)
 
     return jsonify({"user": new_user.to_dict()}), 201
 
@@ -501,6 +555,8 @@ def api_get_user(user_id):
 @auth.require_admin()
 def api_update_user(user_id):
     """Update user (admin only)."""
+    from models import SystemSettings
+
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
@@ -532,7 +588,17 @@ def api_update_user(user_id):
             return jsonify({"error": "Invalid role", "code": "INVALID_ROLE"}), 400
         user.role = data["role"]
 
+    if "approved" in data:
+        was_approved = user.is_approved
+        user.is_approved = bool(data["approved"])
+
     db.session.commit()
+
+    # Send approval email if user was just approved
+    if "approved" in data and bool(data["approved"]) and not was_approved:
+        settings = SystemSettings.query.first()
+        if settings and settings.smtp_enabled:
+            send_approval_email(user.email, settings.device_name or "ThumbsUp", settings)
 
     return jsonify({"user": user.to_dict()}), 200
 
@@ -687,7 +753,7 @@ def api_list_files():
     include_protected = False
 
     if user:
-        include_protected = True
+        include_protected = user.role == "admin" or user.is_approved
         # Check folder permissions (admin has full access)
         if user.role != "admin":
             check_path = "/" + path if path else "/"
@@ -730,6 +796,10 @@ def api_upload_file():
     user = auth.get_user_from_token(token)
     if not user:
         return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
+
+    # Unapproved users cannot upload (they only have access to unprotected files)
+    if user.role != "admin" and not user.is_approved:
+        return jsonify({"error": "Upload requires approved account", "code": "NOT_APPROVED"}), 403
 
     # Check write permissions (admin has full access)
     if user.role != "admin":
@@ -790,11 +860,11 @@ def api_download_file():
             return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
 
     # Resolve file in the correct subdirectory
-    if user:
-        # Authenticated users – look in protected first, then unprotected
+    if user and (user.role == "admin" or user.is_approved):
+        # Approved users – look in protected first, then unprotected
         file_path = resolve_file_path(path)
     else:
-        # Guest – only unprotected
+        # Guest or unapproved user – only unprotected
         unprotected_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "unprotected"
         candidate = (unprotected_base / path).resolve()
         # Guard against directory traversal
@@ -1421,6 +1491,37 @@ def main():
     # Initialize database tables
     with app.app_context():
         db.create_all()
+
+        # Migrate: add is_approved column if missing (for existing databases)
+        from sqlalchemy import inspect as sa_inspect
+        from sqlalchemy import text
+
+        inspector = sa_inspect(db.engine)
+        user_columns = [col["name"] for col in inspector.get_columns("users")]
+        if "is_approved" not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 0"))
+            db.session.commit()
+            print("✅ Migrated: added is_approved column to users table")
+
+        # Migrate: add SMTP columns to system_settings if missing
+        settings_columns = [col["name"] for col in inspector.get_columns("system_settings")]
+        smtp_migrations = [
+            ("smtp_enabled", "BOOLEAN", "0"),
+            ("smtp_host", "VARCHAR(255)", "''"),
+            ("smtp_port", "INTEGER", "587"),
+            ("smtp_username", "VARCHAR(255)", "''"),
+            ("smtp_password", "VARCHAR(255)", "''"),
+            ("smtp_from_email", "VARCHAR(255)", "''"),
+            ("smtp_use_tls", "BOOLEAN", "1"),
+        ]
+        for col_name, col_type, default_val in smtp_migrations:
+            if col_name not in settings_columns:
+                db.session.execute(
+                    text(f"ALTER TABLE system_settings ADD COLUMN {col_name} {col_type} DEFAULT {default_val}")
+                )
+                print(f"✅ Migrated: added {col_name} column to system_settings table")
+        db.session.commit()
+
         print("✅ Database initialized")
 
         # Create default system settings if not exists
