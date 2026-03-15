@@ -9,6 +9,8 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from utils.generate_certs import generate_client_cert
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,25 +101,26 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
     )
 
     attachments = []
+    cert_generated = False
 
     if ca_cert_path and ca_key_path:
         try:
-            from utils.generate_certs import generate_client_cert
-
             client_cert_pem, client_key_pem = generate_client_cert(ca_cert_path, ca_key_path, user_email)
             attachments.append(("client_cert.pem", client_cert_pem))
             attachments.append(("client_key.pem", client_key_pem))
-
-            body_text += (
-                "\nYour client certificate for mTLS is attached.\n"
-                "Please install both the certificate and key to authenticate.\n"
-            )
-            body_html += (
-                "<p>Your client certificate for mTLS is attached. "
-                "Please install both the certificate and key to authenticate.</p>"
-            )
+            cert_generated = True
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)
+
+    if cert_generated:
+        body_text += (
+            "\nYour client certificate for mTLS is attached.\n"
+            "Please install both the certificate and key to authenticate.\n"
+        )
+        body_html += (
+            "<p>Your client certificate for mTLS is attached. "
+            "Please install both the certificate and key to authenticate.</p>"
+        )
 
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
 
