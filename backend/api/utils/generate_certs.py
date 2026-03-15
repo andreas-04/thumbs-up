@@ -127,6 +127,87 @@ def generate_self_signed_cert(
     return cert_path, key_path
 
 
+def generate_client_cert(ca_cert_path, ca_key_path, user_email, validity_days=365):
+    """
+    Generate a client certificate signed by the server CA for mTLS.
+
+    Args:
+        ca_cert_path: Path to the CA certificate (server cert acting as CA)
+        ca_key_path: Path to the CA private key
+        user_email: Email address of the user (used as CN and SAN)
+        validity_days: Certificate validity period in days
+
+    Returns:
+        Tuple of (client_cert_pem: bytes, client_key_pem: bytes) in PEM format.
+    """
+    # Load CA certificate and key
+    with open(ca_cert_path, "rb") as f:
+        ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+    with open(ca_key_path, "rb") as f:
+        ca_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+    # Generate client private key
+    client_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+
+    # Build client certificate subject
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "thumbsup"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "member"),
+            x509.NameAttribute(NameOID.COMMON_NAME, user_email),
+        ]
+    )
+
+    # Build and sign the client certificate
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(ca_cert.subject)
+        .public_key(client_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=validity_days))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.RFC822Name(user_email)]),
+            critical=False,
+        )
+        .add_extension(
+            x509.BasicConstraints(ca=False, path_length=None),
+            critical=True,
+        )
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=True,
+                key_cert_sign=False,
+                key_agreement=False,
+                content_commitment=False,
+                data_encipherment=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256(), default_backend())
+    )
+
+    # Serialize to PEM bytes
+    client_cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    client_key_pem = client_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    return client_cert_pem, client_key_pem
+
+
 if __name__ == "__main__":
     import argparse
 

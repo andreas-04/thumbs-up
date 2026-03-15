@@ -5,14 +5,23 @@ Uses Python's built-in smtplib — no extra dependencies required.
 
 import logging
 import smtplib
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
 
 
-def _send_email(settings, to_email, subject, body_html, body_text):
+def _send_email(settings, to_email, subject, body_html, body_text, attachments=None):
     """Send an email via SMTP using the provided SystemSettings object.
+
+    Args:
+        settings: SystemSettings object with SMTP configuration
+        to_email: Recipient email address
+        subject: Email subject
+        body_html: HTML body content
+        body_text: Plain text body content
+        attachments: Optional list of (filename, data_bytes) tuples
 
     Returns (success: bool, error: str | None).
     """
@@ -32,12 +41,22 @@ def _send_email(settings, to_email, subject, body_html, body_text):
     password = settings.smtp_password or ""
     use_tls = settings.smtp_use_tls if settings.smtp_use_tls is not None else True
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = from_email
     msg["To"] = to_email
-    msg.attach(MIMEText(body_text, "plain"))
-    msg.attach(MIMEText(body_html, "html"))
+
+    # Add text/html alternative body
+    body_part = MIMEMultipart("alternative")
+    body_part.attach(MIMEText(body_text, "plain"))
+    body_part.attach(MIMEText(body_html, "html"))
+    msg.attach(body_part)
+
+    # Add file attachments
+    for filename, data in attachments or []:
+        part = MIMEApplication(data, Name=filename)
+        part["Content-Disposition"] = f'attachment; filename="{filename}"'
+        msg.attach(part)
 
     try:
         if use_tls:
@@ -61,8 +80,12 @@ def _send_email(settings, to_email, subject, body_html, body_text):
         return False, error_msg
 
 
-def send_approval_email(user_email, device_name, settings):
-    """Notify a user that their account has been approved for protected file access."""
+def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca_key_path=None):
+    """Notify a user that their account has been approved for protected file access.
+
+    When CA cert/key paths are provided, a client certificate is generated and
+    attached to the email for mTLS authentication.
+    """
     subject = f"Your account on {device_name} has been approved"
     body_text = (
         f"Good news! Your account ({user_email}) on {device_name} has been approved by an administrator.\n\n"
@@ -74,7 +97,29 @@ def send_approval_email(user_email, device_name, settings):
         f"has been approved by an administrator.</p>"
         f"<p>You now have access to protected files. Log in with your existing credentials to get started.</p>"
     )
-    return _send_email(settings, user_email, subject, body_html, body_text)
+
+    attachments = []
+
+    if ca_cert_path and ca_key_path:
+        try:
+            from utils.generate_certs import generate_client_cert
+
+            client_cert_pem, client_key_pem = generate_client_cert(ca_cert_path, ca_key_path, user_email)
+            attachments.append(("client_cert.pem", client_cert_pem))
+            attachments.append(("client_key.pem", client_key_pem))
+
+            body_text += (
+                "\nYour client certificate for mTLS is attached.\n"
+                "Please install both the certificate and key to authenticate.\n"
+            )
+            body_html += (
+                "<p>Your client certificate for mTLS is attached. "
+                "Please install both the certificate and key to authenticate.</p>"
+            )
+        except Exception as exc:
+            logger.error("Failed to generate client cert for %s: %s", user_email, exc)
+
+    return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
 
 
 def send_invite_email(user_email, device_name, settings):
