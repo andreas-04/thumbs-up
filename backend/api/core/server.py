@@ -541,7 +541,13 @@ def api_create_user():
     # Send invite email for pre-created account
     settings = SystemSettings.query.first()
     if settings and settings.smtp_enabled:
-        send_invite_email(new_user.email, settings.device_name or "ThumbsUp", settings)
+        send_invite_email(
+            new_user.email,
+            settings.device_name or "ThumbsUp",
+            settings,
+            ca_cert_path=CONFIG["CERT_PATH"],
+            ca_key_path=CONFIG["KEY_PATH"],
+        )
 
     return jsonify({"user": new_user.to_dict()}), 201
 
