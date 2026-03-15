@@ -517,7 +517,13 @@ def api_create_user():
         if not was_approved:
             settings = SystemSettings.query.first()
             if settings and settings.smtp_enabled:
-                send_approval_email(existing_user.email, settings.device_name or "ThumbsUp", settings)
+                send_approval_email(
+                    existing_user.email,
+                    settings.device_name or "ThumbsUp",
+                    settings,
+                    ca_cert_path=CONFIG["CERT_PATH"],
+                    ca_key_path=CONFIG["KEY_PATH"],
+                )
 
         return jsonify({"user": existing_user.to_dict(include_permissions=True), "approved": True}), 200
 
@@ -535,7 +541,13 @@ def api_create_user():
     # Send invite email for pre-created account
     settings = SystemSettings.query.first()
     if settings and settings.smtp_enabled:
-        send_invite_email(new_user.email, settings.device_name or "ThumbsUp", settings)
+        send_invite_email(
+            new_user.email,
+            settings.device_name or "ThumbsUp",
+            settings,
+            ca_cert_path=CONFIG["CERT_PATH"],
+            ca_key_path=CONFIG["KEY_PATH"],
+        )
 
     return jsonify({"user": new_user.to_dict()}), 201
 
@@ -598,7 +610,13 @@ def api_update_user(user_id):
     if "approved" in data and bool(data["approved"]) and not was_approved:
         settings = SystemSettings.query.first()
         if settings and settings.smtp_enabled:
-            send_approval_email(user.email, settings.device_name or "ThumbsUp", settings)
+            send_approval_email(
+                user.email,
+                settings.device_name or "ThumbsUp",
+                settings,
+                ca_cert_path=CONFIG["CERT_PATH"],
+                ca_key_path=CONFIG["KEY_PATH"],
+            )
 
     return jsonify({"user": user.to_dict()}), 200
 
