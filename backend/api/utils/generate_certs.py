@@ -208,6 +208,61 @@ def generate_client_cert(ca_cert_path, ca_key_path, user_email, validity_days=36
     return client_cert_pem, client_key_pem
 
 
+def generate_client_p12(ca_cert_path, ca_key_path, user_email, p12_password=None, validity_days=365):
+    """
+    Generate a PKCS#12 (.p12) bundle containing the client certificate,
+    private key, and the CA certificate chain.
+
+    Args:
+        ca_cert_path: Path to the CA certificate (server cert acting as CA)
+        ca_key_path: Path to the CA private key
+        user_email: Email address of the user (used as CN and SAN)
+        p12_password: Optional password to protect the .p12 file (bytes or str).
+                      If None, a random password is generated and returned.
+        validity_days: Certificate validity period in days
+
+    Returns:
+        Tuple of (p12_bytes: bytes, password: str).
+    """
+    import secrets as _secrets
+
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    # Generate the client cert + key in PEM form first
+    client_cert_pem, client_key_pem = generate_client_cert(
+        ca_cert_path, ca_key_path, user_email, validity_days=validity_days
+    )
+
+    # Re-load them as objects for PKCS#12 serialization
+    client_cert = x509.load_pem_x509_certificate(client_cert_pem, default_backend())
+    client_key = serialization.load_pem_private_key(client_key_pem, password=None, backend=default_backend())
+
+    # Load CA cert to include in the chain
+    with open(ca_cert_path, "rb") as f:
+        ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+    # Resolve password
+    if p12_password is None:
+        password_str = _secrets.token_urlsafe(16)
+    elif isinstance(p12_password, bytes):
+        password_str = p12_password.decode("utf-8")
+    else:
+        password_str = p12_password
+
+    password_bytes = password_str.encode("utf-8")
+
+    # Build PKCS#12 bundle
+    p12_bytes = pkcs12.serialize_key_and_certificates(
+        name=user_email.encode("utf-8"),
+        key=client_key,
+        cert=client_cert,
+        cas=[ca_cert],
+        encryption_algorithm=serialization.BestAvailableEncryption(password_bytes),
+    )
+
+    return p12_bytes, password_str
+
+
 if __name__ == "__main__":
     import argparse
 

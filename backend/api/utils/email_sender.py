@@ -9,7 +9,7 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from utils.generate_certs import generate_client_cert
+from utils.generate_certs import generate_client_p12
 
 logger = logging.getLogger(__name__)
 
@@ -102,24 +102,26 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
 
     attachments = []
     cert_generated = False
+    p12_password = None
 
     if ca_cert_path and ca_key_path:
         try:
-            client_cert_pem, client_key_pem = generate_client_cert(ca_cert_path, ca_key_path, user_email)
-            attachments.append(("client_cert.pem", client_cert_pem))
-            attachments.append(("client_key.pem", client_key_pem))
+            p12_bytes, p12_password = generate_client_p12(ca_cert_path, ca_key_path, user_email)
+            attachments.append(("thumbsup-client.p12", p12_bytes))
             cert_generated = True
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)
 
     if cert_generated:
         body_text += (
-            "\nYour client certificate for mTLS is attached.\n"
-            "Please install both the certificate and key to authenticate.\n"
+            "\nYour client certificate (.p12) for mTLS is attached.\n"
+            f"Import password: {p12_password}\n"
+            "Install it on your device to gain access to protected files.\n"
         )
         body_html += (
-            "<p>Your client certificate for mTLS is attached. "
-            "Please install both the certificate and key to authenticate.</p>"
+            "<p>Your client certificate (<code>.p12</code>) for mTLS is attached.</p>"
+            f"<p><strong>Import password:</strong> <code>{p12_password}</code></p>"
+            "<p>Install it on your device to gain access to protected files.</p>"
         )
 
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
@@ -147,24 +149,26 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
 
     attachments = []
     cert_generated = False
+    p12_password = None
 
     if ca_cert_path and ca_key_path:
         try:
-            client_cert_pem, client_key_pem = generate_client_cert(ca_cert_path, ca_key_path, user_email)
-            attachments.append(("client_cert.pem", client_cert_pem))
-            attachments.append(("client_key.pem", client_key_pem))
+            p12_bytes, p12_password = generate_client_p12(ca_cert_path, ca_key_path, user_email)
+            attachments.append(("thumbsup-client.p12", p12_bytes))
             cert_generated = True
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)
 
     if cert_generated:
         body_text += (
-            "\nYour client certificate for mTLS is attached.\n"
-            "Please install both the certificate and key to authenticate.\n"
+            "\nYour client certificate (.p12) for mTLS is attached.\n"
+            f"Import password: {p12_password}\n"
+            "Install it on your device to gain access to protected files.\n"
         )
         body_html += (
-            "<p>Your client certificate for mTLS is attached. "
-            "Please install both the certificate and key to authenticate.</p>"
+            "<p>Your client certificate (<code>.p12</code>) for mTLS is attached.</p>"
+            f"<p><strong>Import password:</strong> <code>{p12_password}</code></p>"
+            "<p>Install it on your device to gain access to protected files.</p>"
         )
 
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)

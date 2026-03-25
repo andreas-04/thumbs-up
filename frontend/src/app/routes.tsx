@@ -10,6 +10,7 @@ import FolderPermissions from './pages/FolderPermissions';
 import UserFileBrowser from './pages/UserFileBrowser';
 import GuestFileBrowser from './pages/GuestFileBrowser';
 import Signup from './pages/Signup';
+import PendingApproval from './pages/PendingApproval';
 import PasswordReset from './pages/PasswordReset';
 
 export const router = createBrowserRouter([
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
   {
     path: '/signup',
     Component: Signup,
+  },
+  {
+    path: '/pending-approval',
+    Component: PendingApproval,
   },
   {
     path: '/reset-password',

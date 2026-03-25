@@ -6,7 +6,6 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Shield, AlertCircle } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 
 export default function Signup() {
   const [username, setUsername] = useState('');
@@ -16,7 +15,6 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,12 +35,14 @@ export default function Signup() {
     try {
       // Import and use the API
       const { api } = await import('../../services/api');
-      await api.signup({ email, password, username });
+      const { user } = await api.signup({ email, password, username });
       
-      // Log the user in directly after signup
-      const loginResult = await login(email, password);
-      if (loginResult) {
-        navigate('/');
+      // Pre-approved users (admin-created accounts) can proceed directly;
+      // self-signup users must wait for admin approval.
+      if (user.isApproved) {
+        navigate('/login');
+      } else {
+        navigate('/pending-approval');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration';
