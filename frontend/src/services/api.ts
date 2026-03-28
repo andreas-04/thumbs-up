@@ -34,6 +34,7 @@ export interface SystemSettings {
   smtpPassword: string;
   smtpFromEmail: string;
   smtpUseTls: boolean;
+  allowedDomains: string[];
 }
 
 export interface FolderPermission {

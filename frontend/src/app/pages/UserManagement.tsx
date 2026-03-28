@@ -38,11 +38,11 @@ import {
 } from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, Trash2, Search, Mail, Key, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Search, Mail, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserManagement() {
-  const { settings, users, addUser, updateUser, deleteUser, refreshUsers } = useData();
+  const { settings, users, addUser, deleteUser, refreshUsers } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -100,15 +100,6 @@ export default function UserManagement() {
     }
   };
 
-  const handleApprove = async (user: User) => {
-    try {
-      await updateUser(user.id, { approved: true });
-      toast.success(`${user.email} approved for protected file access`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to approve user');
-    }
-  };
-
   const handleDelete = async () => {
     if (!selectedUser) return;
     try {
@@ -147,8 +138,8 @@ export default function UserManagement() {
       <Alert className="bg-blue-950 border-blue-900">
         <Key className="h-4 w-4 text-blue-400" />
         <AlertDescription className="text-blue-300">
-          <strong>How it works:</strong> Approved users can access protected files. 
-          Users who sign up without approval can only see unprotected files until an admin approves them.
+          <strong>How it works:</strong> Invite users by entering their email. They'll receive a client certificate for secure access.
+          Users with an allowed email domain can also self-register in System Settings.
         </AlertDescription>
       </Alert>
 
@@ -156,7 +147,7 @@ export default function UserManagement() {
         <CardHeader>
           <CardTitle className="text-white">Users</CardTitle>
           <CardDescription className="text-gray-400">
-            Approved users can access protected files. Unapproved users can only see unprotected files.
+            Invited users can access protected files. Configure domain allowlists in System Settings.
           </CardDescription>
           <div className="pt-4">
             <div className="relative">
@@ -200,19 +191,13 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {user.isApproved ? (
-                          <Badge variant="default" className="bg-green-700 text-green-100">
-                            Protected
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-amber-900 text-amber-200">
-                            Unprotected Only
-                          </Badge>
-                        )}
+                        <Badge variant="default" className="bg-green-700 text-green-100">
+                          Protected
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.last_login ? 'default' : 'secondary'}>
-                          {user.last_login ? 'Registered' : 'Pending'}
+                          {user.last_login ? 'Registered' : 'Invited'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-gray-400">
@@ -229,17 +214,6 @@ export default function UserManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {!user.isApproved && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleApprove(user)}
-                              className="text-green-400 hover:text-green-300"
-                              title="Approve for protected files"
-                            >
-                              <ShieldCheck className="h-4 w-4" />
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="icon"

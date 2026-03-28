@@ -66,6 +66,9 @@ class SystemSettings(db.Model):
     smtp_from_email = db.Column(db.String(255), default="")
     smtp_use_tls = db.Column(db.Boolean, default=True)
 
+    # Domain allowlist for auto-approving signups (comma-separated domains)
+    allowed_domains = db.Column(db.Text, default="")
+
     def __repr__(self):
         return f"<SystemSettings auth={self.auth_method}>"
 
@@ -85,6 +88,7 @@ class SystemSettings(db.Model):
             "smtpPassword": "*****" if self.smtp_password else "",
             "smtpFromEmail": self.smtp_from_email or "",
             "smtpUseTls": self.smtp_use_tls if self.smtp_use_tls is not None else True,
+            "allowedDomains": [d.strip() for d in (self.allowed_domains or "").split(",") if d.strip()],
         }
 
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -13,8 +14,15 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [signupEnabled, setSignupEnabled] = useState(false);
   const { login, loginAsGuest } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.getSettings().then((s) => {
+      setSignupEnabled((s.allowedDomains?.length ?? 0) > 0);
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +39,9 @@ export default function AdminLogin() {
         } else if (userData.role === 'admin') {
           navigate('/admin/dashboard');
         } else {
-          navigate('/files');
+          // Full page load so nginx can enforce the mTLS client-cert check
+          window.location.href = '/files';
+          return;
         }
       } else {
         setError('Invalid email or password');
@@ -45,7 +55,8 @@ export default function AdminLogin() {
 
   const handleGuestAccess = () => {
     loginAsGuest();
-    navigate('/guest/files');
+    // Full page load so nginx can enforce the mTLS client-cert check
+    window.location.href = '/guest/files';
   };
 
   return (
@@ -123,10 +134,14 @@ export default function AdminLogin() {
             </Button>
 
             <div className="text-center text-sm mt-4">
-              <span className="text-gray-400">Don't have an account?</span>{' '}
-              <a href="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
-                Sign up
-              </a>
+              {signupEnabled && (
+                <>
+                  <span className="text-gray-400">Don't have an account?</span>{' '}
+                  <a href="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
+                    Sign up
+                  </a>
+                </>
+              )}
             </div>
           </form>
         </CardContent>

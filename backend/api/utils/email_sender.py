@@ -127,31 +127,26 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
 
 
-def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_key_path=None):
+def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_key_path=None, p12_data=None):
     """Notify a user that an account has been pre-created for them.
 
-    When CA cert/key paths are provided, a client certificate is generated and
-    attached to the email for mTLS authentication.
+    Args:
+        p12_data: Optional pre-generated (p12_bytes, p12_password) tuple.
+                  When provided, the cert is attached directly and the password
+                  is included as the user's temporary login password.
+                  When None but ca_cert_path/ca_key_path are given, a cert is
+                  generated on the fly (legacy behaviour).
     """
-    subject = f"You've been invited to {device_name}"
-    body_text = (
-        f"An account has been created for you on {device_name}.\n\n"
-        f"To get started, visit the site and sign up with this email address: {user_email}\n"
-        f"You will be able to set your own password during signup.\n"
-    )
-    body_html = (
-        f"<h2>You're Invited</h2>"
-        f"<p>An account has been created for you on <strong>{device_name}</strong>.</p>"
-        f"<p>To get started, visit the site and sign up with this email address: "
-        f"<strong>{user_email}</strong></p>"
-        f"<p>You will be able to set your own password during signup.</p>"
-    )
-
     attachments = []
     cert_generated = False
     p12_password = None
 
-    if ca_cert_path and ca_key_path:
+    # Use pre-generated cert data if provided, otherwise generate on the fly
+    if p12_data:
+        p12_bytes, p12_password = p12_data
+        attachments.append(("thumbsup-client.p12", p12_bytes))
+        cert_generated = True
+    elif ca_cert_path and ca_key_path:
         try:
             p12_bytes, p12_password = generate_client_p12(ca_cert_path, ca_key_path, user_email)
             attachments.append(("thumbsup-client.p12", p12_bytes))
@@ -159,16 +154,38 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)
 
+    subject = f"You've been invited to {device_name}"
+    body_text = (
+        f"An account has been created for you on {device_name}.\n\n"
+        f"To get started, import the attached certificate on your device, "
+        f"then log in with your email address: {user_email}\n"
+    )
+    body_html = (
+        f"<h2>You're Invited</h2>"
+        f"<p>An account has been created for you on <strong>{device_name}</strong>.</p>"
+        f"<p>To get started, import the attached certificate on your device, "
+        f"then log in with your email: <strong>{user_email}</strong></p>"
+    )
+
     if cert_generated:
         body_text += (
-            "\nYour client certificate (.p12) for mTLS is attached.\n"
-            f"Import password: {p12_password}\n"
-            "Install it on your device to gain access to protected files.\n"
+            f"\nYour client certificate (.p12) for mTLS is attached.\n"
+            f"Import password / temporary login password: {p12_password}\n"
+            f"You will be asked to set a new password on first login.\n"
         )
         body_html += (
             "<p>Your client certificate (<code>.p12</code>) for mTLS is attached.</p>"
-            f"<p><strong>Import password:</strong> <code>{p12_password}</code></p>"
-            "<p>Install it on your device to gain access to protected files.</p>"
+            f"<p><strong>Import password / temporary login password:</strong> <code>{p12_password}</code></p>"
+            "<p>You will be asked to set a new password on first login.</p>"
+        )
+    else:
+        body_text += (
+            f"\nYour temporary login password is: changeme\n"
+            f"You will be asked to set a new password on first login.\n"
+        )
+        body_html += (
+            "<p><strong>Temporary login password:</strong> <code>changeme</code></p>"
+            "<p>You will be asked to set a new password on first login.</p>"
         )
 
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)

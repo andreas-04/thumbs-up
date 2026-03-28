@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Shield, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Signup() {
   const [username, setUsername] = useState('');
@@ -35,15 +36,11 @@ export default function Signup() {
     try {
       // Import and use the API
       const { api } = await import('../../services/api');
-      const { user } = await api.signup({ email, password, username });
+      await api.signup({ email, password, username });
       
-      // Pre-approved users (admin-created accounts) can proceed directly;
-      // self-signup users must wait for admin approval.
-      if (user.isApproved) {
-        navigate('/login');
-      } else {
-        navigate('/pending-approval');
-      }
+      // Domain-allowlisted signup succeeded — proceed to login.
+      toast.success('Account created! A security certificate has been emailed to you. Please install it before logging in.', { duration: 8000 });
+      navigate('/login');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration';
       setError(errorMessage);

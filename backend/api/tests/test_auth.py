@@ -2,7 +2,7 @@
 Unit tests for the TokenAuth class (core/auth.py).
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 
@@ -128,8 +128,8 @@ class TestGenerateSessionToken:
         payload = auth.validate_token(token)
         assert payload is not None
         assert payload["role"] == "admin"
-        exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
-        iat = datetime.fromtimestamp(payload["iat"], tz=UTC)
+        exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         diff_hours = (exp - iat).total_seconds() / 3600
         assert abs(diff_hours - 2) < 0.01
 
