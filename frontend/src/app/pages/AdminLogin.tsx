@@ -15,7 +15,7 @@ export default function AdminLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [signupEnabled, setSignupEnabled] = useState(false);
-  const { login, loginAsGuest } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,12 +51,6 @@ export default function AdminLogin() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGuestAccess = () => {
-    loginAsGuest();
-    // Full page load so nginx can enforce the mTLS client-cert check
-    window.location.href = '/guest/files';
   };
 
   return (
@@ -112,25 +106,6 @@ export default function AdminLogin() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Logging in...' : 'Login'}
-            </Button>
-
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-gray-900 px-2 text-gray-500">or</span>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white"
-              onClick={handleGuestAccess}
-            >
-              <UserRound className="h-4 w-4 mr-2" />
-              Continue as Guest
             </Button>
 
             <div className="text-center text-sm mt-4">

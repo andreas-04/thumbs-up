@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useData, User, FolderPermission } from '../contexts/DataContext';
-import { api } from '../../services/api';
+import { api, PermissionState, EffectivePermissions, EffectivePermissionEntry } from '../../services/api';
 import { Button } from '../components/ui/button';
 import {
   Card,
@@ -27,7 +27,6 @@ import {
 } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
-import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { 
   FolderOpen, 
@@ -35,10 +34,41 @@ import {
   Info,
   CheckCircle,
   XCircle,
+  MinusCircle,
   Mail,
   User as UserIcon,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+/** Cycle through the three permission states: null → allow → deny → null */
+function nextPermState(current: PermissionState): PermissionState {
+  if (current === null) return 'allow';
+  if (current === 'allow') return 'deny';
+  return null; // deny → null
+}
+
+function PermStateBadge({ value }: { value: PermissionState }) {
+  if (value === 'allow') {
+    return (
+      <span className="inline-flex items-center gap-1 text-green-400 text-xs font-medium">
+        <CheckCircle className="h-3 w-3" /> Allow
+      </span>
+    );
+  }
+  if (value === 'deny') {
+    return (
+      <span className="inline-flex items-center gap-1 text-red-400 text-xs font-medium">
+        <XCircle className="h-3 w-3" /> Deny
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-gray-500 text-xs font-medium">
+      <MinusCircle className="h-3 w-3" /> —
+    </span>
+  );
+}
 
 export default function FolderPermissions() {
   const { settings, users, refreshUsers, updateUserPermissions } = useData();
@@ -46,6 +76,9 @@ export default function FolderPermissions() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [permissions, setPermissions] = useState<FolderPermission[]>([]);
   const [allFolders, setAllFolders] = useState<Array<{ path: string; name: string }>>([]);
+  const [showEffectiveDialog, setShowEffectiveDialog] = useState(false);
+  const [effectiveUser, setEffectiveUser] = useState<User | null>(null);
+  const [effectivePerms, setEffectivePerms] = useState<EffectivePermissions>({});
 
   useEffect(() => {
     refreshUsers().catch((err) => console.error('Failed to refresh users:', err));
@@ -60,27 +93,38 @@ export default function FolderPermissions() {
     setShowEditDialog(true);
   };
 
-  const handlePermissionToggle = (folderPath: string, permType: 'read' | 'write') => {
+  const openEffectiveDialog = async (user: User) => {
+    setEffectiveUser(user);
+    try {
+      const { permissions } = await api.getEffectivePermissions(user.id);
+      setEffectivePerms(permissions);
+      setShowEffectiveDialog(true);
+    } catch (err) {
+      toast.error('Failed to load effective permissions');
+    }
+  };
+
+  const handlePermissionCycle = (folderPath: string, permType: 'read' | 'write') => {
     setPermissions((prev) => {
       const existing = prev.find((p) => p.path === folderPath);
       
       if (existing) {
-        // Update existing permission
-        return prev.map((p) =>
-          p.path === folderPath
-            ? { ...p, [permType]: !p[permType] }
-            : p
+        const newVal = nextPermState(existing[permType]);
+        const updated = prev.map((p) =>
+          p.path === folderPath ? { ...p, [permType]: newVal } : p
         );
+        // Remove the entry entirely if both flags are back to null
+        return updated.filter((p) => p.read !== null || p.write !== null);
       } else {
-        // Add new permission
+        // First click → create with 'allow' on the toggled type, null on the other
         return [
           ...prev,
           {
             id: 0,
             userId: 0,
             path: folderPath,
-            read: permType === 'read',
-            write: permType === 'write',
+            read: permType === 'read' ? 'allow' as PermissionState : null,
+            write: permType === 'write' ? 'allow' as PermissionState : null,
             createdAt: new Date().toISOString(),
           },
         ];
@@ -95,9 +139,9 @@ export default function FolderPermissions() {
   const handleSave = async () => {
     if (!selectedUser) return;
 
-    // Include all permissions that were explicitly configured (even if both are false = deny all)
-    // Only exclude folders that were never touched (not in the permissions array at all)
+    // Only send rows where at least one flag is set (allow or deny)
     const cleanedPermissions = permissions
+      .filter((p) => p.read !== null || p.write !== null)
       .map((p) => ({ path: p.path, read: p.read, write: p.write }));
 
     try {
@@ -154,8 +198,9 @@ export default function FolderPermissions() {
       <Alert className="bg-blue-950 border-blue-900">
         <Info className="h-4 w-4 text-blue-400" />
         <AlertDescription className="text-blue-300">
-          <strong>Access Control Lists (ACL):</strong> Configure read/write permissions for each user per folder.
-          Users without specific permissions will have full access to all folders by default.
+          <strong>Additive Permissions:</strong> Users have no access by default.
+          Enable read/write toggles to grant access to specific folders.
+          User-level permissions override domain and group settings.
         </AlertDescription>
       </Alert>
 
@@ -192,13 +237,13 @@ export default function FolderPermissions() {
                     <TableCell className="text-gray-400">
                       <div className="flex flex-wrap gap-1">
                         {user.folderPermissions.length === 0 ? (
-                          <Badge variant="outline" className="text-green-400 border-green-700">
-                            Full Access
+                          <Badge variant="outline" className="text-gray-400 border-gray-700">
+                            No Direct Permissions
                           </Badge>
                         ) : (
                           user.folderPermissions.slice(0, 2).map((perm) => (
                             <Badge key={perm.path} variant="outline" className="text-gray-300 border-gray-700">
-                              {perm.path}: {perm.read && 'R'}{perm.write && 'W'}
+                              {perm.path}: {perm.read === 'allow' ? 'R' : perm.read === 'deny' ? '!R' : ''}{perm.write === 'allow' ? 'W' : perm.write === 'deny' ? '!W' : ''}
                             </Badge>
                           ))
                         )}
@@ -210,15 +255,26 @@ export default function FolderPermissions() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(user)}
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEffectiveDialog(user)}
+                          className="text-purple-400 hover:text-purple-300"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          Effective
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(user)}
+                          className="text-blue-400 hover:text-blue-300"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -233,10 +289,10 @@ export default function FolderPermissions() {
         <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">
-              Edit Folder Permissions
+              Edit User Overrides
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              Configure read/write access for <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>
+              Configure user-level permission overrides for <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>. These take highest priority in the permission hierarchy.
             </DialogDescription>
           </DialogHeader>
           
@@ -244,8 +300,8 @@ export default function FolderPermissions() {
             <Alert className="bg-gray-800 border-gray-700 mb-4">
               <Info className="h-4 w-4 text-gray-400" />
               <AlertDescription className="text-gray-300 text-sm">
-                <strong>Default behavior:</strong> If no permissions are set for a folder, the user has full read/write access.
-                Set specific permissions to restrict access.
+                <strong>Tri-state permissions:</strong> Click the cells to cycle through:
+                {' '}<span className="text-green-400">Allow</span> → <span className="text-red-400">Deny</span> → <span className="text-gray-500">No Action</span> (inherits from group/domain).
               </AlertDescription>
             </Alert>
 
@@ -273,20 +329,22 @@ export default function FolderPermissions() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="flex justify-center">
-                              <Switch
-                                checked={perm?.read ?? true}
-                                onCheckedChange={() => handlePermissionToggle(folder.path, 'read')}
-                              />
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePermissionCycle(folder.path, 'read')}
+                              className="inline-flex items-center justify-center w-20 h-8 rounded border border-gray-700 hover:border-gray-500 transition-colors bg-gray-800"
+                            >
+                              <PermStateBadge value={perm?.read ?? null} />
+                            </button>
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="flex justify-center">
-                              <Switch
-                                checked={perm?.write ?? true}
-                                onCheckedChange={() => handlePermissionToggle(folder.path, 'write')}
-                              />
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePermissionCycle(folder.path, 'write')}
+                              className="inline-flex items-center justify-center w-20 h-8 rounded border border-gray-700 hover:border-gray-500 transition-colors bg-gray-800"
+                            >
+                              <PermStateBadge value={perm?.write ?? null} />
+                            </button>
                           </TableCell>
                         </TableRow>
                       );
@@ -298,19 +356,19 @@ export default function FolderPermissions() {
 
             <div className="mt-4 p-3 bg-gray-800 rounded-lg">
               <div className="text-sm text-gray-400">
-                <strong className="text-gray-300">Permission Summary:</strong>
+                <strong className="text-gray-300">Permission States:</strong>
                 <ul className="mt-2 space-y-1 ml-4">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-3 w-3 text-green-400" />
-                    <span>Read: View and download files</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-3 w-3 text-blue-400" />
-                    <span>Write: Upload, modify, and delete files</span>
+                    <span><strong className="text-green-400">Allow</strong> — Explicitly grants access (overrides group/domain)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <XCircle className="h-3 w-3 text-red-400" />
-                    <span>Disabled: No access to folder</span>
+                    <span><strong className="text-red-400">Deny</strong> — Explicitly denies access (overrides group/domain)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <MinusCircle className="h-3 w-3 text-gray-500" />
+                    <span><strong className="text-gray-400">No Action</strong> — Inherits from group or domain permissions</span>
                   </li>
                 </ul>
               </div>
@@ -329,6 +387,125 @@ export default function FolderPermissions() {
               Save Permissions
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Effective Permissions Dialog */}
+      <Dialog open={showEffectiveDialog} onOpenChange={setShowEffectiveDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              Effective Permissions
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Resolved permissions for <strong>{effectiveUser && getUserIdentifier(effectiveUser)}</strong> across all layers (domain → group → user)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {Object.keys(effectivePerms).length === 0 ? (
+              <Alert className="bg-green-950 border-green-900">
+                <Info className="h-4 w-4 text-green-400" />
+                <AlertDescription className="text-green-300">
+                  No permission rules configured. This user has full access to all folders by default.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="border border-gray-800 rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-gray-800">
+                      <TableHead className="text-gray-300">Path</TableHead>
+                      <TableHead className="text-gray-300 text-center">Domain</TableHead>
+                      <TableHead className="text-gray-300 text-center">Group</TableHead>
+                      <TableHead className="text-gray-300 text-center">User</TableHead>
+                      <TableHead className="text-gray-300 text-center">Effective</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(effectivePerms)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([path, entry]) => (
+                        <TableRow key={path} className="border-gray-800">
+                          <TableCell className="text-white font-mono text-sm">
+                            <div className="flex items-center gap-2">
+                              <FolderOpen className="h-4 w-4 text-gray-400" />
+                              {path}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {entry.domain ? (
+                              <div className="flex justify-center gap-1">
+                                <Badge variant="outline" className={entry.domain.canRead ? 'text-blue-300 border-blue-800' : 'text-gray-500 border-gray-700'}>
+                                  R
+                                </Badge>
+                                <Badge variant="outline" className={entry.domain.canWrite ? 'text-blue-300 border-blue-800' : 'text-gray-500 border-gray-700'}>
+                                  W
+                                </Badge>
+                              </div>
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {entry.groupMerged ? (
+                              <div>
+                                <div className="flex justify-center gap-1">
+                                  <Badge variant="outline" className={entry.groupMerged.canRead ? 'text-purple-300 border-purple-800' : 'text-gray-500 border-gray-700'}>
+                                    R
+                                  </Badge>
+                                  <Badge variant="outline" className={entry.groupMerged.canWrite ? 'text-purple-300 border-purple-800' : 'text-gray-500 border-gray-700'}>
+                                    W
+                                  </Badge>
+                                </div>
+                                <div className="text-[10px] text-gray-500 mt-1">
+                                  {entry.groups.map((g) => g.groupName).join(', ')}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {entry.user ? (
+                              <div className="flex justify-center gap-1">
+                                <Badge variant="outline" className={entry.user.canRead ? 'text-orange-300 border-orange-800' : 'text-gray-500 border-gray-700'}>
+                                  R
+                                </Badge>
+                                <Badge variant="outline" className={entry.user.canWrite ? 'text-orange-300 border-orange-800' : 'text-gray-500 border-gray-700'}>
+                                  W
+                                </Badge>
+                              </div>
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center gap-1">
+                              <Badge className={entry.effective.canRead ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}>
+                                R
+                              </Badge>
+                              <Badge className={entry.effective.canWrite ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}>
+                                W
+                              </Badge>
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-1">
+                              via {entry.effective.source}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Domain</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> Group (most-permissive across groups)</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> User (highest priority)</span>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

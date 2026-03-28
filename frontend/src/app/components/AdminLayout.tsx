@@ -11,6 +11,8 @@ import {
   X,
   Shield,
   Lock,
+  Globe,
+  UsersRound,
 } from 'lucide-react';
 
 export function AdminLayout() {
@@ -23,6 +25,8 @@ export function AdminLayout() {
     { path: '/admin/settings', label: 'System Settings', icon: Settings },
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/permissions', label: 'Permissions', icon: Shield },
+    { path: '/admin/domains', label: 'Domains', icon: Globe },
+    { path: '/admin/groups', label: 'Groups', icon: UsersRound },
   ];
 
   const isActive = (path: string) => location.pathname === path;
