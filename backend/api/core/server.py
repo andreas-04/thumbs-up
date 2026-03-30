@@ -20,6 +20,7 @@ from werkzeug.utils import secure_filename
 from core.auth import TokenAuth
 from models import User, db
 from utils.email_sender import send_approval_email, send_invite_email
+from utils.generate_certs import generate_client_p12
 from utils.mdns_advertiser import MDNSAdvertiser
 from utils.qr_generator import QRGenerator
 
@@ -259,7 +260,14 @@ def api_login():
 
 @app.route("/api/v1/auth/signup", methods=["POST"])
 def api_signup():
-    """Register new user account."""
+    """Register new user account.
+
+    Only emails whose domain appears in the system-settings domain allowlist
+    (or that were pre-created by an admin) are accepted.  All other signups
+    are rejected with a 403.
+    """
+    from models import SystemSettings
+
     data = request.get_json()
 
     if not data:
@@ -279,8 +287,8 @@ def api_signup():
     # Check if email already exists
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
-        # Allow claiming a pre-approved account (admin pre-created with default password)
-        if existing_user.is_approved and auth.verify_password("changeme", existing_user.password_hash):
+        # Allow claiming a pre-approved account (admin pre-created, still on temp password)
+        if existing_user.is_approved and existing_user.is_default_pin:
             # Claim the pre-approved account: set the user's chosen password
             existing_user.password_hash = auth.hash_password(password)
             existing_user.is_default_pin = False
@@ -290,12 +298,33 @@ def api_signup():
             return jsonify({"token": token, "user": existing_user.to_dict()}), 200
         return jsonify({"error": "Email already registered", "code": "EMAIL_EXISTS"}), 409
 
-    # Create new user (self-signup: not approved for protected files)
+    # Check domain allowlist
+    email_domain = email.rsplit("@", 1)[1].lower()
+    settings = SystemSettings.query.first()
+    allowed = [d.strip().lower() for d in (settings.allowed_domains or "").split(",") if d.strip()] if settings else []
+
+    if email_domain not in allowed:
+        return jsonify({
+            "error": "Registration is not open for this email domain. Contact your administrator.",
+            "code": "DOMAIN_NOT_ALLOWED",
+        }), 403
+
+    # Create new user (domain-allowlisted: auto-approved for protected files)
     new_user = User(
-        email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False, is_approved=False
+        email=email, password_hash=auth.hash_password(password), role="user", is_default_pin=False, is_approved=True
     )
     db.session.add(new_user)
     db.session.commit()
+
+    # Send approval email with .p12 client certificate
+    if settings and settings.smtp_enabled:
+        send_approval_email(
+            new_user.email,
+            settings.device_name or "ThumbsUp",
+            settings,
+            ca_cert_path=CONFIG["CERT_PATH"],
+            ca_key_path=CONFIG["KEY_PATH"],
+        )
 
     # Generate token for immediate login
     token = auth.generate_session_token(new_user)
@@ -448,6 +477,20 @@ def api_update_settings():
     if "smtpUseTls" in data:
         settings.smtp_use_tls = bool(data["smtpUseTls"])
 
+    # Domain allowlist
+    if "allowedDomains" in data:
+        domains = data["allowedDomains"]
+        if not isinstance(domains, list):
+            return jsonify({"error": "allowedDomains must be a list", "code": "INVALID_DOMAINS"}), 400
+        # Validate and normalize each domain (strip whitespace, remove leading @)
+        cleaned = []
+        for d in domains:
+            d = str(d).strip().lstrip("@").lower()
+            if not d or "." not in d:
+                return jsonify({"error": f"Invalid domain: {d}", "code": "INVALID_DOMAIN"}), 400
+            cleaned.append(d)
+        settings.allowed_domains = ",".join(cleaned)
+
     settings.updated_at = datetime.utcnow()
     db.session.commit()
 
@@ -527,26 +570,39 @@ def api_create_user():
 
         return jsonify({"user": existing_user.to_dict(include_permissions=True), "approved": True}), 200
 
+    # Generate client certificate; use the .p12 password as the initial login password
+    # so the user can log in (instead of signing up) and will be prompted to change it.
+    p12_bytes = None
+    p12_password = None
+    settings = SystemSettings.query.first()
+    try:
+        p12_bytes, p12_password = generate_client_p12(
+            CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).error("Failed to generate client cert for %s", email, exc_info=True)
+
+    initial_password = password if password else (p12_password or "changeme")
+
     # Create user (admin-created users are pre-approved for protected files)
     new_user = User(
         email=email,
-        password_hash=auth.hash_password(password) if password else auth.hash_password("changeme"),
+        password_hash=auth.hash_password(initial_password),
         role=role,
-        is_default_pin=False,
+        is_default_pin=True,
         is_approved=True,
     )
     db.session.add(new_user)
     db.session.commit()
 
     # Send invite email for pre-created account
-    settings = SystemSettings.query.first()
     if settings and settings.smtp_enabled:
         send_invite_email(
             new_user.email,
             settings.device_name or "ThumbsUp",
             settings,
-            ca_cert_path=CONFIG["CERT_PATH"],
-            ca_key_path=CONFIG["KEY_PATH"],
+            p12_data=(p12_bytes, p12_password) if p12_bytes else None,
         )
 
     return jsonify({"user": new_user.to_dict()}), 201
@@ -754,6 +810,41 @@ def user_has_access(user, folder_path, require_write=False):
     return best_match.can_write if require_write else best_match.can_read
 
 
+def _require_mtls_for_protected(user):
+    """Return an error response if a non-admin user lacks a valid client cert.
+
+    nginx forwards ``X-SSL-Client-Verify`` (``SUCCESS`` when the client
+    presented a certificate verified against the CA) and ``X-SSL-Client-S-DN``
+    (the certificate subject DN, e.g. ``O=thumbsup,OU=member,CN=user@example.com``).
+
+    This function also verifies that the certificate's CN matches the
+    authenticated user's email so that one user's cert cannot be used to
+    access another user's session.  Admin users are exempt (JWT-only auth).
+    """
+    if user and user.role != "admin":
+        client_verify = request.headers.get("X-SSL-Client-Verify", "")
+        if client_verify != "SUCCESS":
+            return jsonify({
+                "error": "A valid client certificate is required. Please install your .p12 certificate.",
+                "code": "CLIENT_CERT_REQUIRED",
+            }), 403
+
+        # Verify the cert's CN matches the logged-in user's email
+        client_dn = request.headers.get("X-SSL-Client-S-DN", "")
+        cn_value = None
+        for part in client_dn.split(","):
+            part = part.strip()
+            if part.upper().startswith("CN="):
+                cn_value = part[3:].strip()
+                break
+        if not cn_value or cn_value.lower() != user.email.lower():
+            return jsonify({
+                "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
+                "code": "CLIENT_CERT_MISMATCH",
+            }), 403
+    return None
+
+
 @app.route("/api/v1/files", methods=["GET"])
 def api_list_files():
     """List files in directory.
@@ -772,6 +863,13 @@ def api_list_files():
 
     if user:
         include_protected = user.role == "admin" or user.is_approved
+
+        # Require mTLS client certificate for non-admin users accessing protected files
+        if include_protected:
+            mtls_err = _require_mtls_for_protected(user)
+            if mtls_err:
+                return mtls_err
+
         # Check folder permissions (admin has full access)
         if user.role != "admin":
             check_path = "/" + path if path else "/"
@@ -818,6 +916,12 @@ def api_upload_file():
     # Unapproved users cannot upload (they only have access to unprotected files)
     if user.role != "admin" and not user.is_approved:
         return jsonify({"error": "Upload requires approved account", "code": "NOT_APPROVED"}), 403
+
+    # Require mTLS for non-admin users
+    if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
 
     # Check write permissions (admin has full access)
     if user.role != "admin":
@@ -871,6 +975,11 @@ def api_download_file():
     user = auth.get_user_from_token(token) if token else None
 
     if user and user.role != "admin":
+        # Require mTLS for non-admin users accessing protected files
+        if user.is_approved:
+            mtls_err = _require_mtls_for_protected(user)
+            if mtls_err:
+                return mtls_err
         # Check read permissions
         parent = str(Path(path).parent)
         folder_path = "/" if parent == "." else "/" + parent
@@ -918,6 +1027,9 @@ def api_create_directory():
     user = auth.get_user_from_token(token)
 
     if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
         check_path = "/" + path if path else "/"
         if not user_has_access(user, check_path, require_write=True):
             return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
@@ -950,6 +1062,9 @@ def api_delete_file():
     user = auth.get_user_from_token(token)
 
     if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
         check_path = "/" + str(Path(path).parent)
         if not user_has_access(user, check_path, require_write=True):
             return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
@@ -1538,6 +1653,14 @@ def main():
                     text(f"ALTER TABLE system_settings ADD COLUMN {col_name} {col_type} DEFAULT {default_val}")
                 )
                 print(f"✅ Migrated: added {col_name} column to system_settings table")
+
+        # Migrate: add allowed_domains column to system_settings if missing
+        if "allowed_domains" not in settings_columns:
+            db.session.execute(
+                text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''")
+            )
+            print("✅ Migrated: added allowed_domains column to system_settings table")
+
         db.session.commit()
 
         print("✅ Database initialized")

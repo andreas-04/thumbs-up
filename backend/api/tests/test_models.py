@@ -35,6 +35,24 @@ class TestSystemSettingsModel:
         for key in ("id", "authMethod", "tlsEnabled", "httpsPort", "deviceName"):
             assert key in d
 
+    def test_settings_to_dict_allowed_domains_empty(self, app):
+        from models import SystemSettings
+
+        settings = SystemSettings.query.first()
+        d = settings.to_dict()
+        assert "allowedDomains" in d
+        assert d["allowedDomains"] == []
+
+    def test_settings_to_dict_allowed_domains_populated(self, app):
+        from models import SystemSettings, db
+
+        settings = SystemSettings.query.first()
+        settings.allowed_domains = "mycorp.com,example.org"
+        db.session.commit()
+
+        d = settings.to_dict()
+        assert d["allowedDomains"] == ["mycorp.com", "example.org"]
+
     def test_settings_repr(self, app):
         from models import SystemSettings
 

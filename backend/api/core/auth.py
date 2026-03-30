@@ -135,7 +135,7 @@ class TokenAuth:
         }
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-        return token
+        return token if isinstance(token, str) else token.decode("utf-8")
 
     def generate_admin_session(self):
         """
@@ -154,7 +154,7 @@ class TokenAuth:
         }
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-        return token
+        return token if isinstance(token, str) else token.decode("utf-8")
 
     def get_user_from_token(self, token):
         """
@@ -270,7 +270,7 @@ class TokenAuth:
         }
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-        return token
+        return token if isinstance(token, str) else token.decode("utf-8")
 
     def validate_token(self, token):
         """
@@ -364,6 +364,7 @@ class TokenAuth:
         payload = {"user_id": "guest", "permissions": permissions, "iat": created, "exp": expires, "jti": token_id}
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        token = token if isinstance(token, str) else token.decode("utf-8")
 
         # Store in active tokens
         self.active_guest_tokens[token_id] = {"token": token, "created": created, "expires": expires}

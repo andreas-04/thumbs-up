@@ -17,15 +17,19 @@ import {
   AlertTriangle,
   Server,
   Mail,
+  Globe,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '../components/ui/switch';
+import { Badge } from '../components/ui/badge';
 
 export default function SystemSettings() {
   const { settings, updateSettings } = useData();
   const [localSettings, setLocalSettings] = useState(settings);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [domainInput, setDomainInput] = useState('');
 
   if (!localSettings) return null;
 
@@ -52,6 +56,27 @@ export default function SystemSettings() {
   const handleReset = () => {
     setLocalSettings(settings);
     setHasChanges(false);
+    setDomainInput('');
+  };
+
+  const handleAddDomain = () => {
+    const domain = domainInput.trim().replace(/^@/, '').toLowerCase();
+    if (!domain || !domain.includes('.')) {
+      toast.error('Please enter a valid domain (e.g. mycorp.com)');
+      return;
+    }
+    const current = localSettings.allowedDomains || [];
+    if (current.includes(domain)) {
+      toast.error('Domain already in the list');
+      return;
+    }
+    handleChange('allowedDomains', [...current, domain]);
+    setDomainInput('');
+  };
+
+  const handleRemoveDomain = (domain: string) => {
+    const current = localSettings.allowedDomains || [];
+    handleChange('allowedDomains', current.filter((d) => d !== domain));
   };
 
   return (
@@ -71,62 +96,54 @@ export default function SystemSettings() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Security & Network */}
+      {/* Domain Allowlist */}
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-green-400" />
-            <CardTitle className="text-white">Security & Network</CardTitle>
+            <Globe className="h-5 w-5 text-purple-400" />
+            <CardTitle className="text-white">Domain Allowlist</CardTitle>
           </div>
           <CardDescription className="text-gray-400">
-            Configure network settings
+            Users signing up with an allowed email domain are automatically approved and sent a client certificate.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="device-name" className="text-gray-200">Device Name</Label>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
             <Input
-              id="device-name"
-              value={localSettings.deviceName}
-              onChange={(e) => handleChange('deviceName', e.target.value)}
-              className="bg-gray-800 border-gray-700 text-white"
+              placeholder="corporation.com"
+              value={domainInput}
+              onChange={(e) => setDomainInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDomain(); } }}
+              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
             />
-            <p className="text-xs text-gray-500">
-              Friendly name for this device
+            <Button type="button" onClick={handleAddDomain} variant="secondary" className="shrink-0">
+              Add Domain
+            </Button>
+          </div>
+          {(localSettings.allowedDomains?.length ?? 0) > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {localSettings.allowedDomains.map((domain) => (
+                <Badge
+                  key={domain}
+                  variant="secondary"
+                  className="bg-purple-900/50 text-purple-200 border-purple-800 pl-3 pr-1.5 py-1.5 text-sm flex items-center gap-1.5"
+                >
+                  @{domain}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDomain(domain)}
+                    className="rounded-full p-0.5 hover:bg-purple-700/50 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              No domains configured. Only admin-invited users can access the system.
             </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* System Information */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Server className="h-5 w-5 text-orange-400" />
-            <CardTitle className="text-white">System Information</CardTitle>
-          </div>
-          <CardDescription className="text-gray-400">
-            Device details and specifications
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex justify-between py-2 border-b border-gray-800">
-            <span className="text-sm text-gray-400">Device Type</span>
-            <span className="text-sm font-medium text-gray-200">Raspberry Pi</span>
-          </div>
-          <div className="flex justify-between py-2 border-b border-gray-800">
-            <span className="text-sm text-gray-400">Admin Panel Version</span>
-            <span className="text-sm font-medium text-gray-200">2.0.0</span>
-          </div>
-          <div className="flex justify-between py-2 border-b border-gray-800">
-            <span className="text-sm text-gray-400">Protocol</span>
-            <span className="text-sm font-medium text-gray-200">HTTPS/TLS</span>
-          </div>
-          <div className="flex justify-between py-2">
-            <span className="text-sm text-gray-400">Last Updated</span>
-            <span className="text-sm font-medium text-gray-200">February 16, 2026</span>
-          </div>
+          )}
         </CardContent>
       </Card>
 

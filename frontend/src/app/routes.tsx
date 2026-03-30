@@ -11,6 +11,7 @@ import UserFileBrowser from './pages/UserFileBrowser';
 import GuestFileBrowser from './pages/GuestFileBrowser';
 import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
+import CertRequired from './pages/CertRequired';
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +29,10 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     Component: PasswordReset,
+  },
+  {
+    path: '/cert-required',
+    Component: CertRequired,
   },
   {
     path: '/guest/files',
