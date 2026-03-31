@@ -299,10 +299,12 @@ def api_signup():
     domain_cfg_exists = DomainConfig.query.filter_by(domain=email_domain).first() is not None
 
     if email_domain not in allowed and not domain_cfg_exists:
-        return jsonify({
-            "error": "Registration is not open for this email domain. Contact your administrator.",
-            "code": "DOMAIN_NOT_ALLOWED",
-        }), 403
+        return jsonify(
+            {
+                "error": "Registration is not open for this email domain. Contact your administrator.",
+                "code": "DOMAIN_NOT_ALLOWED",
+            }
+        ), 403
 
     # Create new user (domain-allowlisted: auto-approved for protected files)
     new_user = User(
@@ -579,11 +581,10 @@ def api_create_user():
     p12_password = None
     settings = SystemSettings.query.first()
     try:
-        p12_bytes, p12_password = generate_client_p12(
-            CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email
-        )
+        p12_bytes, p12_password = generate_client_p12(CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email)
     except Exception:
         import logging
+
         logging.getLogger(__name__).error("Failed to generate client cert for %s", email, exc_info=True)
 
     initial_password = password if password else (p12_password or "changeme")
@@ -735,7 +736,7 @@ def api_update_user_permissions(user_id):
     # Add new permissions — only create rows where at least one flag is set
     valid_states = {"allow", "deny"}
     for perm_data in data["permissions"]:
-        read_val = perm_data.get("read")   # "allow", "deny", or null/missing
+        read_val = perm_data.get("read")  # "allow", "deny", or null/missing
         write_val = perm_data.get("write")  # "allow", "deny", or null/missing
 
         # Normalise: only keep valid tri-state strings; everything else is None
@@ -800,6 +801,7 @@ def api_list_domains():
     prepopulated and ready to configure.
     """
     from models import SystemSettings
+
     settings = SystemSettings.query.first()
     if settings and settings.allowed_domains:
         allowed = [d.strip().lower() for d in settings.allowed_domains.split(",") if d.strip()]
@@ -1108,10 +1110,12 @@ def _require_mtls_for_protected(user):
     if user and user.role != "admin":
         client_verify = request.headers.get("X-SSL-Client-Verify", "")
         if client_verify != "SUCCESS":
-            return jsonify({
-                "error": "A valid client certificate is required. Please install your .p12 certificate.",
-                "code": "CLIENT_CERT_REQUIRED",
-            }), 403
+            return jsonify(
+                {
+                    "error": "A valid client certificate is required. Please install your .p12 certificate.",
+                    "code": "CLIENT_CERT_REQUIRED",
+                }
+            ), 403
 
         # Verify the cert's CN matches the logged-in user's email
         client_dn = request.headers.get("X-SSL-Client-S-DN", "")
@@ -1122,10 +1126,12 @@ def _require_mtls_for_protected(user):
                 cn_value = part[3:].strip()
                 break
         if not cn_value or cn_value.lower() != user.email.lower():
-            return jsonify({
-                "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
-                "code": "CLIENT_CERT_MISMATCH",
-            }), 403
+            return jsonify(
+                {
+                    "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
+                    "code": "CLIENT_CERT_MISMATCH",
+                }
+            ), 403
     return None
 
 
@@ -1925,9 +1931,7 @@ def main():
 
         # Migrate: add allowed_domains column to system_settings if missing
         if "allowed_domains" not in settings_columns:
-            db.session.execute(
-                text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''")
-            )
+            db.session.execute(text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''"))
             print("✅ Migrated: added allowed_domains column to system_settings table")
 
         db.session.commit()

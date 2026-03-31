@@ -117,7 +117,7 @@ class FolderPermission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     folder_path = db.Column(db.String(1024), nullable=False)
-    can_read = db.Column(db.String(5), nullable=True, default=None)   # "allow", "deny", or None
+    can_read = db.Column(db.String(5), nullable=True, default=None)  # "allow", "deny", or None
     can_write = db.Column(db.String(5), nullable=True, default=None)  # "allow", "deny", or None
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -136,8 +136,8 @@ class FolderPermission(db.Model):
             "id": self.id,
             "userId": self.user_id,
             "path": self.folder_path,
-            "read": self.can_read,     # "allow", "deny", or null
-            "write": self.can_write,   # "allow", "deny", or null
+            "read": self.can_read,  # "allow", "deny", or null
+            "write": self.can_write,  # "allow", "deny", or null
             "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -260,7 +260,9 @@ class GroupPermission(db.Model):
     __table_args__ = (db.UniqueConstraint("group_id", "folder_path", name="unique_group_folder"),)
 
     def __repr__(self):
-        return f"<GroupPermission group_id={self.group_id} path={self.folder_path} r={self.can_read} w={self.can_write}>"
+        return (
+            f"<GroupPermission group_id={self.group_id} path={self.folder_path} r={self.can_read} w={self.can_write}>"
+        )
 
     def to_dict(self):
         return {

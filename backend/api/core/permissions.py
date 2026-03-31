@@ -127,7 +127,7 @@ def resolve_permissions_detailed(user):
     """
     all_paths = set()
     domain_map = {}
-    groups_map = {}   # path -> list of {groupId, groupName, canRead, canWrite}
+    groups_map = {}  # path -> list of {groupId, groupName, canRead, canWrite}
     group_merged_map = {}
     user_map = {}
 
@@ -146,12 +146,14 @@ def resolve_permissions_detailed(user):
         for gp in grp.permissions:
             p = _normalise_path(gp.folder_path)
             all_paths.add(p)
-            groups_map.setdefault(p, []).append({
-                "groupId": grp.id,
-                "groupName": grp.name,
-                "canRead": gp.can_read,
-                "canWrite": gp.can_write,
-            })
+            groups_map.setdefault(p, []).append(
+                {
+                    "groupId": grp.id,
+                    "groupName": grp.name,
+                    "canRead": gp.can_read,
+                    "canWrite": gp.can_write,
+                }
+            )
 
     # Merge across groups per path (OR)
     for p, grp_entries in groups_map.items():
@@ -184,12 +186,18 @@ def resolve_permissions_detailed(user):
 
             eff_read = _user_flag_to_bool(user_map[p]["canRead"], base_read)
             eff_write = _user_flag_to_bool(user_map[p]["canWrite"], base_write)
-            eff_source = "user" if (user_map[p]["canRead"] is not None or user_map[p]["canWrite"] is not None) else (
-                "group" if p in group_merged_map else ("domain" if p in domain_map else "none")
+            eff_source = (
+                "user"
+                if (user_map[p]["canRead"] is not None or user_map[p]["canWrite"] is not None)
+                else ("group" if p in group_merged_map else ("domain" if p in domain_map else "none"))
             )
             eff = {"canRead": eff_read, "canWrite": eff_write, "source": eff_source}
         elif p in group_merged_map:
-            eff = {"canRead": group_merged_map[p]["canRead"], "canWrite": group_merged_map[p]["canWrite"], "source": "group"}
+            eff = {
+                "canRead": group_merged_map[p]["canRead"],
+                "canWrite": group_merged_map[p]["canWrite"],
+                "source": "group",
+            }
         elif p in domain_map:
             eff = {"canRead": domain_map[p]["canRead"], "canWrite": domain_map[p]["canWrite"], "source": "domain"}
         else:

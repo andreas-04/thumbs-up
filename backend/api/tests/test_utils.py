@@ -146,7 +146,9 @@ class TestUserHasAccess:
         from core.server import user_has_access
         from models import FolderPermission, db
 
-        parent_perm = FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny")
+        parent_perm = FolderPermission(
+            user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny"
+        )
         # More specific path overrides parent
         specific_perm = FolderPermission(
             user_id=regular_user.id, folder_path="/shared/secret", can_read="deny", can_write="deny"

@@ -8,6 +8,7 @@ import json
 # Permission resolver unit tests
 # ============================================================================
 
+
 class TestResolvePermissions:
     """Tests for resolve_permissions()."""
 
@@ -73,7 +74,9 @@ class TestResolvePermissions:
         # Add user to group (group gives r/w on /shared)
         db.session.add(GroupMembership(group_id=group_with_perms.id, user_id=regular_user.id))
         # User override: /shared → deny write
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny")
+        )
         db.session.commit()
 
         result = resolve_permissions(regular_user)
@@ -88,7 +91,9 @@ class TestResolvePermissions:
 
         db.session.add(GroupMembership(group_id=group_with_perms.id, user_id=regular_user.id))
         # User override on /docs only (not on /shared)
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/docs", can_read="allow", can_write="deny"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/docs", can_read="allow", can_write="deny")
+        )
         db.session.commit()
 
         result = resolve_permissions(regular_user)
@@ -105,7 +110,9 @@ class TestResolvePermissions:
         from models import FolderPermission, db
 
         # Domain has /shared (from fixture), user has /private
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/private", can_read="allow", can_write="allow"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/private", can_read="allow", can_write="allow")
+        )
         db.session.commit()
 
         result = resolve_permissions(regular_user)
@@ -130,7 +137,9 @@ class TestCheckAccess:
         from core.permissions import check_access
         from models import FolderPermission, db
 
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny")
+        )
         db.session.commit()
 
         assert check_access(regular_user, "/shared/docs") is True
@@ -141,8 +150,14 @@ class TestCheckAccess:
         from core.permissions import check_access
         from models import FolderPermission, db
 
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny"))
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared/uploads", can_read="allow", can_write="allow"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="allow", can_write="deny")
+        )
+        db.session.add(
+            FolderPermission(
+                user_id=regular_user.id, folder_path="/shared/uploads", can_read="allow", can_write="allow"
+            )
+        )
         db.session.commit()
 
         # /shared/docs inherits from /shared → no write
@@ -155,7 +170,9 @@ class TestCheckAccess:
         from core.permissions import check_access
         from models import FolderPermission, db
 
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/docs", can_read="allow", can_write="deny"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/docs", can_read="allow", can_write="deny")
+        )
         db.session.commit()
 
         assert check_access(regular_user, "/other") is False
@@ -166,7 +183,9 @@ class TestCheckAccess:
         from models import FolderPermission, db
 
         # Only /docs/projects is granted
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/docs/projects", can_read="allow", can_write="allow"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/docs/projects", can_read="allow", can_write="allow")
+        )
         db.session.commit()
 
         granted = {"/docs/projects"}
@@ -204,12 +223,14 @@ class TestCheckAccess:
         # Group gives r/w on /shared
         db.session.add(GroupMembership(group_id=group_with_perms.id, user_id=regular_user.id))
         # User: deny read, but leave write as None (should inherit group's True)
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="deny", can_write=None))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="deny", can_write=None)
+        )
         db.session.commit()
 
         result = resolve_permissions(regular_user)
-        assert result["/shared"]["can_read"] is False   # explicit deny
-        assert result["/shared"]["can_write"] is True    # inherited from group
+        assert result["/shared"]["can_read"] is False  # explicit deny
+        assert result["/shared"]["can_write"] is True  # inherited from group
 
     def test_user_all_none_keeps_base_source(self, app, regular_user, domain_config):
         """User row with both flags None preserves base tier's source label."""
@@ -223,6 +244,8 @@ class TestCheckAccess:
         result = resolve_permissions(regular_user)
         assert result["/shared"]["source"] == "domain"
         assert result["/shared"]["can_read"] is True
+
+
 class TestResolvePermissionsDetailed:
     """Tests for resolve_permissions_detailed()."""
 
@@ -232,7 +255,9 @@ class TestResolvePermissionsDetailed:
         from models import FolderPermission, GroupMembership, db
 
         db.session.add(GroupMembership(group_id=group_with_perms.id, user_id=regular_user.id))
-        db.session.add(FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="deny", can_write="deny"))
+        db.session.add(
+            FolderPermission(user_id=regular_user.id, folder_path="/shared", can_read="deny", can_write="deny")
+        )
         db.session.commit()
 
         result = resolve_permissions_detailed(regular_user)
@@ -258,10 +283,16 @@ class TestDomainAPI:
         h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
 
         # Create
-        resp = client.post("/api/v1/domains", headers=h, data=json.dumps({
-            "domain": "example.com",
-            "permissions": [{"path": "/shared", "read": True, "write": False}],
-        }))
+        resp = client.post(
+            "/api/v1/domains",
+            headers=h,
+            data=json.dumps(
+                {
+                    "domain": "example.com",
+                    "permissions": [{"path": "/shared", "read": True, "write": False}],
+                }
+            ),
+        )
         assert resp.status_code == 201
         domain_id = resp.get_json()["domain"]["id"]
 
@@ -276,10 +307,16 @@ class TestDomainAPI:
         assert resp.get_json()["domain"]["domain"] == "example.com"
 
         # Update
-        resp = client.put(f"/api/v1/domains/{domain_id}", headers=h, data=json.dumps({
-            "domain": "newexample.com",
-            "permissions": [{"path": "/shared", "read": True, "write": True}],
-        }))
+        resp = client.put(
+            f"/api/v1/domains/{domain_id}",
+            headers=h,
+            data=json.dumps(
+                {
+                    "domain": "newexample.com",
+                    "permissions": [{"path": "/shared", "read": True, "write": True}],
+                }
+            ),
+        )
         assert resp.status_code == 200
         assert resp.get_json()["domain"]["domain"] == "newexample.com"
 
@@ -307,10 +344,16 @@ class TestGroupAPI:
         h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
 
         # Create
-        resp = client.post("/api/v1/groups", headers=h, data=json.dumps({
-            "name": "Engineers",
-            "description": "Engineering team",
-        }))
+        resp = client.post(
+            "/api/v1/groups",
+            headers=h,
+            data=json.dumps(
+                {
+                    "name": "Engineers",
+                    "description": "Engineering team",
+                }
+            ),
+        )
         assert resp.status_code == 201
         group_id = resp.get_json()["group"]["id"]
 
@@ -324,23 +367,41 @@ class TestGroupAPI:
         assert resp.get_json()["group"]["name"] == "Engineers"
 
         # Update permissions
-        resp = client.put(f"/api/v1/groups/{group_id}/permissions", headers=h, data=json.dumps({
-            "permissions": [{"path": "/shared", "read": True, "write": True}],
-        }))
+        resp = client.put(
+            f"/api/v1/groups/{group_id}/permissions",
+            headers=h,
+            data=json.dumps(
+                {
+                    "permissions": [{"path": "/shared", "read": True, "write": True}],
+                }
+            ),
+        )
         assert resp.status_code == 200
         assert len(resp.get_json()["permissions"]) == 1
 
         # Update members
-        resp = client.put(f"/api/v1/groups/{group_id}/members", headers=h, data=json.dumps({
-            "userIds": [regular_user.id],
-        }))
+        resp = client.put(
+            f"/api/v1/groups/{group_id}/members",
+            headers=h,
+            data=json.dumps(
+                {
+                    "userIds": [regular_user.id],
+                }
+            ),
+        )
         assert resp.status_code == 200
         assert len(resp.get_json()["group"]["members"]) == 1
 
         # Update metadata
-        resp = client.put(f"/api/v1/groups/{group_id}", headers=h, data=json.dumps({
-            "name": "Eng",
-        }))
+        resp = client.put(
+            f"/api/v1/groups/{group_id}",
+            headers=h,
+            data=json.dumps(
+                {
+                    "name": "Eng",
+                }
+            ),
+        )
         assert resp.status_code == 200
         assert resp.get_json()["group"]["name"] == "Eng"
 
@@ -383,9 +444,15 @@ class TestUserGroupAssignment:
 
     def test_assign_and_verify(self, client, admin_token, regular_user, group_with_perms):
         h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
-        resp = client.put(f"/api/v1/users/{regular_user.id}/groups", headers=h, data=json.dumps({
-            "groupIds": [group_with_perms.id],
-        }))
+        resp = client.put(
+            f"/api/v1/users/{regular_user.id}/groups",
+            headers=h,
+            data=json.dumps(
+                {
+                    "groupIds": [group_with_perms.id],
+                }
+            ),
+        )
         assert resp.status_code == 200
         user_data = resp.get_json()["user"]
         assert len(user_data["groups"]) == 1
