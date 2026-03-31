@@ -7,7 +7,7 @@ Generates server certificate and private key for HTTPS.
 import ipaddress
 import os
 import socket
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -66,8 +66,8 @@ def generate_self_signed_cert(
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=validity_days))
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=validity_days))
         .add_extension(
             x509.SubjectAlternativeName(
                 [
@@ -166,8 +166,8 @@ def generate_client_cert(ca_cert_path, ca_key_path, user_email, validity_days=36
         .issuer_name(ca_cert.subject)
         .public_key(client_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=validity_days))
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=validity_days))
         .add_extension(
             x509.SubjectAlternativeName([x509.RFC822Name(user_email)]),
             critical=False,

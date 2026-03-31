@@ -1,11 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { api, SystemSettings, FileItem as ApiFileItem, FolderPermission as ApiFolderPermission } from '../../services/api';
+import {
+  api,
+  SystemSettings,
+  FileItem as ApiFileItem,
+  FolderPermission as ApiFolderPermission,
+  DomainConfig as ApiDomainConfig,
+  GroupSummary as ApiGroupSummary,
+} from '../../services/api';
 import { useAuth } from './AuthContext';
 
 export type AuthMethod = 'email' | 'email+password' | 'username+password';
 
 // Re-export API types for backward compatibility
 export type FolderPermission = ApiFolderPermission;
+export type DomainConfig = ApiDomainConfig;
+export type GroupSummary = ApiGroupSummary;
 
 export interface User {
   id: number;
@@ -17,6 +26,7 @@ export interface User {
   role?: 'admin' | 'user';
   last_login?: string | null;
   isApproved?: boolean;
+  groups?: { id: number; name: string }[];
 }
 
 export type SystemSettingsType = SystemSettings;
@@ -37,7 +47,15 @@ interface DataContextType {
   refreshUsers: () => Promise<void>;
   
   // User permissions
-  updateUserPermissions: (userId: number, permissions: Array<{ path: string; read: boolean; write: boolean }>) => Promise<void>;
+  updateUserPermissions: (userId: number, permissions: Array<{ path: string; read: import('../../services/api').PermissionState; write: import('../../services/api').PermissionState }>) => Promise<void>;
+
+  // Domains
+  domains: DomainConfig[];
+  refreshDomains: () => Promise<void>;
+
+  // Groups
+  groups: GroupSummary[];
+  refreshGroups: () => Promise<void>;
   
   // File system
   files: FileItem[];
@@ -53,9 +71,11 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isGuest } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [settings, setSettings] = useState<SystemSettingsType | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [domains, setDomains] = useState<DomainConfig[]>([]);
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState('/');
   const currentPathRef = useRef(currentPath);
@@ -95,10 +115,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
         last_login: u.last_login,
         isApproved: u.isApproved,
         folderPermissions: u.folderPermissions || [],
+        groups: u.groups || [],
       }));
       setUsers(formattedUsers);
     } catch (err) {
       console.error('Failed to refresh users:', err);
+      throw err;
+    }
+  }, []);
+
+  const refreshDomains = useCallback(async () => {
+    try {
+      const { domains: domainsData } = await api.listDomains();
+      setDomains(domainsData);
+    } catch (err) {
+      console.error('Failed to refresh domains:', err);
+      throw err;
+    }
+  }, []);
+
+  const refreshGroups = useCallback(async () => {
+    try {
+      const { groups: groupsData } = await api.listGroups();
+      setGroups(groupsData);
+    } catch (err) {
+      console.error('Failed to refresh groups:', err);
       throw err;
     }
   }, []);
@@ -137,7 +178,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUserPermissions = async (userId: number, permissions: Array<{ path: string; read: boolean; write: boolean }>) => {
+  const updateUserPermissions = async (userId: number, permissions: Array<{ path: string; read: import('../../services/api').PermissionState; write: import('../../services/api').PermissionState }>) => {
     try {
       await api.updateUserPermissions(userId, permissions);
       // Refresh users to get updated permissions
@@ -196,21 +237,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
               last_login: u.last_login,
               isApproved: u.isApproved,
               folderPermissions: u.folderPermissions || [],
+              groups: u.groups || [],
             }));
             setUsers(formattedUsers);
           } catch (err) {
             console.error('Failed to load users:', err);
           }
 
+          // Load domains and groups (admin only, fails silently).
+          try {
+            const { domains: domainsData } = await api.listDomains();
+            setDomains(domainsData);
+          } catch (err) {
+            console.error('Failed to load domains:', err);
+          }
+          try {
+            const { groups: groupsData } = await api.listGroups();
+            setGroups(groupsData);
+          } catch (err) {
+            console.error('Failed to load groups:', err);
+          }
+
           // Load files for root directory.
           await refreshFiles('/');
-        } else if (isGuest) {
-          // Guests can browse unprotected files (no auth token needed).
-          setUsers([]);
-          await refreshFiles('/');
         } else {
-          // Clear protected data when logged out.
+          // Clear data when logged out.
           setUsers([]);
+          setDomains([]);
+          setGroups([]);
           setFiles([]);
         }
       } catch (err) {
@@ -223,7 +277,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     loadInitialData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isGuest]);
+  }, [isAuthenticated]);
 
   return (
     <DataContext.Provider
@@ -237,6 +291,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         deleteUser,
         refreshUsers,
         updateUserPermissions,
+        domains,
+        refreshDomains,
+        groups,
+        refreshGroups,
         files,
         currentPath,
         setCurrentPath,

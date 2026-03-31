@@ -68,8 +68,8 @@ class TestFolderPermissionModel:
         perm = FolderPermission(
             user_id=regular_user.id,
             folder_path="/docs",
-            can_read=True,
-            can_write=False,
+            can_read="allow",
+            can_write="deny",
         )
         db.session.add(perm)
         db.session.commit()
@@ -77,8 +77,8 @@ class TestFolderPermissionModel:
         d = perm.to_dict()
         assert d["userId"] == regular_user.id
         assert d["path"] == "/docs"
-        assert d["read"] is True
-        assert d["write"] is False
+        assert d["read"] == "allow"
+        assert d["write"] == "deny"
 
     def test_folder_permission_repr(self, app, regular_user):
         from models import FolderPermission, db
@@ -86,8 +86,8 @@ class TestFolderPermissionModel:
         perm = FolderPermission(
             user_id=regular_user.id,
             folder_path="/photos",
-            can_read=True,
-            can_write=True,
+            can_read="allow",
+            can_write="allow",
         )
         db.session.add(perm)
         db.session.commit()
@@ -101,8 +101,8 @@ class TestFolderPermissionModel:
         perm = FolderPermission(
             user_id=regular_user.id,
             folder_path="/videos",
-            can_read=True,
-            can_write=False,
+            can_read="allow",
+            can_write="deny",
         )
         db.session.add(perm)
         db.session.commit()
