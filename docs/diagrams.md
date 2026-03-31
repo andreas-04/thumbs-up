@@ -25,8 +25,9 @@ graph TB
         subgraph BackendContainer["Backend Container (Flask)"]
             Flask["Flask API Server<br/>Port 8443"]
             Auth["JWT Auth Module<br/>core/auth.py"]
+            PermResolver["Permission Resolver<br/>core/permissions.py"]
             FileOps["File Operations"]
-            UserMgmt["User Management"]
+            UserMgmt["User & Group Management"]
             CertGen["Certificate Generator<br/>utils/generate_certs.py"]
             EmailSvc["Email Service<br/>utils/email_sender.py"]
         end
@@ -54,6 +55,7 @@ graph TB
     Nginx --- Certs
 
     Flask --- Auth
+    Flask --- PermResolver
     Flask --- FileOps
     Flask --- UserMgmt
     Flask --- CertGen
@@ -61,6 +63,7 @@ graph TB
 
     Auth -->|"Query/Update"| DB
     UserMgmt -->|"CRUD"| DB
+    PermResolver -->|"Resolve tiers"| DB
     FileOps -->|"Read/Write"| FileStore
     CertGen -->|"Store/Load"| Certs
     EmailSvc -->|"SMTP"| SMTP
@@ -104,7 +107,7 @@ sequenceDiagram
     end
 
     Note over U,DB: Authenticated Request
-    U->>N: GET /api/v1/files<br/>Authorization: Bearer <token>
+    U->>N: GET /api/v1/files<br/>Authorization: Bearer token
     N->>F: Forward + SSL headers
     F->>A: get_token_from_request()
     A->>A: jwt.decode(token, secret, HS256)
@@ -124,7 +127,7 @@ sequenceDiagram
     end
 
     Note over U,DB: Token Refresh
-    U->>N: POST /api/v1/auth/refresh<br/>Authorization: Bearer <token>
+    U->>N: POST /api/v1/auth/refresh<br/>Authorization: Bearer token
     N->>F: Forward request
     F->>A: Validate existing token
     A-->>F: Valid
@@ -138,44 +141,48 @@ sequenceDiagram
 
 ## 3. Role-Based Access Control (RBAC)
 
-Diagram showing the role hierarchy, permissions, and how access control is enforced across the system.
+Diagram showing the role hierarchy, the three-tier permission system, and how access control is enforced.
 
 ```mermaid
 graph TB
     subgraph Roles["User Roles"]
-        Admin["🔑 Admin<br/>role = 'admin'<br/>2-hour session"]
+        Admin["🔑 Admin<br/>role = 'admin'<br/>2-hour session<br/>Bypasses all permission checks"]
         ApprovedUser["👤 Approved User<br/>role = 'user'<br/>is_approved = true<br/>24-hour session"]
         PendingUser["⏳ Pending User<br/>role = 'user'<br/>is_approved = false"]
-        Guest["👥 Guest<br/>Legacy token-based<br/>24-hour session"]
     end
 
-    subgraph Permissions["Permission Capabilities"]
-        SysMgmt["System Management<br/>• Modify settings<br/>• View dashboard stats"]
-        UserAdmin["User Administration<br/>• Create/update/delete users<br/>• Manage folder permissions<br/>• Generate certificates"]
-        ProtectedFiles["Protected File Access<br/>• Browse protected/<br/>• Upload files<br/>• Delete files"]
-        UnprotectedFiles["Unprotected File Access<br/>• Browse unprotected/<br/>• Read-only or read-write"]
-        AuthOnly["Authentication Only<br/>• Login/logout<br/>• Change password"]
+    subgraph PermTiers["Three-Tier Permission Resolution (core/permissions.py)"]
+        Tier1["Tier 1: Domain Defaults<br/>DomainConfig matched by email domain<br/>Base read/write per folder path"]
+        Tier2["Tier 2: Group Permissions<br/>OR across all user groups<br/>Overrides domain at same path"]
+        Tier3["Tier 3: User Overrides<br/>Tri-state: allow / deny / None<br/>allow and deny override lower tiers<br/>None defers to group or domain"]
+    end
+
+    subgraph Capabilities["Permission Capabilities"]
+        SysMgmt["System Management<br/>• Settings, dashboard stats<br/>• Domain config, group CRUD"]
+        UserAdmin["User Administration<br/>• CRUD users and groups<br/>• Manage folder permissions<br/>• Generate certificates"]
+        ProtectedFiles["Protected File Access<br/>• Browse protected/<br/>• Upload / delete files"]
+        AuthOnly["Authentication Only<br/>• Login / logout<br/>• Change password"]
     end
 
     subgraph Enforcement["Enforcement Points"]
         JWTCheck["JWT Token Validation<br/>@auth.require_auth()"]
         AdminCheck["Admin Role Check<br/>@auth.require_admin()"]
         mTLSCheck["mTLS Certificate Check<br/>X-SSL-Client-Verify"]
-        ACLCheck["Folder ACL Check<br/>user_has_access()"]
+        ACLCheck["Layered ACL Check<br/>check_access() via<br/>resolve_permissions()"]
         ApprovalCheck["Approval Check<br/>is_approved flag"]
     end
 
     Admin -->|"Full Access"| SysMgmt
     Admin -->|"Full Access"| UserAdmin
     Admin -->|"No mTLS needed"| ProtectedFiles
-    Admin -->|"Full Access"| UnprotectedFiles
 
-    ApprovedUser -->|"mTLS Required"| ProtectedFiles
-    ApprovedUser -->|"ACL Enforced"| UnprotectedFiles
+    ApprovedUser -->|"mTLS + ACL"| ProtectedFiles
 
     PendingUser --> AuthOnly
 
-    Guest --> UnprotectedFiles
+    Tier1 -->|"Overridden by"| Tier2
+    Tier2 -->|"Overridden by"| Tier3
+    Tier3 -->|"Produces"| ACLCheck
 
     SysMgmt -.->|"Requires"| AdminCheck
     UserAdmin -.->|"Requires"| AdminCheck
@@ -183,12 +190,65 @@ graph TB
     ProtectedFiles -.->|"Non-admin requires"| mTLSCheck
     ProtectedFiles -.->|"Requires"| ACLCheck
     ProtectedFiles -.->|"Requires"| ApprovalCheck
-    UnprotectedFiles -.->|"Optional"| JWTCheck
 ```
 
 ---
 
-## 4. Certificate Lifecycle & mTLS Flow
+## 4. Layered Permission Resolution
+
+How the three-tier permission resolver (`core/permissions.py`) merges domain, group, and user-level permissions to produce an effective access decision.
+
+```mermaid
+flowchart TD
+    Start(["resolve_permissions(user)"])
+
+    subgraph T1["Tier 1 — Domain Defaults"]
+        ExtractDomain["Extract email domain<br/>e.g. user@acme.com → acme.com"]
+        LookupDomain["Query DomainConfig<br/>by domain"]
+        HasDomain{DomainConfig<br/>found?}
+        LoadDomainPerms["Load DomainPermission rows<br/>→ base {path: can_read, can_write}"]
+        NoDomain["No domain defaults<br/>effective = empty"]
+    end
+
+    subgraph T2["Tier 2 — Group Permissions"]
+        LoadGroups["Load user.groups<br/>via GroupMembership"]
+        HasGroups{User in<br/>any groups?}
+        MergeGroups["For each path, OR flags<br/>across all groups<br/>(most permissive wins)"]
+        ApplyGroups["Group results override<br/>domain at same path"]
+        NoGroups["Skip group tier"]
+    end
+
+    subgraph T3["Tier 3 — User Overrides"]
+        LoadUserPerms["Load FolderPermission rows<br/>for user (tri-state)"]
+        HasUserPerms{User overrides<br/>exist?}
+        ApplyTriState["For each path:<br/>• 'allow' → True<br/>• 'deny' → False<br/>• None → keep group/domain value"]
+        NoUserPerms["Skip user tier"]
+    end
+
+    EffectiveMap(["Return effective map<br/>{path: {can_read, can_write, source}}"])
+
+    Start --> ExtractDomain --> LookupDomain --> HasDomain
+    HasDomain -->|Yes| LoadDomainPerms
+    HasDomain -->|No| NoDomain
+    LoadDomainPerms --> LoadGroups
+    NoDomain --> LoadGroups
+
+    LoadGroups --> HasGroups
+    HasGroups -->|Yes| MergeGroups --> ApplyGroups
+    HasGroups -->|No| NoGroups
+    ApplyGroups --> LoadUserPerms
+    NoGroups --> LoadUserPerms
+
+    LoadUserPerms --> HasUserPerms
+    HasUserPerms -->|Yes| ApplyTriState
+    HasUserPerms -->|No| NoUserPerms
+    ApplyTriState --> EffectiveMap
+    NoUserPerms --> EffectiveMap
+```
+
+---
+
+## 5. Certificate Lifecycle & mTLS Flow
 
 End-to-end flow of certificate generation, distribution, and mutual TLS authentication.
 
@@ -244,9 +304,9 @@ sequenceDiagram
 
 ---
 
-## 5. File Access Control Flow
+## 6. File Access Control Flow
 
-Decision flow showing how file access requests are evaluated based on user role, approval status, mTLS, and folder ACLs.
+Decision flow showing how file access requests are evaluated based on user role, approval status, mTLS, and the layered permission resolver.
 
 ```mermaid
 flowchart TD
@@ -268,27 +328,27 @@ flowchart TD
     CheckCN{Cert CN ==<br/>User email?}
     DenyMismatch["403 Certificate<br/>Mismatch"]
 
-    %% ACL check
-    CheckACL["Load FolderPermissions<br/>for user"]
-    HasPerms{Has ACL<br/>entries?}
-    FullDefault["Default: Full access<br/>(no restrictions defined)"]
-    FindMatch["Find longest matching<br/>folder_path prefix"]
+    %% Layered ACL check
+    ResolvePerms["Resolve effective permissions<br/>Domain → Group → User tiers<br/>(core/permissions.py)"]
+    HasPerms{Any effective<br/>permissions?}
+    DenyNoPerms["403 Access Denied<br/>No permissions configured"]
+    FindMatch["Longest-prefix match<br/>on folder_path"]
     HasMatch{Match<br/>found?}
     DenyACL["403 Access Denied<br/>No matching permission"]
     CheckReadWrite{Requires<br/>write?}
-    CheckWritePerm{can_write<br/>= true?}
-    CheckReadPerm{can_read<br/>= true?}
+    CheckWritePerm{effective<br/>can_write?}
+    CheckReadPerm{effective<br/>can_read?}
     DenyWrite["403 Write Access<br/>Denied"]
     DenyRead["403 Read Access<br/>Denied"]
     GrantAccess(["✅ Access Granted<br/>Return files"])
 
-    %% Guest path
-    GuestAccess["Unprotected files only<br/>No mTLS needed"]
+    %% Unauthenticated path
+    PublicAccess["Unprotected files only"]
 
     Start --> ExtractToken --> HasToken
-    HasToken -->|No| GuestAccess
+    HasToken -->|No| PublicAccess
     HasToken -->|Yes| ValidToken
-    ValidToken -->|No| GuestAccess
+    ValidToken -->|No| PublicAccess
     ValidToken -->|Yes| GetUser --> CheckRole
 
     CheckRole -->|admin| AdminAccess
@@ -301,10 +361,10 @@ flowchart TD
     CheckmTLS -->|Yes| CheckCN
 
     CheckCN -->|No| DenyMismatch
-    CheckCN -->|Yes| CheckACL
+    CheckCN -->|Yes| ResolvePerms
 
-    CheckACL --> HasPerms
-    HasPerms -->|No| FullDefault
+    ResolvePerms --> HasPerms
+    HasPerms -->|No| DenyNoPerms
     HasPerms -->|Yes| FindMatch --> HasMatch
     HasMatch -->|No| DenyACL
     HasMatch -->|Yes| CheckReadWrite
@@ -318,14 +378,13 @@ flowchart TD
     CheckReadPerm -->|Yes| GrantAccess
     CheckReadPerm -->|No| DenyRead
 
-    FullDefault --> GrantAccess
     AdminAccess --> GrantAccess
-    GuestAccess --> GrantAccess
+    PublicAccess --> GrantAccess
 ```
 
 ---
 
-## 6. User Onboarding & Approval Workflow
+## 7. User Onboarding & Approval Workflow
 
 Flow showing the complete user lifecycle from signup through approval to first login.
 
@@ -359,8 +418,7 @@ sequenceDiagram
         API->>DB: Create User<br/>is_approved = true<br/>is_default_pin = false
         API-->>FE: 200 {token, user}
     else New email, domain not in allowlist
-        API->>DB: Create User<br/>is_approved = false<br/>is_default_pin = false
-        API-->>FE: 200 {token, user, requiresApproval: true}
+        API-->>FE: 403 DOMAIN_NOT_ALLOWED
     end
 
     Note over User,Admin: Path B — Admin-Created User
@@ -398,9 +456,9 @@ sequenceDiagram
 
 ---
 
-## 7. Database Entity Relationship Diagram
+## 8. Database Entity Relationship Diagram
 
-Data model showing the relationships between Users, FolderPermissions, and SystemSettings.
+Data model showing the relationships between Users, Groups, DomainConfigs, FolderPermissions, and SystemSettings.
 
 ```mermaid
 erDiagram
@@ -415,23 +473,65 @@ erDiagram
         datetime last_login "Nullable"
     }
 
+    GROUPS {
+        int id PK
+        string name UK "Unique, not null"
+        string description "Nullable"
+        datetime created_at "Default: utcnow"
+        datetime updated_at "Auto-updated"
+    }
+
+    GROUP_MEMBERSHIPS {
+        int id PK
+        int group_id FK "References groups.id"
+        int user_id FK "References users.id"
+        datetime created_at "Default: utcnow"
+    }
+
+    GROUP_PERMISSIONS {
+        int id PK
+        int group_id FK "References groups.id"
+        string folder_path "Max 1024 chars"
+        boolean can_read "Default: false"
+        boolean can_write "Default: false"
+        datetime created_at "Default: utcnow"
+    }
+
     FOLDER_PERMISSIONS {
         int id PK
         int user_id FK "References users.id"
         string folder_path "Max 1024 chars"
-        boolean can_read "Default: true"
+        string can_read "Tri-state: allow, deny, or null"
+        string can_write "Tri-state: allow, deny, or null"
+        datetime created_at "Default: utcnow"
+    }
+
+    DOMAIN_CONFIGS {
+        int id PK
+        string domain UK "Unique, not null"
+        datetime created_at "Default: utcnow"
+        datetime updated_at "Auto-updated"
+    }
+
+    DOMAIN_PERMISSIONS {
+        int id PK
+        int domain_id FK "References domain_configs.id"
+        string folder_path "Max 1024 chars"
+        boolean can_read "Default: false"
         boolean can_write "Default: false"
         datetime created_at "Default: utcnow"
     }
 
     SYSTEM_SETTINGS {
         int id PK
-        string server_name "Display name"
+        string mode "open | protected"
+        string auth_method "email, email+password, username+password"
+        boolean tls_enabled "Default: true"
+        int https_port "Default: 8443"
+        string device_name "Display name"
         string allowed_domains "Comma-separated domain list"
-        boolean enable_uploads "Default: true"
-        boolean enable_delete "Default: false"
-        int token_expiry_hours "Default: 24"
-        string smtp_server "Email server host"
+        boolean smtp_enabled "Default: false"
+        string smtp_host "Email server host"
         int smtp_port "Default: 587"
         string smtp_username "Email account"
         string smtp_password "Email password"
@@ -439,11 +539,15 @@ erDiagram
         boolean smtp_use_tls "Default: true"
     }
 
-    USERS ||--o{ FOLDER_PERMISSIONS : "has"
+    USERS ||--o{ GROUP_MEMBERSHIPS : "belongs to"
+    GROUPS ||--o{ GROUP_MEMBERSHIPS : "has"
+    GROUPS ||--o{ GROUP_PERMISSIONS : "has"
+    USERS ||--o{ FOLDER_PERMISSIONS : "has overrides"
+    DOMAIN_CONFIGS ||--o{ DOMAIN_PERMISSIONS : "has"
 ```
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 2.0*
 *Last Updated: March 2026*
 *Format: Mermaid (rendered natively by GitHub)*
