@@ -35,10 +35,7 @@ graph TB
         subgraph Storage["Persistent Volumes"]
             DB[("SQLite Database<br/>thumbsup-db")]
             Certs["TLS Certificates<br/>thumbsup-certs"]
-            subgraph FileStore["File Storage (thumbsup-storage)"]
-                Protected["protected/"]
-                Unprotected["unprotected/"]
-            end
+            FileStore["File Storage<br/>(thumbsup-storage/files/)"]
         end
     end
 
@@ -160,7 +157,7 @@ graph TB
     subgraph Capabilities["Permission Capabilities"]
         SysMgmt["System Management<br/>• Settings, dashboard stats<br/>• Domain config, group CRUD"]
         UserAdmin["User Administration<br/>• CRUD users and groups<br/>• Manage folder permissions<br/>• Generate certificates"]
-        ProtectedFiles["Protected File Access<br/>• Browse protected/<br/>• Upload / delete files"]
+        FileAccess["File Access<br/>• Browse / download files<br/>• Upload / delete files"]
         AuthOnly["Authentication Only<br/>• Login / logout<br/>• Change password"]
     end
 
@@ -174,9 +171,9 @@ graph TB
 
     Admin -->|"Full Access"| SysMgmt
     Admin -->|"Full Access"| UserAdmin
-    Admin -->|"No mTLS needed"| ProtectedFiles
+    Admin -->|"No mTLS needed"| FileAccess
 
-    ApprovedUser -->|"mTLS + ACL"| ProtectedFiles
+    ApprovedUser -->|"mTLS + ACL"| FileAccess
 
     PendingUser --> AuthOnly
 
@@ -186,10 +183,10 @@ graph TB
 
     SysMgmt -.->|"Requires"| AdminCheck
     UserAdmin -.->|"Requires"| AdminCheck
-    ProtectedFiles -.->|"Requires"| JWTCheck
-    ProtectedFiles -.->|"Non-admin requires"| mTLSCheck
-    ProtectedFiles -.->|"Requires"| ACLCheck
-    ProtectedFiles -.->|"Requires"| ApprovalCheck
+    FileAccess -.->|"Requires"| JWTCheck
+    FileAccess -.->|"Non-admin requires"| mTLSCheck
+    FileAccess -.->|"Requires"| ACLCheck
+    FileAccess -.->|"Requires"| ApprovalCheck
 ```
 
 ---
@@ -306,23 +303,20 @@ sequenceDiagram
 
 ## 6. File Access Control Flow
 
-Decision flow showing how file access requests are evaluated based on user role, approval status, mTLS, and the layered permission resolver.
+Decision flow showing how file access requests are evaluated. All file endpoints require authentication; access is controlled by role, mTLS, and the layered permission resolver.
 
 ```mermaid
 flowchart TD
-    Start(["Incoming File Request<br/>GET /api/v1/files"])
-    ExtractToken["Extract JWT from<br/>Authorization header /<br/>Cookie / URL param"]
-    HasToken{Token<br/>present?}
-    ValidToken{Token<br/>valid?}
+    Start(["Incoming File Request<br/>(e.g. GET /api/v1/files)"])
+    AuthCheck["@auth.require_auth()<br/>Extract & validate JWT"]
+    AuthFail["401 Unauthorized"]
     GetUser["Load User from DB"]
     CheckRole{User role?}
 
     %% Admin path
-    AdminAccess["Full access granted<br/>Protected + Unprotected<br/>No mTLS needed"]
+    AdminAccess["Full access granted<br/>All files, no mTLS needed"]
 
     %% User path
-    CheckApproved{is_approved<br/>= true?}
-    DenyUnapproved["403 Forbidden<br/>Account not approved"]
     CheckmTLS{mTLS verified?<br/>X-SSL-Client-Verify<br/>== SUCCESS}
     DenyCert["403 Client Certificate<br/>Required"]
     CheckCN{Cert CN ==<br/>User email?}
@@ -342,20 +336,12 @@ flowchart TD
     DenyRead["403 Read Access<br/>Denied"]
     GrantAccess(["✅ Access Granted<br/>Return files"])
 
-    %% Unauthenticated path
-    PublicAccess["Unprotected files only"]
-
-    Start --> ExtractToken --> HasToken
-    HasToken -->|No| PublicAccess
-    HasToken -->|Yes| ValidToken
-    ValidToken -->|No| PublicAccess
-    ValidToken -->|Yes| GetUser --> CheckRole
+    Start --> AuthCheck
+    AuthCheck -->|Invalid / missing| AuthFail
+    AuthCheck -->|Valid| GetUser --> CheckRole
 
     CheckRole -->|admin| AdminAccess
-    CheckRole -->|user| CheckApproved
-
-    CheckApproved -->|No| DenyUnapproved
-    CheckApproved -->|Yes| CheckmTLS
+    CheckRole -->|user| CheckmTLS
 
     CheckmTLS -->|No| DenyCert
     CheckmTLS -->|Yes| CheckCN
@@ -379,7 +365,6 @@ flowchart TD
     CheckReadPerm -->|No| DenyRead
 
     AdminAccess --> GrantAccess
-    PublicAccess --> GrantAccess
 ```
 
 ---
@@ -468,7 +453,7 @@ erDiagram
         string password_hash "bcrypt hashed"
         string role "admin | user"
         boolean is_default_pin "First-time login flag"
-        boolean is_approved "Approved for protected files"
+        boolean is_approved "Approved for file access"
         datetime created_at "Default: utcnow"
         datetime last_login "Nullable"
     }
@@ -524,7 +509,7 @@ erDiagram
 
     SYSTEM_SETTINGS {
         int id PK
-        string mode "open | protected"
+        string mode "Legacy, unused"
         string auth_method "email, email+password, username+password"
         boolean tls_enabled "Default: true"
         int https_port "Default: 8443"
