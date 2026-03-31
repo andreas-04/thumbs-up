@@ -1090,7 +1090,6 @@ def user_has_access(user, folder_path, require_write=False):
     group permissions, and user-level overrides.  If no permissions exist at
     any tier the user gets full default access (backward compatible).
     """
-    from core.permissions import check_access
 
     return check_access(user, folder_path, require_write=require_write)
 
@@ -1157,7 +1156,7 @@ def api_list_files():
 
         # Non-admin: filter to only items the user can see
         if user.role != "admin":
-            from core.permissions import visible_paths, is_item_visible
+            from core.permissions import is_item_visible, visible_paths
 
             granted = visible_paths(user)
             if not granted:

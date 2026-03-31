@@ -180,8 +180,8 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
         )
     else:
         body_text += (
-            f"\nYour temporary login password is: changeme\n"
-            f"You will be asked to set a new password on first login.\n"
+            "\nYour temporary login password is: changeme\n"
+            "You will be asked to set a new password on first login.\n"
         )
         body_html += (
             "<p><strong>Temporary login password:</strong> <code>changeme</code></p>"

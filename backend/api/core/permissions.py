@@ -17,7 +17,7 @@ Permissions are **additive** — by default users have **no access**.  Each tier
 can only grant additional access.  Admin users bypass all checks.
 """
 
-from models import DomainConfig, DomainPermission, FolderPermission, GroupPermission
+from models import DomainConfig, FolderPermission
 
 
 def _normalise_path(path):

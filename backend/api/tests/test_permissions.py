@@ -4,7 +4,6 @@ Tests for the layered permission resolver and new API endpoints.
 
 import json
 
-
 # ============================================================================
 # Permission resolver unit tests
 # ============================================================================
@@ -199,7 +198,7 @@ class TestCheckAccess:
 
     def test_user_none_defers_to_group(self, app, regular_user, group_with_perms):
         """User tri-state None defers to group permission instead of overriding."""
-        from core.permissions import check_access, resolve_permissions
+        from core.permissions import resolve_permissions
         from models import FolderPermission, GroupMembership, db
 
         # Group gives r/w on /shared
