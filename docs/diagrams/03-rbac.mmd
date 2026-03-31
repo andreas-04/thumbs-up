@@ -1,0 +1,46 @@
+graph TB
+    subgraph Roles["User Roles"]
+        Admin["🔑 Admin<br/>role = 'admin'<br/>2-hour session<br/>Bypasses all permission checks"]
+        ApprovedUser["👤 Approved User<br/>role = 'user'<br/>is_approved = true<br/>24-hour session"]
+        PendingUser["⏳ Pending User<br/>role = 'user'<br/>is_approved = false"]
+    end
+
+    subgraph PermTiers["Three-Tier Permission Resolution (core/permissions.py)"]
+        Tier1["Tier 1: Domain Defaults<br/>DomainConfig matched by email domain<br/>Base read/write per folder path"]
+        Tier2["Tier 2: Group Permissions<br/>OR across all user groups<br/>Overrides domain at same path"]
+        Tier3["Tier 3: User Overrides<br/>Tri-state: allow / deny / None<br/>allow and deny override lower tiers<br/>None defers to group or domain"]
+    end
+
+    subgraph Capabilities["Permission Capabilities"]
+        SysMgmt["System Management<br/>• Settings, dashboard stats<br/>• Domain config, group CRUD"]
+        UserAdmin["User Administration<br/>• CRUD users and groups<br/>• Manage folder permissions<br/>• Generate certificates"]
+        FileAccess["File Access<br/>• Browse / download files<br/>• Upload / delete files"]
+        AuthOnly["Authentication Only<br/>• Login / logout<br/>• Change password"]
+    end
+
+    subgraph Enforcement["Enforcement Points"]
+        JWTCheck["JWT Token Validation<br/>@auth.require_auth()"]
+        AdminCheck["Admin Role Check<br/>@auth.require_admin()"]
+        mTLSCheck["mTLS Certificate Check<br/>X-SSL-Client-Verify"]
+        ACLCheck["Layered ACL Check<br/>check_access() via<br/>resolve_permissions()"]
+        ApprovalCheck["Approval Check<br/>is_approved flag"]
+    end
+
+    Admin -->|"Full Access"| SysMgmt
+    Admin -->|"Full Access"| UserAdmin
+    Admin -->|"No mTLS needed"| FileAccess
+
+    ApprovedUser -->|"mTLS + ACL"| FileAccess
+
+    PendingUser --> AuthOnly
+
+    Tier1 -->|"Overridden by"| Tier2
+    Tier2 -->|"Overridden by"| Tier3
+    Tier3 -->|"Produces"| ACLCheck
+
+    SysMgmt -.->|"Requires"| AdminCheck
+    UserAdmin -.->|"Requires"| AdminCheck
+    FileAccess -.->|"Requires"| JWTCheck
+    FileAccess -.->|"Non-admin requires"| mTLSCheck
+    FileAccess -.->|"Requires"| ACLCheck
+    FileAccess -.->|"Requires"| ApprovalCheck

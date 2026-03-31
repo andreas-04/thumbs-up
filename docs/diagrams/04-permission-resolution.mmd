@@ -1,0 +1,45 @@
+flowchart TD
+    Start(["resolve_permissions(user)"])
+
+    subgraph T1["Tier 1 — Domain Defaults"]
+        ExtractDomain["Extract email domain<br/>e.g. user@acme.com → acme.com"]
+        LookupDomain["Query DomainConfig<br/>by domain"]
+        HasDomain{DomainConfig<br/>found?}
+        LoadDomainPerms["Load DomainPermission rows<br/>→ base {path: can_read, can_write}"]
+        NoDomain["No domain defaults<br/>effective = empty"]
+    end
+
+    subgraph T2["Tier 2 — Group Permissions"]
+        LoadGroups["Load user.groups<br/>via GroupMembership"]
+        HasGroups{User in<br/>any groups?}
+        MergeGroups["For each path, OR flags<br/>across all groups<br/>(most permissive wins)"]
+        ApplyGroups["Group results override<br/>domain at same path"]
+        NoGroups["Skip group tier"]
+    end
+
+    subgraph T3["Tier 3 — User Overrides"]
+        LoadUserPerms["Load FolderPermission rows<br/>for user (tri-state)"]
+        HasUserPerms{User overrides<br/>exist?}
+        ApplyTriState["For each path:<br/>• 'allow' → True<br/>• 'deny' → False<br/>• None → keep group/domain value"]
+        NoUserPerms["Skip user tier"]
+    end
+
+    EffectiveMap(["Return effective map<br/>{path: {can_read, can_write, source}}"])
+
+    Start --> ExtractDomain --> LookupDomain --> HasDomain
+    HasDomain -->|Yes| LoadDomainPerms
+    HasDomain -->|No| NoDomain
+    LoadDomainPerms --> LoadGroups
+    NoDomain --> LoadGroups
+
+    LoadGroups --> HasGroups
+    HasGroups -->|Yes| MergeGroups --> ApplyGroups
+    HasGroups -->|No| NoGroups
+    ApplyGroups --> LoadUserPerms
+    NoGroups --> LoadUserPerms
+
+    LoadUserPerms --> HasUserPerms
+    HasUserPerms -->|Yes| ApplyTriState
+    HasUserPerms -->|No| NoUserPerms
+    ApplyTriState --> EffectiveMap
+    NoUserPerms --> EffectiveMap

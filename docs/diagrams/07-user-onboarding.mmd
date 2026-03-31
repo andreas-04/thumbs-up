@@ -1,0 +1,63 @@
+sequenceDiagram
+    participant User as New User
+    participant FE as React Frontend
+    participant API as Flask API
+    participant DB as SQLite DB
+    participant CertGen as Cert Generator
+    participant Email as Email Service
+    participant Admin as Admin User
+
+    Note over User,Admin: Path A — Self-Service Signup
+    User->>FE: Navigate to /signup
+    FE->>API: GET /api/v1/settings
+    API-->>FE: {allowed_domains, ...}
+    User->>FE: Enter email + password
+    FE->>API: POST /api/v1/auth/signup<br/>{email, password}
+
+    API->>API: Validate email format
+    API->>API: Check domain against<br/>allowed_domains list
+    API->>DB: Check if email exists
+
+    alt Email exists & is_approved & is_default_pin
+        API->>DB: Update password_hash
+        API-->>FE: 200 {token, user, requiresPasswordChange: false}
+    else Email already claimed
+        API-->>FE: 403 EMAIL_EXISTS
+    else New email, domain approved
+        API->>DB: Create User<br/>is_approved = true<br/>is_default_pin = false
+        API-->>FE: 200 {token, user}
+    else New email, domain not in allowlist
+        API-->>FE: 403 DOMAIN_NOT_ALLOWED
+    end
+
+    Note over User,Admin: Path B — Admin-Created User
+    Admin->>FE: Navigate to User Management
+    Admin->>FE: Click "Add User"
+    FE->>API: POST /api/v1/users<br/>{email, password?, role}
+    API->>CertGen: generate_client_p12(email)
+    CertGen-->>API: {p12_bytes, password}
+    API->>DB: Create User<br/>is_approved = true<br/>is_default_pin = true<br/>password = p12_password
+    API->>Email: send_invite_email<br/>(email, p12 attachment, password)
+    Email-->>User: Email with .p12 cert<br/>+ temporary password
+    API-->>FE: 201 {user}
+
+    Note over User,Admin: Admin Approval (for unapproved signups)
+    Admin->>FE: View pending users
+    Admin->>FE: Approve user
+    FE->>API: PUT /api/v1/users/{id}<br/>{is_approved: true}
+    API->>CertGen: generate_client_p12(email)
+    CertGen-->>API: {p12_bytes, password}
+    API->>DB: Update is_approved = true
+    API->>Email: Send approval + cert email
+    Email-->>User: Approval email with .p12
+
+    Note over User,Admin: First Login (Admin-Created User)
+    User->>FE: Login with temp password
+    FE->>API: POST /api/v1/auth/login
+    API-->>FE: {token, requiresPasswordChange: true}
+    FE->>FE: Redirect to password change
+    User->>FE: Enter new password
+    FE->>API: POST /api/v1/auth/change-password<br/>{new_password} (is_default_pin bypass)
+    API->>DB: Update password_hash<br/>Set is_default_pin = false
+    API-->>FE: {token} (new session)
+    FE->>FE: Redirect to file browser

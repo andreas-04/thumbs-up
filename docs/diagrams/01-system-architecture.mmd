@@ -1,0 +1,56 @@
+graph TB
+    subgraph Clients["Client Layer"]
+        Browser["Web Browser"]
+        Mobile["Mobile Device"]
+    end
+
+    subgraph Docker["Docker Compose Environment"]
+        subgraph FrontendContainer["Frontend Container (nginx)"]
+            Nginx["Nginx Reverse Proxy<br/>Port 443 (HTTPS)"]
+            SPA["React SPA<br/>Static Assets"]
+            mTLS["mTLS Termination"]
+        end
+
+        subgraph BackendContainer["Backend Container (Flask)"]
+            Flask["Flask API Server<br/>Port 8443"]
+            Auth["JWT Auth Module<br/>core/auth.py"]
+            PermResolver["Permission Resolver<br/>core/permissions.py"]
+            FileOps["File Operations"]
+            UserMgmt["User & Group Management"]
+            CertGen["Certificate Generator<br/>utils/generate_certs.py"]
+            EmailSvc["Email Service<br/>utils/email_sender.py"]
+        end
+
+        subgraph Storage["Persistent Volumes"]
+            DB[("SQLite Database<br/>thumbsup-db")]
+            Certs["TLS Certificates<br/>thumbsup-certs"]
+            FileStore["File Storage<br/>(thumbsup-storage/files/)"]
+        end
+    end
+
+    subgraph External["External Services"]
+        SMTP["SMTP Server<br/>(Email Delivery)"]
+        mDNS["Avahi / mDNS<br/>Service Discovery"]
+    end
+
+    Browser -->|"HTTPS + mTLS"| Nginx
+    Mobile -->|"HTTPS + mTLS"| Nginx
+    Nginx --> SPA
+    Nginx -->|"Proxy /api/*<br/>+ SSL headers"| Flask
+    Nginx --- mTLS
+    Nginx --- Certs
+
+    Flask --- Auth
+    Flask --- PermResolver
+    Flask --- FileOps
+    Flask --- UserMgmt
+    Flask --- CertGen
+    Flask --- EmailSvc
+
+    Auth -->|"Query/Update"| DB
+    UserMgmt -->|"CRUD"| DB
+    PermResolver -->|"Resolve tiers"| DB
+    FileOps -->|"Read/Write"| FileStore
+    CertGen -->|"Store/Load"| Certs
+    EmailSvc -->|"SMTP"| SMTP
+    Flask -.->|"Advertise"| mDNS

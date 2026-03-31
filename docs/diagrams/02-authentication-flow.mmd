@@ -1,0 +1,58 @@
+sequenceDiagram
+    participant U as User/Browser
+    participant N as Nginx
+    participant F as Flask API
+    participant A as Auth Module
+    participant DB as SQLite DB
+
+    Note over U,DB: Login Flow
+    U->>N: POST /api/v1/auth/login<br/>{email, password}
+    N->>F: Forward request
+    F->>DB: Query User by email
+    DB-->>F: User record
+    F->>A: verify_password(input, hash)
+    A->>A: bcrypt.checkpw()
+    A-->>F: Valid/Invalid
+
+    alt Invalid Credentials
+        F-->>N: 401 INVALID_CREDENTIALS
+        N-->>U: 401 Unauthorized
+    else Valid Credentials
+        F->>A: generate_token(user)
+        A->>A: jwt.encode(payload, secret, HS256)<br/>payload: {user_id, email, role, exp, jti}
+        A-->>F: JWT Token
+        F->>DB: Update last_login timestamp
+        F-->>N: 200 {token, user}
+        N-->>U: Set auth_token in response
+        U->>U: Store token in localStorage
+    end
+
+    Note over U,DB: Authenticated Request
+    U->>N: GET /api/v1/files<br/>Authorization: Bearer token
+    N->>F: Forward + SSL headers
+    F->>A: get_token_from_request()
+    A->>A: jwt.decode(token, secret, HS256)
+    A->>A: Check expiry (exp claim)
+
+    alt Token Expired
+        A-->>F: Token expired
+        F-->>N: 401 TOKEN_EXPIRED
+        N-->>U: 401 Unauthorized
+    else Token Valid
+        A->>DB: Query User by user_id
+        DB-->>A: User record
+        A-->>F: request.user = {user_id, email, role}
+        F->>F: Process request
+        F-->>N: 200 Response data
+        N-->>U: Response
+    end
+
+    Note over U,DB: Token Refresh
+    U->>N: POST /api/v1/auth/refresh<br/>Authorization: Bearer token
+    N->>F: Forward request
+    F->>A: Validate existing token
+    A-->>F: Valid
+    F->>A: Generate new token (new jti, fresh exp)
+    A-->>F: New JWT Token
+    F-->>N: 200 {token}
+    N-->>U: New token

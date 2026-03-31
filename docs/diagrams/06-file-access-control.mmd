@@ -1,0 +1,59 @@
+flowchart TD
+    Start(["Incoming File Request<br/>(e.g. GET /api/v1/files)"])
+    AuthCheck["@auth.require_auth()<br/>Extract & validate JWT"]
+    AuthFail["401 Unauthorized"]
+    GetUser["Load User from DB"]
+    CheckRole{User role?}
+
+    %% Admin path
+    AdminAccess["Full access granted<br/>All files, no mTLS needed"]
+
+    %% User path
+    CheckmTLS{mTLS verified?<br/>X-SSL-Client-Verify<br/>== SUCCESS}
+    DenyCert["403 Client Certificate<br/>Required"]
+    CheckCN{Cert CN ==<br/>User email?}
+    DenyMismatch["403 Certificate<br/>Mismatch"]
+
+    %% Layered ACL check
+    ResolvePerms["Resolve effective permissions<br/>Domain → Group → User tiers<br/>(core/permissions.py)"]
+    HasPerms{Any effective<br/>permissions?}
+    DenyNoPerms["403 Access Denied<br/>No permissions configured"]
+    FindMatch["Longest-prefix match<br/>on folder_path"]
+    HasMatch{Match<br/>found?}
+    DenyACL["403 Access Denied<br/>No matching permission"]
+    CheckReadWrite{Requires<br/>write?}
+    CheckWritePerm{effective<br/>can_write?}
+    CheckReadPerm{effective<br/>can_read?}
+    DenyWrite["403 Write Access<br/>Denied"]
+    DenyRead["403 Read Access<br/>Denied"]
+    GrantAccess(["✅ Access Granted<br/>Return files"])
+
+    Start --> AuthCheck
+    AuthCheck -->|Invalid / missing| AuthFail
+    AuthCheck -->|Valid| GetUser --> CheckRole
+
+    CheckRole -->|admin| AdminAccess
+    CheckRole -->|user| CheckmTLS
+
+    CheckmTLS -->|No| DenyCert
+    CheckmTLS -->|Yes| CheckCN
+
+    CheckCN -->|No| DenyMismatch
+    CheckCN -->|Yes| ResolvePerms
+
+    ResolvePerms --> HasPerms
+    HasPerms -->|No| DenyNoPerms
+    HasPerms -->|Yes| FindMatch --> HasMatch
+    HasMatch -->|No| DenyACL
+    HasMatch -->|Yes| CheckReadWrite
+
+    CheckReadWrite -->|Yes| CheckWritePerm
+    CheckReadWrite -->|No| CheckReadPerm
+
+    CheckWritePerm -->|Yes| GrantAccess
+    CheckWritePerm -->|No| DenyWrite
+
+    CheckReadPerm -->|Yes| GrantAccess
+    CheckReadPerm -->|No| DenyRead
+
+    AdminAccess --> GrantAccess
