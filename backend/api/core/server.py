@@ -18,7 +18,16 @@ from werkzeug.utils import secure_filename
 
 # Local imports
 from core.auth import TokenAuth
-from models import User, db
+from core.permissions import check_access, resolve_permissions_detailed
+from models import (
+    DomainConfig,
+    DomainPermission,
+    Group,
+    GroupMembership,
+    GroupPermission,
+    User,
+    db,
+)
 from utils.email_sender import send_approval_email, send_invite_email
 from utils.generate_certs import generate_client_p12
 from utils.mdns_advertiser import MDNSAdvertiser
@@ -159,42 +168,26 @@ def _list_directory(base_path, path=""):
     return items
 
 
-def get_file_list(path="", include_protected=True):
+def get_file_list(path=""):
     """
-    Get a unified list of files from protected and unprotected subdirectories.
+    Get a list of files from the storage directory.
 
-    The storage directory is expected to contain two subdirectories:
-      - ``protected/``  – only visible to authenticated users
-      - ``unprotected/`` – visible to everyone (including guests)
-
-    Files from both directories are merged into a single flat view so that
-    callers never see the ``protected/`` or ``unprotected/`` prefix.
+    All files live under a single ``files/`` subdirectory inside STORAGE_PATH.
+    Access control is handled purely by the permission resolver – there is no
+    longer a protected/unprotected split.
 
     Args:
-        path: Relative path within the virtual merged view.
-        include_protected: If True, include files from the protected directory.
+        path: Relative path within the files directory.
 
     Returns:
         Sorted list of file/directory info dicts (folders first, then files).
     """
-    protected_base = os.path.join(CONFIG["STORAGE_PATH"], "protected")
-    unprotected_base = os.path.join(CONFIG["STORAGE_PATH"], "unprotected")
+    files_base = os.path.join(CONFIG["STORAGE_PATH"], "files")
 
-    # Ensure subdirectories exist
-    os.makedirs(protected_base, exist_ok=True)
-    os.makedirs(unprotected_base, exist_ok=True)
+    # Ensure directory exists
+    os.makedirs(files_base, exist_ok=True)
 
-    # Always include unprotected files
-    items_map: dict = {}
-    for item in _list_directory(unprotected_base, path):
-        items_map[item["name"]] = item
-
-    # Merge protected files (protected entries override unprotected if same name)
-    if include_protected:
-        for item in _list_directory(protected_base, path):
-            items_map[item["name"]] = item
-
-    items = list(items_map.values())
+    items = _list_directory(files_base, path)
 
     # Sort: directories first, then files alphabetically
     items.sort(key=lambda x: (x["type"] != "folder", x["name"].lower()))
@@ -205,21 +198,20 @@ def get_file_list(path="", include_protected=True):
 def resolve_file_path(rel_path):
     """Resolve a virtual path to the actual filesystem path.
 
-    Looks in ``protected/`` first, then ``unprotected/``.  Returns the first
-    match or ``None`` if neither directory contains the path.
+    Looks in the ``files/`` subdirectory of STORAGE_PATH.  Returns the path
+    if existing, or ``None``.
 
     Validates that the resolved path stays within the storage directory to
     prevent directory traversal attacks.
     """
     storage = Path(CONFIG["STORAGE_PATH"]).resolve()
-    for subdir in ("protected", "unprotected"):
-        base = (storage / subdir).resolve()
-        candidate = (base / rel_path).resolve()
-        # Guard against directory traversal (e.g. ../../etc/passwd)
-        if not str(candidate).startswith(str(base)):
-            return None
-        if candidate.exists():
-            return candidate
+    base = (storage / "files").resolve()
+    candidate = (base / rel_path).resolve()
+    # Guard against directory traversal (e.g. ../../etc/passwd)
+    if not str(candidate).startswith(str(base)):
+        return None
+    if candidate.exists():
+        return candidate
     return None
 
 
@@ -298,16 +290,21 @@ def api_signup():
             return jsonify({"token": token, "user": existing_user.to_dict()}), 200
         return jsonify({"error": "Email already registered", "code": "EMAIL_EXISTS"}), 409
 
-    # Check domain allowlist
+    # Check domain allowlist (SystemSettings legacy + DomainConfig)
     email_domain = email.rsplit("@", 1)[1].lower()
     settings = SystemSettings.query.first()
     allowed = [d.strip().lower() for d in (settings.allowed_domains or "").split(",") if d.strip()] if settings else []
 
-    if email_domain not in allowed:
-        return jsonify({
-            "error": "Registration is not open for this email domain. Contact your administrator.",
-            "code": "DOMAIN_NOT_ALLOWED",
-        }), 403
+    # Also allow if domain has a DomainConfig entry
+    domain_cfg_exists = DomainConfig.query.filter_by(domain=email_domain).first() is not None
+
+    if email_domain not in allowed and not domain_cfg_exists:
+        return jsonify(
+            {
+                "error": "Registration is not open for this email domain. Contact your administrator.",
+                "code": "DOMAIN_NOT_ALLOWED",
+            }
+        ), 403
 
     # Create new user (domain-allowlisted: auto-approved for protected files)
     new_user = User(
@@ -491,6 +488,14 @@ def api_update_settings():
             cleaned.append(d)
         settings.allowed_domains = ",".join(cleaned)
 
+        # Auto-create DomainConfig (with an empty permission entry) for any
+        # newly-added domains so they appear immediately on the Domains page.
+        existing = {dc.domain for dc in DomainConfig.query.all()}
+        for d in cleaned:
+            if d not in existing:
+                dc = DomainConfig(domain=d)
+                db.session.add(dc)
+
     settings.updated_at = datetime.utcnow()
     db.session.commit()
 
@@ -576,11 +581,10 @@ def api_create_user():
     p12_password = None
     settings = SystemSettings.query.first()
     try:
-        p12_bytes, p12_password = generate_client_p12(
-            CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email
-        )
+        p12_bytes, p12_password = generate_client_p12(CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email)
     except Exception:
         import logging
+
         logging.getLogger(__name__).error("Failed to generate client cert for %s", email, exc_info=True)
 
     initial_password = password if password else (p12_password or "changeme")
@@ -729,13 +733,25 @@ def api_update_user_permissions(user_id):
     # Delete existing permissions
     FolderPermission.query.filter_by(user_id=user_id).delete()
 
-    # Add new permissions
+    # Add new permissions — only create rows where at least one flag is set
+    valid_states = {"allow", "deny"}
     for perm_data in data["permissions"]:
+        read_val = perm_data.get("read")  # "allow", "deny", or null/missing
+        write_val = perm_data.get("write")  # "allow", "deny", or null/missing
+
+        # Normalise: only keep valid tri-state strings; everything else is None
+        read_val = read_val if read_val in valid_states else None
+        write_val = write_val if write_val in valid_states else None
+
+        # Skip rows where both flags are None (no action on either)
+        if read_val is None and write_val is None:
+            continue
+
         permission = FolderPermission(
             user_id=user_id,
             folder_path=perm_data.get("path", "/"),
-            can_read=perm_data.get("read", True),
-            can_write=perm_data.get("write", False),
+            can_read=read_val,
+            can_write=write_val,
         )
         db.session.add(permission)
 
@@ -749,65 +765,335 @@ def api_update_user_permissions(user_id):
 @app.route("/api/v1/folders", methods=["GET"])
 @auth.require_admin()
 def api_list_folders():
-    """List all folders from protected and unprotected subdirectories (admin only)."""
-    folders = [{"path": "/", "name": "Root"}]
-    seen_paths: set = set()
+    """List all folders from the files subdirectory (admin only).
 
-    for subdir in ("protected", "unprotected"):
-        sub_path = Path(CONFIG["STORAGE_PATH"]) / subdir
-        if not sub_path.exists():
-            continue
-        try:
-            for item in sub_path.rglob("*"):
-                if item.is_dir():
-                    rel_path = "/" + str(item.relative_to(sub_path))
-                    if rel_path not in seen_paths:
-                        seen_paths.add(rel_path)
-                        folders.append({"path": rel_path, "name": item.name})
-        except Exception as e:
-            return jsonify({"error": str(e), "code": "FOLDER_SCAN_ERROR"}), 500
+    Root is intentionally excluded — permissions are per-folder only.
+    """
+    folders = []
+
+    files_path = Path(CONFIG["STORAGE_PATH"]) / "files"
+    if not files_path.exists():
+        return jsonify({"folders": folders}), 200
+
+    try:
+        for item in files_path.rglob("*"):
+            if item.is_dir():
+                rel_path = "/" + str(item.relative_to(files_path))
+                folders.append({"path": rel_path, "name": item.name})
+    except Exception as e:
+        return jsonify({"error": str(e), "code": "FOLDER_SCAN_ERROR"}), 500
 
     return jsonify({"folders": folders}), 200
+
+
+# =============================================================================
+# Domain Config Endpoints (admin only)
+# =============================================================================
+
+
+@app.route("/api/v1/domains", methods=["GET"])
+@auth.require_admin()
+def api_list_domains():
+    """List all domain configs with their permissions.
+
+    Auto-creates DomainConfig rows for any domains in system settings'
+    allowed_domains that don't already have one, so the admin sees them
+    prepopulated and ready to configure.
+    """
+    from models import SystemSettings
+
+    settings = SystemSettings.query.first()
+    if settings and settings.allowed_domains:
+        allowed = [d.strip().lower() for d in settings.allowed_domains.split(",") if d.strip()]
+        existing = {dc.domain for dc in DomainConfig.query.all()}
+        created = False
+        for domain in allowed:
+            if domain not in existing:
+                db.session.add(DomainConfig(domain=domain))
+                created = True
+        if created:
+            db.session.commit()
+
+    domains = DomainConfig.query.order_by(DomainConfig.domain).all()
+    return jsonify({"domains": [d.to_dict() for d in domains]}), 200
+
+
+@app.route("/api/v1/domains", methods=["POST"])
+@auth.require_admin()
+def api_create_domain():
+    """Create a new domain config with optional permissions."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    domain = data.get("domain", "").strip().lower().lstrip("@")
+    if not domain or "." not in domain:
+        return jsonify({"error": "Valid domain required", "code": "INVALID_DOMAIN"}), 400
+
+    if DomainConfig.query.filter_by(domain=domain).first():
+        return jsonify({"error": "Domain already exists", "code": "DOMAIN_EXISTS"}), 409
+
+    dc = DomainConfig(domain=domain)
+    db.session.add(dc)
+    db.session.flush()  # get dc.id
+
+    for perm_data in data.get("permissions", []):
+        dp = DomainPermission(
+            domain_id=dc.id,
+            folder_path=perm_data.get("path", "/"),
+            can_read=perm_data.get("read", False),
+            can_write=perm_data.get("write", False),
+        )
+        db.session.add(dp)
+
+    db.session.commit()
+    return jsonify({"domain": dc.to_dict()}), 201
+
+
+@app.route("/api/v1/domains/<int:domain_id>", methods=["GET"])
+@auth.require_admin()
+def api_get_domain(domain_id):
+    """Get a single domain config with permissions."""
+    dc = DomainConfig.query.get(domain_id)
+    if not dc:
+        return jsonify({"error": "Domain not found", "code": "DOMAIN_NOT_FOUND"}), 404
+    return jsonify({"domain": dc.to_dict()}), 200
+
+
+@app.route("/api/v1/domains/<int:domain_id>", methods=["PUT"])
+@auth.require_admin()
+def api_update_domain(domain_id):
+    """Update a domain config (domain name and/or permissions)."""
+    dc = DomainConfig.query.get(domain_id)
+    if not dc:
+        return jsonify({"error": "Domain not found", "code": "DOMAIN_NOT_FOUND"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    if "domain" in data:
+        new_domain = data["domain"].strip().lower().lstrip("@")
+        if not new_domain or "." not in new_domain:
+            return jsonify({"error": "Valid domain required", "code": "INVALID_DOMAIN"}), 400
+        existing = DomainConfig.query.filter_by(domain=new_domain).first()
+        if existing and existing.id != domain_id:
+            return jsonify({"error": "Domain already exists", "code": "DOMAIN_EXISTS"}), 409
+        dc.domain = new_domain
+
+    if "permissions" in data:
+        DomainPermission.query.filter_by(domain_id=dc.id).delete()
+        for perm_data in data["permissions"]:
+            dp = DomainPermission(
+                domain_id=dc.id,
+                folder_path=perm_data.get("path", "/"),
+                can_read=perm_data.get("read", False),
+                can_write=perm_data.get("write", False),
+            )
+            db.session.add(dp)
+
+    db.session.commit()
+    return jsonify({"domain": dc.to_dict()}), 200
+
+
+@app.route("/api/v1/domains/<int:domain_id>", methods=["DELETE"])
+@auth.require_admin()
+def api_delete_domain(domain_id):
+    """Delete a domain config and its permissions."""
+    dc = DomainConfig.query.get(domain_id)
+    if not dc:
+        return jsonify({"error": "Domain not found", "code": "DOMAIN_NOT_FOUND"}), 404
+
+    db.session.delete(dc)
+    db.session.commit()
+    return jsonify({"success": True}), 200
+
+
+# =============================================================================
+# Group Endpoints (admin only)
+# =============================================================================
+
+
+@app.route("/api/v1/groups", methods=["GET"])
+@auth.require_admin()
+def api_list_groups():
+    """List all groups with member count and permission count."""
+    groups = Group.query.order_by(Group.name).all()
+    return jsonify({"groups": [g.to_dict() for g in groups]}), 200
+
+
+@app.route("/api/v1/groups", methods=["POST"])
+@auth.require_admin()
+def api_create_group():
+    """Create a new group."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Group name required", "code": "MISSING_NAME"}), 400
+
+    if Group.query.filter_by(name=name).first():
+        return jsonify({"error": "Group name already exists", "code": "GROUP_EXISTS"}), 409
+
+    grp = Group(name=name, description=data.get("description", "").strip() or None)
+    db.session.add(grp)
+    db.session.commit()
+    return jsonify({"group": grp.to_dict()}), 201
+
+
+@app.route("/api/v1/groups/<int:group_id>", methods=["GET"])
+@auth.require_admin()
+def api_get_group(group_id):
+    """Get a single group with members and permissions."""
+    grp = Group.query.get(group_id)
+    if not grp:
+        return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
+    return jsonify({"group": grp.to_dict(include_members=True)}), 200
+
+
+@app.route("/api/v1/groups/<int:group_id>", methods=["PUT"])
+@auth.require_admin()
+def api_update_group(group_id):
+    """Update group metadata (name, description)."""
+    grp = Group.query.get(group_id)
+    if not grp:
+        return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    if "name" in data:
+        new_name = data["name"].strip()
+        if not new_name:
+            return jsonify({"error": "Group name required", "code": "MISSING_NAME"}), 400
+        existing = Group.query.filter_by(name=new_name).first()
+        if existing and existing.id != group_id:
+            return jsonify({"error": "Group name already exists", "code": "GROUP_EXISTS"}), 409
+        grp.name = new_name
+
+    if "description" in data:
+        grp.description = data["description"].strip() or None
+
+    db.session.commit()
+    return jsonify({"group": grp.to_dict(include_members=True)}), 200
+
+
+@app.route("/api/v1/groups/<int:group_id>", methods=["DELETE"])
+@auth.require_admin()
+def api_delete_group(group_id):
+    """Delete a group (cascades memberships and permissions)."""
+    grp = Group.query.get(group_id)
+    if not grp:
+        return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
+
+    db.session.delete(grp)
+    db.session.commit()
+    return jsonify({"success": True}), 200
+
+
+@app.route("/api/v1/groups/<int:group_id>/permissions", methods=["PUT"])
+@auth.require_admin()
+def api_update_group_permissions(group_id):
+    """Replace a group's permissions."""
+    grp = Group.query.get(group_id)
+    if not grp:
+        return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
+
+    data = request.get_json()
+    if not data or "permissions" not in data:
+        return jsonify({"error": "Permissions array required", "code": "MISSING_PERMISSIONS"}), 400
+
+    GroupPermission.query.filter_by(group_id=group_id).delete()
+    for perm_data in data["permissions"]:
+        gp = GroupPermission(
+            group_id=group_id,
+            folder_path=perm_data.get("path", "/"),
+            can_read=perm_data.get("read", False),
+            can_write=perm_data.get("write", False),
+        )
+        db.session.add(gp)
+
+    db.session.commit()
+    perms = GroupPermission.query.filter_by(group_id=group_id).all()
+    return jsonify({"permissions": [p.to_dict() for p in perms]}), 200
+
+
+@app.route("/api/v1/groups/<int:group_id>/members", methods=["PUT"])
+@auth.require_admin()
+def api_update_group_members(group_id):
+    """Replace a group's member list."""
+    grp = Group.query.get(group_id)
+    if not grp:
+        return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
+
+    data = request.get_json()
+    if not data or "userIds" not in data:
+        return jsonify({"error": "userIds array required", "code": "MISSING_USER_IDS"}), 400
+
+    GroupMembership.query.filter_by(group_id=group_id).delete()
+    for uid in data["userIds"]:
+        user = User.query.get(uid)
+        if user:
+            db.session.add(GroupMembership(group_id=group_id, user_id=uid))
+
+    db.session.commit()
+    # Refresh to get updated members
+    db.session.refresh(grp)
+    return jsonify({"group": grp.to_dict(include_members=True)}), 200
+
+
+# =============================================================================
+# Enhanced User Permission Endpoints
+# =============================================================================
+
+
+@app.route("/api/v1/users/<int:user_id>/effective-permissions", methods=["GET"])
+@auth.require_admin()
+def api_get_effective_permissions(user_id):
+    """Get a user's effective resolved permissions with source attribution."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
+
+    detailed = resolve_permissions_detailed(user)
+    return jsonify({"permissions": detailed}), 200
+
+
+@app.route("/api/v1/users/<int:user_id>/groups", methods=["PUT"])
+@auth.require_admin()
+def api_update_user_groups(user_id):
+    """Assign a user to groups."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
+
+    data = request.get_json()
+    if not data or "groupIds" not in data:
+        return jsonify({"error": "groupIds array required", "code": "MISSING_GROUP_IDS"}), 400
+
+    GroupMembership.query.filter_by(user_id=user_id).delete()
+    for gid in data["groupIds"]:
+        grp = Group.query.get(gid)
+        if grp:
+            db.session.add(GroupMembership(group_id=gid, user_id=user_id))
+
+    db.session.commit()
+    db.session.refresh(user)
+    return jsonify({"user": user.to_dict(include_permissions=True)}), 200
 
 
 def user_has_access(user, folder_path, require_write=False):
     """Check if a user can access a folder.
 
-    If the user has NO FolderPermission rows at all, they get full default
-    access (the UI shows this as "Default").  If at least one row exists we
-    look for the most specific matching permission – i.e. the longest
-    folder_path that is a prefix of the requested path.  A permission on '/'
-    therefore covers every sub-folder unless a more specific row overrides it.
+    Delegates to the layered permission resolver which merges domain defaults,
+    group permissions, and user-level overrides.  If no permissions exist at
+    any tier the user gets full default access (backward compatible).
     """
-    from models import FolderPermission
 
-    all_permissions = FolderPermission.query.filter_by(user_id=user.id).all()
-    if not all_permissions:
-        # No restrictions configured – allow everything
-        return True
-
-    # Normalise the requested path so it always starts with '/' and has no
-    # trailing slash (except for root itself).
-    normalised = "/" + folder_path.strip("/")
-    if normalised != "/":
-        normalised = normalised.rstrip("/")
-
-    # Find the most specific (longest) permission whose path is a prefix of
-    # the requested folder_path.
-    best_match = None
-    for perm in all_permissions:
-        perm_path = "/" + perm.folder_path.strip("/")
-        if perm_path != "/":
-            perm_path = perm_path.rstrip("/")
-        # Check if this permission path is a prefix of the requested path
-        if normalised == perm_path or normalised.startswith(perm_path + "/"):
-            if best_match is None or len(perm_path) > len(best_match.folder_path.strip("/")):
-                best_match = perm
-
-    if not best_match:
-        # User has ACL rows but none cover this path – deny
-        return False
-    return best_match.can_write if require_write else best_match.can_read
+    return check_access(user, folder_path, require_write=require_write)
 
 
 def _require_mtls_for_protected(user):
@@ -824,10 +1110,12 @@ def _require_mtls_for_protected(user):
     if user and user.role != "admin":
         client_verify = request.headers.get("X-SSL-Client-Verify", "")
         if client_verify != "SUCCESS":
-            return jsonify({
-                "error": "A valid client certificate is required. Please install your .p12 certificate.",
-                "code": "CLIENT_CERT_REQUIRED",
-            }), 403
+            return jsonify(
+                {
+                    "error": "A valid client certificate is required. Please install your .p12 certificate.",
+                    "code": "CLIENT_CERT_REQUIRED",
+                }
+            ), 403
 
         # Verify the cert's CN matches the logged-in user's email
         client_dn = request.headers.get("X-SSL-Client-S-DN", "")
@@ -838,53 +1126,61 @@ def _require_mtls_for_protected(user):
                 cn_value = part[3:].strip()
                 break
         if not cn_value or cn_value.lower() != user.email.lower():
-            return jsonify({
-                "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
-                "code": "CLIENT_CERT_MISMATCH",
-            }), 403
+            return jsonify(
+                {
+                    "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
+                    "code": "CLIENT_CERT_MISMATCH",
+                }
+            ), 403
     return None
 
 
 @app.route("/api/v1/files", methods=["GET"])
+@auth.require_auth()
 def api_list_files():
     """List files in directory.
 
-    Authenticated users see a merged view of protected and unprotected files.
-    Unauthenticated (guest) users only see unprotected files.
-    Folder-level ACLs are still enforced for non-admin authenticated users.
+    Requires authentication.  Admin users see everything; non-admin users
+    only see items they have permission for (or folders that lead toward
+    granted areas).
     """
     path = request.args.get("path", "")
     search = request.args.get("search", "").strip()
 
-    # Determine whether the caller is authenticated
     token = auth.get_token_from_request()
-    user = auth.get_user_from_token(token) if token else None
-    include_protected = False
+    user = auth.get_user_from_token(token)
 
-    if user:
-        include_protected = user.role == "admin" or user.is_approved
-
-        # Require mTLS client certificate for non-admin users accessing protected files
-        if include_protected:
-            mtls_err = _require_mtls_for_protected(user)
-            if mtls_err:
-                return mtls_err
-
-        # Check folder permissions (admin has full access)
-        if user.role != "admin":
-            check_path = "/" + path if path else "/"
-            if not user_has_access(user, check_path):
-                return jsonify({"error": "Access denied", "code": "ACCESS_DENIED"}), 403
+    # Require mTLS client certificate for non-admin users
+    if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
 
     # Get file list
     try:
-        files = get_file_list(path, include_protected=include_protected)
+        files = get_file_list(path)
+
+        # Non-admin: filter to only items the user can see
+        if user.role != "admin":
+            from core.permissions import is_item_visible, visible_paths
+
+            granted = visible_paths(user)
+            if not granted:
+                files = []
+            else:
+                current = "/" + path if path else "/"
+                filtered = []
+                for f in files:
+                    # Build the full path for this item
+                    item_path = current.rstrip("/") + "/" + f["name"] if current != "/" else "/" + f["name"]
+                    if is_item_visible(item_path, f["type"] == "folder", granted):
+                        filtered.append(f)
+                files = filtered
 
         # Filter by search if provided
         if search:
             files = [f for f in files if search.lower() in f["name"].lower()]
 
-        # Format response
         return jsonify(
             {
                 "files": files,
@@ -897,25 +1193,16 @@ def api_list_files():
 
 
 @app.route("/api/v1/files/upload", methods=["POST"])
+@auth.require_auth()
 def api_upload_file():
-    """Upload file to the protected directory (requires authentication)."""
+    """Upload file to the storage directory (requires authentication)."""
     if not CONFIG["ENABLE_UPLOADS"]:
         return jsonify({"error": "Uploads are disabled", "code": "UPLOADS_DISABLED"}), 403
 
-    path = request.form.get("path", "")
+    path = request.form.get("path", "").strip().lstrip("/")
 
-    # Uploads always require authentication
     token = auth.get_token_from_request()
-    if not token:
-        return jsonify({"error": "Authentication required", "code": "AUTH_REQUIRED"}), 401
-
     user = auth.get_user_from_token(token)
-    if not user:
-        return jsonify({"error": "Invalid token", "code": "INVALID_TOKEN"}), 401
-
-    # Unapproved users cannot upload (they only have access to unprotected files)
-    if user.role != "admin" and not user.is_approved:
-        return jsonify({"error": "Upload requires approved account", "code": "NOT_APPROVED"}), 403
 
     # Require mTLS for non-admin users
     if user.role != "admin":
@@ -937,9 +1224,13 @@ def api_upload_file():
     if file.filename == "":
         return jsonify({"error": "No file selected", "code": "NO_FILE"}), 400
 
-    # Secure filename and save to the protected subdirectory
+    # Secure filename and save to the files subdirectory
     filename = secure_filename(file.filename)
-    target_dir = Path(CONFIG["STORAGE_PATH"]) / "protected" / path
+    storage_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files"
+    target_dir = (storage_base / path).resolve()
+    # Guard against directory traversal
+    if not str(target_dir).startswith(str(storage_base)):
+        return jsonify({"error": "Invalid path", "code": "INVALID_PATH"}), 400
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / filename
 
@@ -960,47 +1251,29 @@ def api_upload_file():
 
 
 @app.route("/api/v1/files/download", methods=["GET"])
+@auth.require_auth()
 def api_download_file():
-    """Download file.
-
-    Authenticated users can download from both protected and unprotected dirs.
-    Guests can only download from the unprotected directory.
-    """
+    """Download file (requires authentication)."""
     path = request.args.get("path", "")
     if not path:
         return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
 
-    # Determine caller identity
     token = auth.get_token_from_request()
-    user = auth.get_user_from_token(token) if token else None
+    user = auth.get_user_from_token(token)
 
-    if user and user.role != "admin":
-        # Require mTLS for non-admin users accessing protected files
-        if user.is_approved:
-            mtls_err = _require_mtls_for_protected(user)
-            if mtls_err:
-                return mtls_err
+    if user.role != "admin":
+        # Require mTLS for non-admin users
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
         # Check read permissions
         parent = str(Path(path).parent)
         folder_path = "/" if parent == "." else "/" + parent
         if not user_has_access(user, folder_path):
             return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
 
-    # Resolve file in the correct subdirectory
-    if user and (user.role == "admin" or user.is_approved):
-        # Approved users – look in protected first, then unprotected
-        file_path = resolve_file_path(path)
-    else:
-        # Guest or unapproved user – only unprotected
-        unprotected_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "unprotected"
-        candidate = (unprotected_base / path).resolve()
-        # Guard against directory traversal
-        if not str(candidate).startswith(str(unprotected_base)):
-            file_path = None
-        elif candidate.exists():
-            file_path = candidate
-        else:
-            file_path = None
+    # Resolve file
+    file_path = resolve_file_path(path)
 
     if not file_path or not file_path.is_file():
         return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
@@ -1016,7 +1289,7 @@ def api_create_directory():
     if not data:
         return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
 
-    path = data.get("path", "")
+    path = data.get("path", "").strip().lstrip("/")
     name = data.get("name", "").strip()
 
     if not name:
@@ -1034,8 +1307,12 @@ def api_create_directory():
         if not user_has_access(user, check_path, require_write=True):
             return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
 
-    # Create directory in protected subdirectory
-    target_dir = Path(CONFIG["STORAGE_PATH"]) / "protected" / path / secure_filename(name)
+    # Create directory in files subdirectory
+    storage_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files"
+    target_dir = (storage_base / path / secure_filename(name)).resolve()
+    # Guard against directory traversal
+    if not str(target_dir).startswith(str(storage_base)):
+        return jsonify({"error": "Invalid path", "code": "INVALID_PATH"}), 400
 
     try:
         target_dir.mkdir(parents=True, exist_ok=False)
@@ -1097,17 +1374,15 @@ def api_get_dashboard_stats():
     # Count users
     user_count = User.query.filter_by(role="user").count()
 
-    # Count files and folders across protected and unprotected subdirectories
+    # Count files and folders in pages subdirectory
     file_count = 0
     folder_count = 0
     total_size = 0
 
-    for subdir in ("protected", "unprotected"):
-        sub_path = Path(CONFIG["STORAGE_PATH"]) / subdir
-        if not sub_path.exists():
-            continue
+    files_path = Path(CONFIG["STORAGE_PATH"]) / "files"
+    if files_path.exists():
         try:
-            for item in sub_path.rglob("*"):
+            for item in files_path.rglob("*"):
                 if item.is_file():
                     file_count += 1
                     total_size += item.stat().st_size
@@ -1656,9 +1931,7 @@ def main():
 
         # Migrate: add allowed_domains column to system_settings if missing
         if "allowed_domains" not in settings_columns:
-            db.session.execute(
-                text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''")
-            )
+            db.session.execute(text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''"))
             print("✅ Migrated: added allowed_domains column to system_settings table")
 
         db.session.commit()

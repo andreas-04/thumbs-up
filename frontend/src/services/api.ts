@@ -18,6 +18,7 @@ export interface User {
   created_at: string;
   last_login: string | null;
   folderPermissions?: FolderPermission[];
+  groups?: { id: number; name: string }[];
 }
 
 export interface SystemSettings {
@@ -37,12 +38,14 @@ export interface SystemSettings {
   allowedDomains: string[];
 }
 
+export type PermissionState = 'allow' | 'deny' | null;
+
 export interface FolderPermission {
   id: number;
   userId: number;
   path: string;
-  read: boolean;
-  write: boolean;
+  read: PermissionState;
+  write: PermissionState;
   createdAt: string;
 }
 
@@ -80,6 +83,63 @@ export interface SignupCredentials {
   password: string;
   username?: string;
 }
+
+// --- Domain Config ---
+
+export interface DomainPermission {
+  id: number;
+  domainId: number;
+  path: string;
+  read: boolean;
+  write: boolean;
+  createdAt: string;
+}
+
+export interface DomainConfig {
+  id: number;
+  domain: string;
+  permissions: DomainPermission[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Groups ---
+
+export interface GroupPermission {
+  id: number;
+  groupId: number;
+  path: string;
+  read: boolean;
+  write: boolean;
+  createdAt: string;
+}
+
+export interface GroupSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  memberCount: number;
+  permissionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupDetail extends GroupSummary {
+  members: { id: number; email: string }[];
+  permissions: GroupPermission[];
+}
+
+// --- Effective Permissions ---
+
+export interface EffectivePermissionEntry {
+  domain: { canRead: boolean; canWrite: boolean } | null;
+  groups: { groupId: number; groupName: string; canRead: boolean; canWrite: boolean }[];
+  groupMerged: { canRead: boolean; canWrite: boolean } | null;
+  user: { canRead: boolean; canWrite: boolean } | null;
+  effective: { canRead: boolean; canWrite: boolean; source: string };
+}
+
+export type EffectivePermissions = Record<string, EffectivePermissionEntry>;
 
 // =============================================================================
 // API Client Class
@@ -346,7 +406,7 @@ class ApiClient {
 
   async updateUserPermissions(
     userId: number,
-    permissions: Array<{ path: string; read: boolean; write: boolean }>
+    permissions: Array<{ path: string; read: PermissionState; write: PermissionState }>
   ): Promise<{ permissions: FolderPermission[] }> {
     return this.request<{ permissions: FolderPermission[] }>(
       `/api/v1/users/${userId}/permissions`,
@@ -435,6 +495,128 @@ class ApiClient {
     return this.request<{ success: boolean }>(endpoint, {
       method: 'DELETE',
     });
+  }
+
+  // ===========================================================================
+  // Domain Config Endpoints
+  // ===========================================================================
+
+  async listDomains(): Promise<{ domains: DomainConfig[] }> {
+    return this.request<{ domains: DomainConfig[] }>('/api/v1/domains');
+  }
+
+  async createDomain(data: {
+    domain: string;
+    permissions?: Array<{ path: string; read: boolean; write: boolean }>;
+  }): Promise<{ domain: DomainConfig }> {
+    return this.request<{ domain: DomainConfig }>('/api/v1/domains', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDomain(domainId: number): Promise<{ domain: DomainConfig }> {
+    return this.request<{ domain: DomainConfig }>(`/api/v1/domains/${domainId}`);
+  }
+
+  async updateDomain(
+    domainId: number,
+    data: {
+      domain?: string;
+      permissions?: Array<{ path: string; read: boolean; write: boolean }>;
+    }
+  ): Promise<{ domain: DomainConfig }> {
+    return this.request<{ domain: DomainConfig }>(`/api/v1/domains/${domainId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDomain(domainId: number): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/domains/${domainId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Group Endpoints
+  // ===========================================================================
+
+  async listGroups(): Promise<{ groups: GroupSummary[] }> {
+    return this.request<{ groups: GroupSummary[] }>('/api/v1/groups');
+  }
+
+  async createGroup(data: { name: string; description?: string }): Promise<{ group: GroupSummary }> {
+    return this.request<{ group: GroupSummary }>('/api/v1/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getGroup(groupId: number): Promise<{ group: GroupDetail }> {
+    return this.request<{ group: GroupDetail }>(`/api/v1/groups/${groupId}`);
+  }
+
+  async updateGroup(
+    groupId: number,
+    data: { name?: string; description?: string }
+  ): Promise<{ group: GroupDetail }> {
+    return this.request<{ group: GroupDetail }>(`/api/v1/groups/${groupId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGroup(groupId: number): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/groups/${groupId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateGroupPermissions(
+    groupId: number,
+    permissions: Array<{ path: string; read: boolean; write: boolean }>
+  ): Promise<{ permissions: GroupPermission[] }> {
+    return this.request<{ permissions: GroupPermission[] }>(
+      `/api/v1/groups/${groupId}/permissions`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ permissions }),
+      }
+    );
+  }
+
+  async updateGroupMembers(
+    groupId: number,
+    userIds: number[]
+  ): Promise<{ group: GroupDetail }> {
+    return this.request<{ group: GroupDetail }>(
+      `/api/v1/groups/${groupId}/members`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ userIds }),
+      }
+    );
+  }
+
+  // ===========================================================================
+  // Enhanced User Permission Endpoints
+  // ===========================================================================
+
+  async getEffectivePermissions(userId: number): Promise<{ permissions: EffectivePermissions }> {
+    return this.request<{ permissions: EffectivePermissions }>(
+      `/api/v1/users/${userId}/effective-permissions`
+    );
+  }
+
+  async updateUserGroups(userId: number, groupIds: number[]): Promise<{ user: User }> {
+    return this.request<{ user: User }>(
+      `/api/v1/users/${userId}/groups`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ groupIds }),
+      }
+    );
   }
 
   // ===========================================================================

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useData, FileItem } from '../contexts/DataContext';
+import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -17,6 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import {
   FolderOpen,
@@ -27,11 +37,66 @@ import {
   Download,
   Upload,
   Lock,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function FileBrowser() {
   const { files, currentPath, refreshFiles, settings } = useData();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    setUploading(true);
+    try {
+      // API expects a relative path without leading slash; root is empty string
+      const apiPath = currentPath === '/' ? '' : currentPath.replace(/^\/+/, '');
+      for (let i = 0; i < selectedFiles.length; i++) {
+        await api.uploadFile(selectedFiles[i], apiPath);
+      }
+      toast.success(
+        selectedFiles.length === 1
+          ? `Uploaded "${selectedFiles[0].name}"`
+          : `Uploaded ${selectedFiles.length} files`
+      );
+      refreshFiles(currentPath);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      // Reset input so re-selecting the same file triggers onChange
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim();
+    if (!name) {
+      toast.error('Folder name is required');
+      return;
+    }
+    try {
+      // API expects a relative path without leading slash; root is empty string
+      const apiPath = currentPath === '/' ? '' : currentPath.replace(/^\/+/, '');
+      await api.createDirectory(apiPath, name);
+      toast.success(`Folder "${name}" created`);
+      setShowNewFolderDialog(false);
+      setNewFolderName('');
+      refreshFiles(currentPath);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create folder');
+    }
+  };
 
   if (!settings) return null;
 
@@ -163,13 +228,37 @@ export default function FileBrowser() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Hidden file input for uploads */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileSelected}
+          />
+
           {/* Action Buttons */}
           <div className="flex gap-2 mb-4">
-            <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              onClick={handleUploadClick}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              {uploading ? 'Uploading...' : 'Upload'}
             </Button>
-            <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              onClick={() => { setNewFolderName(''); setShowNewFolderDialog(true); }}
+            >
               <FolderOpen className="h-4 w-4 mr-2" />
               New Folder
             </Button>
@@ -280,6 +369,35 @@ export default function FileBrowser() {
           </div>
         </CardContent>
       </Card>
+
+      {/* New Folder Dialog */}
+      <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Create New Folder</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Create a new folder in <code className="text-gray-300">{currentPath}</code>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label className="text-gray-300">Folder Name</Label>
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="e.g. Documents"
+              className="bg-gray-800 border-gray-700 text-white"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewFolderDialog(false)} className="border-gray-700 text-gray-300">
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFolder}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

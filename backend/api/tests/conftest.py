@@ -117,3 +117,31 @@ def user_token(app, regular_user):
 def storage_dir(tmp_path):
     """Return a temporary storage directory."""
     return str(tmp_path)
+
+
+@pytest.fixture
+def domain_config(app, regular_user):
+    """Create a DomainConfig for the regular user's email domain (test.com) with read-only on /shared."""
+    from models import DomainConfig, DomainPermission, db
+
+    dc = DomainConfig(domain="test.com")
+    db.session.add(dc)
+    db.session.flush()
+    dp = DomainPermission(domain_id=dc.id, folder_path="/shared", can_read=True, can_write=False)
+    db.session.add(dp)
+    db.session.commit()
+    return dc
+
+
+@pytest.fixture
+def group_with_perms(app):
+    """Create a Group with r/w permission on /shared."""
+    from models import Group, GroupPermission, db
+
+    grp = Group(name="test-group", description="Test group")
+    db.session.add(grp)
+    db.session.flush()
+    gp = GroupPermission(group_id=grp.id, folder_path="/shared", can_read=True, can_write=True)
+    db.session.add(gp)
+    db.session.commit()
+    return grp
