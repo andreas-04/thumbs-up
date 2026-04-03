@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
@@ -148,13 +147,6 @@ export default function DomainConfigPage() {
           add domain
         </Button>
       </div>
-
-      <Alert className="glass border-glass-border">
-        <Info className="h-3.5 w-3.5 text-term-blue" />
-        <AlertDescription className="text-muted-foreground text-xs">
-          domains listed here are auto-allowlisted for signup. group and user-level overrides take precedence.
-        </AlertDescription>
-      </Alert>
 
       <Card className="glass">
         <CardHeader className="pb-3">

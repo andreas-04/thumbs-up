@@ -193,13 +193,6 @@ export default function FolderPermissions() {
         </p>
       </div>
 
-      <Alert className="glass border-glass-border">
-        <Info className="h-3.5 w-3.5 text-term-blue" />
-        <AlertDescription className="text-muted-foreground text-xs">
-          users have no access by default. user-level permissions override domain and group settings.
-        </AlertDescription>
-      </Alert>
-
       <Card className="glass">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-foreground">user permissions</CardTitle>

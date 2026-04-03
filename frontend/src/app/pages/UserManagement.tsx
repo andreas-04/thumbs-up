@@ -35,8 +35,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { Badge } from '../components/ui/badge';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import { Plus, Trash2, Search, Mail, Key, ShieldOff, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../services/api';
@@ -159,16 +157,9 @@ export default function UserManagement() {
         </div>
         <Button onClick={() => setShowAddDialog(true)} className="h-8 text-xs">
           <Plus className="h-3.5 w-3.5 mr-1.5" />
-          approve email
+          invite
         </Button>
       </div>
-
-      <Alert className="glass border-term-blue/20 py-2">
-        <Key className="h-3.5 w-3.5 text-term-blue" />
-        <AlertDescription className="text-muted-foreground text-xs">
-          invite users by email -- they receive a client certificate for mTLS access
-        </AlertDescription>
-      </Alert>
 
       <Card className="glass">
         <CardHeader className="pb-3">

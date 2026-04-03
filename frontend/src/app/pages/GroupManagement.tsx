@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
@@ -34,7 +33,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Info,
   FolderOpen,
   ShieldCheck,
   UserPlus,
@@ -206,13 +204,6 @@ export default function GroupManagement() {
           create group
         </Button>
       </div>
-
-      <Alert className="glass border-glass-border">
-        <Info className="h-3.5 w-3.5 text-term-purple" />
-        <AlertDescription className="text-muted-foreground text-xs">
-          group permissions override domain defaults. most permissive setting wins across groups. user-level overrides take precedence.
-        </AlertDescription>
-      </Alert>
 
       <Card className="glass">
         <CardHeader className="pb-3">
