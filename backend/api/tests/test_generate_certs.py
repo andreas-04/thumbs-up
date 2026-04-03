@@ -190,18 +190,46 @@ class TestGenerateCRL:
         crl = x509.load_pem_x509_crl(open(crl_path, "rb").read(), default_backend())
         assert len(list(crl)) == 0
 
-    def test_generate_empty_crl_noop_if_exists(self, tmp_path):
+    def test_generate_empty_crl_noop_if_valid(self, tmp_path):
+        import os
 
-        from utils.generate_certs import generate_empty_crl
+        from utils.generate_certs import generate_crl, generate_empty_crl, update_crl_file
 
         ca_cert, ca_key = self._create_ca(tmp_path)
         crl_path = str(tmp_path / "crl.pem")
-        # Create a file first
-        with open(crl_path, "w") as f:
-            f.write("existing")
+
+        # Create a valid CRL signed by this CA
+        crl_bytes = generate_crl(ca_cert, ca_key, [])
+        update_crl_file(crl_bytes, crl_path)
+
+        # Record mtime
+        mtime_before = os.path.getmtime(crl_path)
 
         generate_empty_crl(ca_cert, ca_key, crl_path)
 
-        # Should NOT overwrite
-        with open(crl_path) as f:
-            assert f.read() == "existing"
+        # Should NOT overwrite — CRL already matches the CA
+        assert os.path.getmtime(crl_path) == mtime_before
+
+    def test_generate_empty_crl_replaces_stale_crl(self, tmp_path):
+
+        from utils.generate_certs import generate_crl, generate_empty_crl, update_crl_file
+
+        # Create two separate CAs
+        ca_cert_old, ca_key_old = self._create_ca(tmp_path / "old")
+        ca_cert_new, ca_key_new = self._create_ca(tmp_path / "new")
+
+        crl_path = str(tmp_path / "crl.pem")
+
+        # Write a CRL signed by the OLD CA
+        crl_bytes = generate_crl(ca_cert_old, ca_key_old, [])
+        update_crl_file(crl_bytes, crl_path)
+
+        # Now generate_empty_crl with the NEW CA should replace it
+        generate_empty_crl(ca_cert_new, ca_key_new, crl_path)
+
+        # CRL should now be valid against the new CA
+        with open(crl_path, "rb") as f:
+            crl = x509.load_pem_x509_crl(f.read(), default_backend())
+        with open(ca_cert_new, "rb") as f:
+            new_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+        assert crl.is_signature_valid(new_cert.public_key())

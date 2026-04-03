@@ -314,9 +314,21 @@ def update_crl_file(crl_pem_bytes, crl_path="./certs/crl.pem"):
     os.replace(tmp_path, crl_path)
 
 
+def _crl_matches_ca(crl_path, ca_cert_path):
+    """Return True if the existing CRL was signed by the current CA."""
+    try:
+        with open(crl_path, "rb") as f:
+            crl = x509.load_pem_x509_crl(f.read(), default_backend())
+        with open(ca_cert_path, "rb") as f:
+            ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+        return crl.is_signature_valid(ca_cert.public_key())
+    except Exception:
+        return False
+
+
 def generate_empty_crl(ca_cert_path, ca_key_path, crl_path="./certs/crl.pem"):
-    """Generate an empty CRL file if none exists."""
-    if os.path.exists(crl_path):
+    """Generate an empty CRL file if none exists or the existing one doesn't match the current CA."""
+    if os.path.exists(crl_path) and _crl_matches_ca(crl_path, ca_cert_path):
         return
     crl_bytes = generate_crl(ca_cert_path, ca_key_path, [])
     update_crl_file(crl_bytes, crl_path)
