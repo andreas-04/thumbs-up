@@ -4,6 +4,7 @@ import { api, User } from '../../services/api';
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
+  certRevoked: boolean;
   login: (email: string, password: string) => Promise<User | null>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
@@ -16,6 +17,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const certRevoked = user?.certRevoked ?? false;
 
   useEffect(() => {
     // Check if user has a valid token and load user data
@@ -71,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, updateUser, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, certRevoked, login, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

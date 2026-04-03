@@ -53,6 +53,17 @@ if [ ! -f "certs/server_cert.pem" ] || [ ! -f "certs/server_key.pem" ]; then
     echo ""
 fi
 
+# Ensure CRL file exists (empty CRL if none) so nginx can start
+if [ ! -f "certs/crl.pem" ]; then
+    echo "Generating initial (empty) CRL..."
+    $PYTHON -c "
+from utils.generate_certs import generate_empty_crl
+generate_empty_crl('./certs/server_cert.pem', './certs/server_key.pem', './certs/crl.pem')
+"
+    echo "   [OK] CRL generated"
+    echo ""
+fi
+
 # Verify ADMIN_PIN is set
 if [ -z "$ADMIN_PIN" ]; then
     echo "ERROR: ADMIN_PIN environment variable not set"

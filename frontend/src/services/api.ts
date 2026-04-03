@@ -19,6 +19,9 @@ export interface User {
   last_login: string | null;
   folderPermissions?: FolderPermission[];
   groups?: { id: number; name: string }[];
+  certRevoked?: boolean;
+  certIssuedAt?: string | null;
+  certExpiresAt?: string | null;
 }
 
 export interface SystemSettings {
@@ -392,6 +395,39 @@ class ApiClient {
     return this.request<{ success: boolean }>(`/api/v1/users/${userId}`, {
       method: 'DELETE',
     });
+  }
+
+  // ===========================================================================
+  // Certificate Revocation & Re-issue Endpoints
+  // ===========================================================================
+
+  async revokeCert(userId: number): Promise<{ message: string; revokedSerial: string | null; user: User }> {
+    return this.request(`/api/v1/users/${userId}/revoke-cert`, {
+      method: 'POST',
+    });
+  }
+
+  async reissueCert(userId: number): Promise<{ message: string; user: User }> {
+    return this.request(`/api/v1/users/${userId}/reissue-cert`, {
+      method: 'POST',
+    });
+  }
+
+  async getCertStatus(userId: number): Promise<{
+    serial: string | null;
+    issuedAt: string | null;
+    expiresAt: string | null;
+    isRevoked: boolean;
+    revocationHistory: Array<{
+      id: number;
+      serialNumber: string;
+      userId: number | null;
+      revokedAt: string;
+      reason: string;
+      revokedBy: number | null;
+    }>;
+  }> {
+    return this.request(`/api/v1/users/${userId}/cert-status`);
   }
 
   // ===========================================================================
