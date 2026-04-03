@@ -6,7 +6,6 @@ import { Label } from '../components/ui/label';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
@@ -150,139 +149,114 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-white">User Management</h1>
-          <p className="text-gray-400 mt-1">
-            Manage approved users for file access
+          <h1 className="text-lg font-medium text-foreground">users</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            manage approved users
           </p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Approve Email
+        <Button onClick={() => setShowAddDialog(true)} className="h-8 text-xs">
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
+          approve email
         </Button>
       </div>
 
-      <Alert className="bg-blue-950 border-blue-900">
-        <Key className="h-4 w-4 text-blue-400" />
-        <AlertDescription className="text-blue-300">
-          <strong>How it works:</strong> Invite users by entering their email. They'll receive a client certificate for secure access.
-          Users with an allowed email domain can also self-register in System Settings.
+      <Alert className="glass border-term-blue/20 py-2">
+        <Key className="h-3.5 w-3.5 text-term-blue" />
+        <AlertDescription className="text-muted-foreground text-xs">
+          invite users by email -- they receive a client certificate for mTLS access
         </AlertDescription>
       </Alert>
 
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Users</CardTitle>
-          <CardDescription className="text-gray-400">
-            Invited users can access protected files. Configure domain allowlists in System Settings.
-          </CardDescription>
-          <div className="pt-4">
+      <Card className="glass">
+        <CardHeader className="pb-3">
+          <div className="pt-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search by email..."
+                placeholder="filter..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                className="pl-8 glass border-glass-border text-foreground placeholder:text-term-dim h-8 text-xs"
               />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
+          <div className="border border-glass-border rounded overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                  <TableHead className="text-gray-300">Email</TableHead>
-                  <TableHead className="text-gray-300">Access</TableHead>
-                  <TableHead className="text-gray-300">Certificate</TableHead>
-                  <TableHead className="text-gray-300">Status</TableHead>
-                  <TableHead className="text-gray-300">Added</TableHead>
-                  <TableHead className="text-gray-300">Permissions</TableHead>
-                  <TableHead className="text-right text-gray-300">Actions</TableHead>
+                <TableRow className="border-glass-border hover:bg-glass-highlight">
+                  <TableHead className="text-muted-foreground text-xs">email</TableHead>
+                  <TableHead className="text-muted-foreground text-xs">cert</TableHead>
+                  <TableHead className="text-muted-foreground text-xs">status</TableHead>
+                  <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">added</TableHead>
+                  <TableHead className="text-right text-muted-foreground text-xs">actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
-                  <TableRow className="border-gray-800">
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      {searchQuery ? 'No users found matching your search' : 'No users yet. Approve an email to grant protected file access.'}
+                  <TableRow className="border-glass-border">
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-xs">
+                      {searchQuery ? 'no matches' : 'no users -- approve an email to start'}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredUsers.map((user) => (
-                    <TableRow key={user.id} className="border-gray-800 hover:bg-gray-800/50">
-                      <TableCell className="font-medium text-white">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-gray-400" />
+                    <TableRow key={user.id} className="border-glass-border hover:bg-glass-highlight">
+                      <TableCell className="text-foreground text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="h-3 w-3 text-muted-foreground" />
                           {getUserIdentifier(user)}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="default" className="bg-green-700 text-green-100">
-                          Protected
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
                         {user.certRevoked ? (
-                          <Badge variant="default" className="bg-amber-700 text-amber-100">
-                            Revoked
-                          </Badge>
+                          <span className="text-term-yellow text-xs">revoked</span>
                         ) : (
-                          <Badge variant="default" className="bg-green-700 text-green-100">
-                            Active
-                          </Badge>
+                          <span className="text-term-green text-xs">active</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.last_login ? 'default' : 'secondary'}>
-                          {user.last_login ? 'Registered' : 'Invited'}
-                        </Badge>
+                        <span className={`text-xs ${user.last_login ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {user.last_login ? 'registered' : 'invited'}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-gray-400">
+                      <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-gray-400">
-                        {user.folderPermissions.length > 0 ? (
-                          <Badge variant="outline" className="text-gray-300 border-gray-700">
-                            {user.folderPermissions.length} folder(s)
-                          </Badge>
-                        ) : (
-                          <span className="text-sm text-gray-500">Default</span>
-                        )}
-                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-0.5">
                           {!user.certRevoked ? (
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => { setSelectedUser(user); setShowRevokeDialog(true); }}
-                              className="text-amber-400 hover:text-amber-300"
+                              className="text-term-yellow hover:text-term-yellow/80 h-7 w-7"
                               title="Revoke Certificate"
                             >
-                              <ShieldOff className="h-4 w-4" />
+                              <ShieldOff className="h-3.5 w-3.5" />
                             </Button>
                           ) : (
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => { setSelectedUser(user); setShowReissueDialog(true); }}
-                              className="text-blue-400 hover:text-blue-300"
+                              className="text-term-blue hover:text-term-blue/80 h-7 w-7"
                               title="Re-issue Certificate"
                             >
-                              <RefreshCw className="h-4 w-4" />
+                              <RefreshCw className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => openDeleteDialog(user)}
-                            className="text-red-400 hover:text-red-300"
+                            className="text-term-red/70 hover:text-term-red h-7 w-7"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -297,49 +271,48 @@ export default function UserManagement() {
 
       {/* Add User Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="glass border-glass-border text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-white">Approve Email</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Add an email address to the approved list. The user can then create their own account using this email.
+            <DialogTitle className="text-foreground text-sm">approve email</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              user will receive a client certificate for secure access
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="add-email" className="text-gray-200">Email Address *</Label>
+          <div className="space-y-3 py-3">
+            <div className="space-y-1">
+              <Label htmlFor="add-email" className="text-muted-foreground text-xs">email</Label>
               <Input
                 id="add-email"
                 type="email"
                 placeholder="user@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                className="glass border-glass-border text-foreground placeholder:text-term-dim h-8 text-xs"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">
-              Cancel
+            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="glass border-glass-border text-foreground hover:bg-glass-highlight h-8 text-xs">
+              cancel
             </Button>
-            <Button onClick={handleAdd}>Approve Email</Button>
+            <Button onClick={handleAdd} className="h-8 text-xs">approve</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="bg-gray-900 border-gray-800">
+        <AlertDialogContent className="glass border-glass-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Remove Email?</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400">
-              Are you sure you want to remove <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong> from the approved list?
-              They will no longer be able to access files on this device.
+            <AlertDialogTitle className="text-foreground text-sm">remove user?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground text-xs">
+              remove <strong className="text-foreground">{selectedUser && getUserIdentifier(selectedUser)}</strong> -- they will lose file access
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Remove
+            <AlertDialogCancel className="glass border-glass-border text-foreground hover:bg-glass-highlight h-8 text-xs">cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-term-red/20 text-term-red border border-term-red/30 hover:bg-term-red/30 h-8 text-xs">
+              remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -347,19 +320,17 @@ export default function UserManagement() {
 
       {/* Revoke Certificate Dialog */}
       <AlertDialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
-        <AlertDialogContent className="bg-gray-900 border-gray-800">
+        <AlertDialogContent className="glass border-glass-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Revoke Certificate?</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400">
-              This will revoke the client certificate for <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>.
-              They will lose access to protected files immediately.
-              Their account and permissions will be preserved.
+            <AlertDialogTitle className="text-foreground text-sm">revoke certificate?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground text-xs">
+              revoke cert for <strong className="text-foreground">{selectedUser && getUserIdentifier(selectedUser)}</strong> -- immediate loss of file access
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRevoke} className="bg-amber-600 hover:bg-amber-700">
-              Revoke Certificate
+            <AlertDialogCancel className="glass border-glass-border text-foreground hover:bg-glass-highlight h-8 text-xs">cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevoke} className="bg-term-yellow/20 text-term-yellow border border-term-yellow/30 hover:bg-term-yellow/30 h-8 text-xs">
+              revoke
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -367,18 +338,17 @@ export default function UserManagement() {
 
       {/* Re-issue Certificate Dialog */}
       <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
-        <AlertDialogContent className="bg-gray-900 border-gray-800">
+        <AlertDialogContent className="glass border-glass-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Re-issue Certificate?</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400">
-              A new client certificate will be generated and emailed to <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>.
-              They will need to install the new certificate to regain file access.
+            <AlertDialogTitle className="text-foreground text-sm">re-issue certificate?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground text-xs">
+              new cert will be generated and emailed to <strong className="text-foreground">{selectedUser && getUserIdentifier(selectedUser)}</strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReissue} className="bg-blue-600 hover:bg-blue-700">
-              Re-issue Certificate
+            <AlertDialogCancel className="glass border-glass-border text-foreground hover:bg-glass-highlight h-8 text-xs">cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReissue} className="bg-term-blue/20 text-term-blue border border-term-blue/30 hover:bg-term-blue/30 h-8 text-xs">
+              re-issue
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

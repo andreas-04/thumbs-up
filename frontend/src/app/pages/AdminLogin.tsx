@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Shield, AlertCircle, UserRound } from 'lucide-react';
+import { Terminal, AlertCircle } from 'lucide-react';
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('');
@@ -30,94 +30,87 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      // Use username as email
       const userData = await login(username, password);
       if (userData) {
-        // Check if password change is required
         if (userData.requiresPasswordChange) {
           navigate('/reset-password');
         } else if (userData.role === 'admin') {
           navigate('/admin/dashboard');
         } else {
-          // Full page load so nginx can enforce the mTLS client-cert check
           window.location.href = '/files';
           return;
         }
       } else {
-        setError('Invalid email or password');
+        setError('invalid credentials');
       }
     } catch {
-      setError('An error occurred. Please try again.');
+      setError('connection failed. try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-              <Shield className="h-8 w-8 text-white" />
-            </div>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-sm glass">
+        <CardHeader className="space-y-1 text-center pb-4">
+          <div className="flex justify-center mb-3">
+            <Terminal className="h-8 w-8 text-term-green" />
           </div>
-          <CardTitle className="text-2xl text-white">
-            ThumbsUp File Share
+          <CardTitle className="text-lg text-foreground tracking-tight">
+            thumbs-up
           </CardTitle>
-          <CardDescription className="text-gray-400">
-            Enter your credentials to sign in
+          <CardDescription className="text-muted-foreground text-xs">
+            authenticate to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {error && (
-              <Alert variant="destructive" className="bg-red-950 border-red-900">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+              <Alert variant="destructive" className="glass border-term-red/20 py-2">
+                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertDescription className="text-term-red text-xs">{error}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-gray-200">Email</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="username" className="text-muted-foreground text-xs">email</Label>
               <Input
                 id="username"
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="user@domain.com"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 autoFocus
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground placeholder:text-term-dim h-9 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-200">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-muted-foreground text-xs">password</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Logging in...' : 'Login'}
+            <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+              {loading ? 'connecting...' : 'login'}
             </Button>
 
-            <div className="text-center text-sm mt-4">
-              {signupEnabled && (
-                <>
-                  <span className="text-gray-400">Don't have an account?</span>{' '}
-                  <a href="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
-                    Sign up
-                  </a>
-                </>
-              )}
-            </div>
+            {signupEnabled && (
+              <div className="text-center text-xs pt-2">
+                <span className="text-muted-foreground">no account? </span>
+                <a href="/signup" className="text-term-blue hover:text-term-cyan transition-colors">
+                  sign up
+                </a>
+              </div>
+            )}
           </form>
         </CardContent>
       </Card>

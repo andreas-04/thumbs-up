@@ -80,89 +80,89 @@ export default function SystemSettings() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-5 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-semibold text-white">System Settings</h1>
-        <p className="text-gray-400 mt-1">
-          Configure device settings
+        <h1 className="text-lg font-medium text-foreground">settings</h1>
+        <p className="text-muted-foreground text-xs mt-0.5">
+          system configuration
         </p>
       </div>
 
       {showSuccess && (
-        <Alert className="bg-green-950 border-green-900">
-          <CheckCircle className="h-4 w-4 text-green-400" />
-          <AlertDescription className="text-green-300">
-            System settings have been saved successfully
+        <Alert className="glass border-term-green/20 py-2">
+          <CheckCircle className="h-3.5 w-3.5 text-term-green" />
+          <AlertDescription className="text-term-green text-xs">
+            settings saved
           </AlertDescription>
         </Alert>
       )}
       {/* Domain Allowlist */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
+      <Card className="glass">
+        <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-purple-400" />
-            <CardTitle className="text-white">Domain Allowlist</CardTitle>
+            <Globe className="h-3.5 w-3.5 text-term-purple" />
+            <CardTitle className="text-sm text-foreground">domain allowlist</CardTitle>
           </div>
-          <CardDescription className="text-gray-400">
-            Users signing up with an allowed email domain are automatically approved and sent a client certificate.
+          <CardDescription className="text-xs text-muted-foreground">
+            allowed email domains for auto-approval
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               placeholder="corporation.com"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDomain(); } }}
-              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+              className="glass border-glass-border text-foreground placeholder:text-term-dim h-8 text-xs"
             />
-            <Button type="button" onClick={handleAddDomain} variant="secondary" className="shrink-0">
-              Add Domain
+            <Button type="button" onClick={handleAddDomain} variant="secondary" className="shrink-0 h-8 text-xs">
+              add
             </Button>
           </div>
           {(localSettings.allowedDomains?.length ?? 0) > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {localSettings.allowedDomains.map((domain) => (
                 <Badge
                   key={domain}
                   variant="secondary"
-                  className="bg-purple-900/50 text-purple-200 border-purple-800 pl-3 pr-1.5 py-1.5 text-sm flex items-center gap-1.5"
+                  className="glass border-term-purple/20 text-term-purple pl-2 pr-1 py-0.5 text-xs flex items-center gap-1"
                 >
                   @{domain}
                   <button
                     type="button"
                     onClick={() => handleRemoveDomain(domain)}
-                    className="rounded-full p-0.5 hover:bg-purple-700/50 transition-colors"
+                    className="rounded p-0.5 hover:bg-glass-highlight transition-colors"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3 w-3" />
                   </button>
                 </Badge>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">
-              No domains configured. Only admin-invited users can access the system.
+            <p className="text-xs text-muted-foreground">
+              no domains configured -- invite-only mode
             </p>
           )}
         </CardContent>
       </Card>
 
       {/* Email Notifications */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
+      <Card className="glass">
+        <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-blue-400" />
-            <CardTitle className="text-white">Email Notifications</CardTitle>
+            <Mail className="h-3.5 w-3.5 text-term-blue" />
+            <CardTitle className="text-sm text-foreground">smtp</CardTitle>
           </div>
-          <CardDescription className="text-gray-400">
-            Configure SMTP to email users when their account is approved
+          <CardDescription className="text-xs text-muted-foreground">
+            email delivery configuration
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-gray-200">Enable SMTP</Label>
-              <p className="text-xs text-gray-500">Send email notifications when accounts are approved</p>
+              <Label className="text-foreground text-xs">enabled</Label>
+              <p className="text-[11px] text-muted-foreground">send cert emails on approval</p>
             </div>
             <Switch
               checked={localSettings.smtpEnabled}
@@ -170,34 +170,34 @@ export default function SystemSettings() {
             />
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smtp-host" className="text-gray-200">SMTP Host</Label>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="smtp-host" className="text-muted-foreground text-xs">host</Label>
                 <Input
                   id="smtp-host"
                   placeholder="smtp.example.com"
                   value={localSettings.smtpHost}
                   onChange={(e) => handleChange('smtpHost', e.target.value)}
                   disabled={!localSettings.smtpEnabled}
-                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                  className="glass border-glass-border text-foreground h-8 text-xs disabled:opacity-40"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-port" className="text-gray-200">SMTP Port</Label>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-port" className="text-muted-foreground text-xs">port</Label>
                 <Input
                   id="smtp-port"
                   type="number"
                   value={localSettings.smtpPort}
                   onChange={(e) => handleChange('smtpPort', parseInt(e.target.value) || 587)}
                   disabled={!localSettings.smtpEnabled}
-                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                  className="glass border-glass-border text-foreground h-8 text-xs disabled:opacity-40"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="smtp-from" className="text-gray-200">From Email</Label>
+            <div className="space-y-1">
+              <Label htmlFor="smtp-from" className="text-muted-foreground text-xs">from address</Label>
               <Input
                 id="smtp-from"
                 type="email"
@@ -205,41 +205,40 @@ export default function SystemSettings() {
                 value={localSettings.smtpFromEmail}
                 onChange={(e) => handleChange('smtpFromEmail', e.target.value)}
                 disabled={!localSettings.smtpEnabled}
-                className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                className="glass border-glass-border text-foreground h-8 text-xs disabled:opacity-40"
               />
-              <p className="text-xs text-gray-500">The sender address for notification emails</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smtp-username" className="text-gray-200">Username</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="smtp-username" className="text-muted-foreground text-xs">username</Label>
                 <Input
                   id="smtp-username"
                   placeholder="username"
                   value={localSettings.smtpUsername}
                   onChange={(e) => handleChange('smtpUsername', e.target.value)}
                   disabled={!localSettings.smtpEnabled}
-                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                  className="glass border-glass-border text-foreground h-8 text-xs disabled:opacity-40"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-password" className="text-gray-200">Password</Label>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-password" className="text-muted-foreground text-xs">password</Label>
                 <Input
                   id="smtp-password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="--------"
                   value={localSettings.smtpPassword}
                   onChange={(e) => handleChange('smtpPassword', e.target.value)}
                   disabled={!localSettings.smtpEnabled}
-                  className="bg-gray-800 border-gray-700 text-white disabled:opacity-50"
+                  className="glass border-glass-border text-foreground h-8 text-xs disabled:opacity-40"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-gray-200">Use STARTTLS</Label>
-                <p className="text-xs text-gray-500">Enable TLS encryption for the SMTP connection</p>
+                <Label className="text-foreground text-xs">starttls</Label>
+                <p className="text-[11px] text-muted-foreground">tls encryption</p>
               </div>
               <Switch
                 checked={localSettings.smtpUseTls}
@@ -252,25 +251,25 @@ export default function SystemSettings() {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-3">
-        <Button onClick={handleSave} disabled={!hasChanges}>
-          Save Settings
+      <div className="flex gap-2">
+        <Button onClick={handleSave} disabled={!hasChanges} className="h-8 text-xs">
+          save
         </Button>
         <Button
           variant="outline"
           onClick={handleReset}
           disabled={!hasChanges}
-          className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+          className="glass border-glass-border text-foreground hover:bg-glass-highlight h-8 text-xs"
         >
-          Reset Changes
+          reset
         </Button>
       </div>
 
       {hasChanges && (
-        <Alert className="bg-yellow-950 border-yellow-900">
-          <AlertTriangle className="h-4 w-4 text-yellow-400" />
-          <AlertDescription className="text-yellow-300">
-            You have unsaved changes. Click "Save Settings" to apply them.
+        <Alert className="glass border-term-yellow/20 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-term-yellow" />
+          <AlertDescription className="text-term-yellow text-xs">
+            unsaved changes
           </AlertDescription>
         </Alert>
       )}

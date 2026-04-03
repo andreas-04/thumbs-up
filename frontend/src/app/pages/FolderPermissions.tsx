@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
@@ -26,7 +25,6 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Badge } from '../components/ui/badge';
 import { Label } from '../components/ui/label';
 import { 
   FolderOpen, 
@@ -51,21 +49,21 @@ function nextPermState(current: PermissionState): PermissionState {
 function PermStateBadge({ value }: { value: PermissionState }) {
   if (value === 'allow') {
     return (
-      <span className="inline-flex items-center gap-1 text-green-400 text-xs font-medium">
-        <CheckCircle className="h-3 w-3" /> Allow
+      <span className="inline-flex items-center gap-1 text-term-green text-xs">
+        <CheckCircle className="h-3 w-3" /> allow
       </span>
     );
   }
   if (value === 'deny') {
     return (
-      <span className="inline-flex items-center gap-1 text-red-400 text-xs font-medium">
-        <XCircle className="h-3 w-3" /> Deny
+      <span className="inline-flex items-center gap-1 text-term-red text-xs">
+        <XCircle className="h-3 w-3" /> deny
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-gray-500 text-xs font-medium">
-      <MinusCircle className="h-3 w-3" /> —
+    <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
+      <MinusCircle className="h-3 w-3" /> --
     </span>
   );
 }
@@ -168,18 +166,18 @@ export default function FolderPermissions() {
 
   if (users.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-semibold text-white">Folder Permissions</h1>
-          <p className="text-gray-400 mt-1">
-            Configure per-user folder access control
+          <h1 className="text-lg text-foreground">folder permissions</h1>
+          <p className="text-muted-foreground text-xs mt-1">
+            per-user folder access control
           </p>
         </div>
 
-        <Alert className="bg-blue-950 border-blue-900">
-          <Info className="h-4 w-4 text-blue-400" />
-          <AlertDescription className="text-blue-300">
-            No users have been added yet. Add users in <a href="/admin/users" className="underline">User Management</a> before configuring folder permissions.
+        <Alert className="glass border-glass-border">
+          <Info className="h-3.5 w-3.5 text-term-blue" />
+          <AlertDescription className="text-muted-foreground text-xs">
+            no users yet. add users in <a href="/admin/users" className="text-term-blue underline">user management</a> first.
           </AlertDescription>
         </Alert>
       </div>
@@ -187,72 +185,63 @@ export default function FolderPermissions() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-semibold text-white">Folder Permissions</h1>
-        <p className="text-gray-400 mt-1">
-          Configure per-user folder access control (ACL)
+        <h1 className="text-lg text-foreground">folder permissions</h1>
+        <p className="text-muted-foreground text-xs mt-1">
+          per-user folder access control
         </p>
       </div>
 
-      <Alert className="bg-blue-950 border-blue-900">
-        <Info className="h-4 w-4 text-blue-400" />
-        <AlertDescription className="text-blue-300">
-          <strong>Additive Permissions:</strong> Users have no access by default.
-          Enable read/write toggles to grant access to specific folders.
-          User-level permissions override domain and group settings.
+      <Alert className="glass border-glass-border">
+        <Info className="h-3.5 w-3.5 text-term-blue" />
+        <AlertDescription className="text-muted-foreground text-xs">
+          users have no access by default. user-level permissions override domain and group settings.
         </AlertDescription>
       </Alert>
 
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">User Permissions</CardTitle>
-          <CardDescription className="text-gray-400">
-            Click "Edit" to configure folder-level access for each user
-          </CardDescription>
+      <Card className="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-foreground">user permissions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
+          <div className="border border-glass-border rounded overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                  <TableHead className="text-gray-300">User</TableHead>
-                  <TableHead className="text-gray-300">Permissions</TableHead>
-                  <TableHead className="text-right text-gray-300">Actions</TableHead>
+                <TableRow className="border-glass-border hover:bg-glass-highlight">
+                  <TableHead className="text-muted-foreground text-xs">user</TableHead>
+                  <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">permissions</TableHead>
+                  <TableHead className="text-right text-muted-foreground text-xs"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.id} className="border-gray-800 hover:bg-gray-800/50">
-                    <TableCell className="font-medium text-white">
-                      <div className="flex items-center gap-2">
+                  <TableRow key={user.id} className="border-glass-border hover:bg-glass-highlight">
+                    <TableCell className="text-foreground text-xs">
+                      <div className="flex items-center gap-1.5">
                         {settings.authMethod === 'username+password' ? (
-                          <UserIcon className="h-4 w-4 text-gray-400" />
+                          <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
                         ) : (
-                          <Mail className="h-4 w-4 text-gray-400" />
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
                         {getUserIdentifier(user)}
                       </div>
                     </TableCell>
-                    <TableCell className="text-gray-400">
-                      <div className="flex flex-wrap gap-1">
-                        {user.folderPermissions.length === 0 ? (
-                          <Badge variant="outline" className="text-gray-400 border-gray-700">
-                            No Direct Permissions
-                          </Badge>
-                        ) : (
-                          user.folderPermissions.slice(0, 2).map((perm) => (
-                            <Badge key={perm.path} variant="outline" className="text-gray-300 border-gray-700">
-                              {perm.path}: {perm.read === 'allow' ? 'R' : perm.read === 'deny' ? '!R' : ''}{perm.write === 'allow' ? 'W' : perm.write === 'deny' ? '!W' : ''}
-                            </Badge>
-                          ))
-                        )}
-                        {user.folderPermissions.length > 2 && (
-                          <Badge variant="outline" className="text-gray-400 border-gray-700">
-                            +{user.folderPermissions.length - 2} more
-                          </Badge>
-                        )}
-                      </div>
+                    <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
+                      {user.folderPermissions.length === 0 ? (
+                        <span className="text-term-dim">none</span>
+                      ) : (
+                        <span>
+                          {user.folderPermissions.slice(0, 2).map((perm) => (
+                            <span key={perm.path} className="mr-2">
+                              {perm.path}: {perm.read === 'allow' ? 'r' : perm.read === 'deny' ? '!r' : ''}{perm.write === 'allow' ? 'w' : perm.write === 'deny' ? '!w' : ''}
+                            </span>
+                          ))}
+                          {user.folderPermissions.length > 2 && (
+                            <span className="text-term-dim">+{user.folderPermissions.length - 2}</span>
+                          )}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -260,19 +249,19 @@ export default function FolderPermissions() {
                           variant="ghost"
                           size="sm"
                           onClick={() => openEffectiveDialog(user)}
-                          className="text-purple-400 hover:text-purple-300"
+                          className="text-term-purple hover:text-term-cyan h-7 text-xs"
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          Effective
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          effective
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => openEditDialog(user)}
-                          className="text-blue-400 hover:text-blue-300"
+                          className="text-term-blue hover:text-term-cyan h-7 text-xs"
                         >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
+                          <Edit className="h-3.5 w-3.5 mr-1" />
+                          edit
                         </Button>
                       </div>
                     </TableCell>
@@ -286,53 +275,52 @@ export default function FolderPermissions() {
 
       {/* Edit Permissions Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="glass border-glass-border max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">
-              Edit User Overrides
+            <DialogTitle className="text-foreground text-sm">
+              edit user overrides
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Configure user-level permission overrides for <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>. These take highest priority in the permission hierarchy.
+            <DialogDescription className="text-muted-foreground text-xs">
+              configure overrides for <strong className="text-foreground">{selectedUser && getUserIdentifier(selectedUser)}</strong>
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-4">
-            <Alert className="bg-gray-800 border-gray-700 mb-4">
-              <Info className="h-4 w-4 text-gray-400" />
-              <AlertDescription className="text-gray-300 text-sm">
-                <strong>Tri-state permissions:</strong> Click the cells to cycle through:
-                {' '}<span className="text-green-400">Allow</span> → <span className="text-red-400">Deny</span> → <span className="text-gray-500">No Action</span> (inherits from group/domain).
+          <div className="py-3">
+            <Alert className="glass border-glass-border mb-3">
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+              <AlertDescription className="text-muted-foreground text-xs">
+                click to cycle: <span className="text-term-green">allow</span> / <span className="text-term-red">deny</span> / <span className="text-muted-foreground">inherit</span>
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-2">
-              <Label className="text-gray-200 text-base">Folder Access Control</Label>
-              <div className="border border-gray-700 rounded-lg overflow-hidden">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">folder access</Label>
+              <div className="border border-glass-border rounded overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                      <TableHead className="text-gray-300">Folder</TableHead>
-                      <TableHead className="text-center text-gray-300">Read</TableHead>
-                      <TableHead className="text-center text-gray-300">Write</TableHead>
+                    <TableRow className="border-glass-border hover:bg-glass-highlight">
+                      <TableHead className="text-muted-foreground text-xs">folder</TableHead>
+                      <TableHead className="text-center text-muted-foreground text-xs">read</TableHead>
+                      <TableHead className="text-center text-muted-foreground text-xs">write</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {allFolders.map((folder) => {
                       const perm = getPermission(folder.path);
                       return (
-                        <TableRow key={folder.path} className="border-gray-800">
-                          <TableCell className="text-white">
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="h-4 w-4 text-orange-400" />
+                        <TableRow key={folder.path} className="border-glass-border">
+                          <TableCell className="text-foreground text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-term-yellow" />
                               {folder.name}
-                              <span className="text-xs text-gray-500">{folder.path}</span>
+                              <span className="text-term-dim text-[10px]">{folder.path}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
                             <button
                               type="button"
                               onClick={() => handlePermissionCycle(folder.path, 'read')}
-                              className="inline-flex items-center justify-center w-20 h-8 rounded border border-gray-700 hover:border-gray-500 transition-colors bg-gray-800"
+                              className="inline-flex items-center justify-center w-16 h-7 rounded border border-glass-border hover:border-foreground/30 transition-colors glass"
                             >
                               <PermStateBadge value={perm?.read ?? null} />
                             </button>
@@ -341,7 +329,7 @@ export default function FolderPermissions() {
                             <button
                               type="button"
                               onClick={() => handlePermissionCycle(folder.path, 'write')}
-                              className="inline-flex items-center justify-center w-20 h-8 rounded border border-gray-700 hover:border-gray-500 transition-colors bg-gray-800"
+                              className="inline-flex items-center justify-center w-16 h-7 rounded border border-glass-border hover:border-foreground/30 transition-colors glass"
                             >
                               <PermStateBadge value={perm?.write ?? null} />
                             </button>
@@ -353,38 +341,18 @@ export default function FolderPermissions() {
                 </Table>
               </div>
             </div>
-
-            <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-              <div className="text-sm text-gray-400">
-                <strong className="text-gray-300">Permission States:</strong>
-                <ul className="mt-2 space-y-1 ml-4">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-3 w-3 text-green-400" />
-                    <span><strong className="text-green-400">Allow</strong> — Explicitly grants access (overrides group/domain)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <XCircle className="h-3 w-3 text-red-400" />
-                    <span><strong className="text-red-400">Deny</strong> — Explicitly denies access (overrides group/domain)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <MinusCircle className="h-3 w-3 text-gray-500" />
-                    <span><strong className="text-gray-400">No Action</strong> — Inherits from group or domain permissions</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
           </div>
 
           <DialogFooter>
             <Button 
               variant="outline" 
               onClick={() => setShowEditDialog(false)}
-              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              className="glass border-glass-border text-foreground h-8 text-xs"
             >
-              Cancel
+              cancel
             </Button>
-            <Button onClick={handleSave}>
-              Save Permissions
+            <Button onClick={handleSave} className="h-8 text-xs">
+              save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -392,104 +360,84 @@ export default function FolderPermissions() {
 
       {/* Effective Permissions Dialog */}
       <Dialog open={showEffectiveDialog} onOpenChange={setShowEffectiveDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="glass border-glass-border max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">
-              Effective Permissions
+            <DialogTitle className="text-foreground text-sm">
+              effective permissions
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Resolved permissions for <strong>{effectiveUser && getUserIdentifier(effectiveUser)}</strong> across all layers (domain → group → user)
+            <DialogDescription className="text-muted-foreground text-xs">
+              resolved for <strong className="text-foreground">{effectiveUser && getUserIdentifier(effectiveUser)}</strong> across all layers
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4">
+          <div className="py-3">
             {Object.keys(effectivePerms).length === 0 ? (
-              <Alert className="bg-green-950 border-green-900">
-                <Info className="h-4 w-4 text-green-400" />
-                <AlertDescription className="text-green-300">
-                  No permission rules configured. This user has full access to all folders by default.
+              <Alert className="glass border-glass-border">
+                <Info className="h-3.5 w-3.5 text-term-green" />
+                <AlertDescription className="text-muted-foreground text-xs">
+                  no permission rules configured. full access by default.
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="border border-gray-800 rounded-lg overflow-hidden">
+              <div className="border border-glass-border rounded overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800">
-                      <TableHead className="text-gray-300">Path</TableHead>
-                      <TableHead className="text-gray-300 text-center">Domain</TableHead>
-                      <TableHead className="text-gray-300 text-center">Group</TableHead>
-                      <TableHead className="text-gray-300 text-center">User</TableHead>
-                      <TableHead className="text-gray-300 text-center">Effective</TableHead>
+                    <TableRow className="border-glass-border">
+                      <TableHead className="text-muted-foreground text-xs">path</TableHead>
+                      <TableHead className="text-muted-foreground text-xs text-center">domain</TableHead>
+                      <TableHead className="text-muted-foreground text-xs text-center">group</TableHead>
+                      <TableHead className="text-muted-foreground text-xs text-center">user</TableHead>
+                      <TableHead className="text-muted-foreground text-xs text-center">effective</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {Object.entries(effectivePerms)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([path, entry]) => (
-                        <TableRow key={path} className="border-gray-800">
-                          <TableCell className="text-white font-mono text-sm">
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="h-4 w-4 text-gray-400" />
+                        <TableRow key={path} className="border-glass-border">
+                          <TableCell className="text-foreground text-xs font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                               {path}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center text-xs">
                             {entry.domain ? (
-                              <div className="flex justify-center gap-1">
-                                <Badge variant="outline" className={entry.domain.canRead ? 'text-blue-300 border-blue-800' : 'text-gray-500 border-gray-700'}>
-                                  R
-                                </Badge>
-                                <Badge variant="outline" className={entry.domain.canWrite ? 'text-blue-300 border-blue-800' : 'text-gray-500 border-gray-700'}>
-                                  W
-                                </Badge>
-                              </div>
+                              <span>
+                                <span className={entry.domain.canRead ? 'text-term-blue' : 'text-term-dim'}>r</span>
+                                <span className={entry.domain.canWrite ? 'text-term-blue' : 'text-term-dim'}>w</span>
+                              </span>
                             ) : (
-                              <span className="text-gray-600">—</span>
+                              <span className="text-term-dim">--</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center text-xs">
                             {entry.groupMerged ? (
                               <div>
-                                <div className="flex justify-center gap-1">
-                                  <Badge variant="outline" className={entry.groupMerged.canRead ? 'text-purple-300 border-purple-800' : 'text-gray-500 border-gray-700'}>
-                                    R
-                                  </Badge>
-                                  <Badge variant="outline" className={entry.groupMerged.canWrite ? 'text-purple-300 border-purple-800' : 'text-gray-500 border-gray-700'}>
-                                    W
-                                  </Badge>
-                                </div>
-                                <div className="text-[10px] text-gray-500 mt-1">
+                                <span className={entry.groupMerged.canRead ? 'text-term-purple' : 'text-term-dim'}>r</span>
+                                <span className={entry.groupMerged.canWrite ? 'text-term-purple' : 'text-term-dim'}>w</span>
+                                <div className="text-[10px] text-term-dim mt-0.5">
                                   {entry.groups.map((g) => g.groupName).join(', ')}
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-gray-600">—</span>
+                              <span className="text-term-dim">--</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center text-xs">
                             {entry.user ? (
-                              <div className="flex justify-center gap-1">
-                                <Badge variant="outline" className={entry.user.canRead ? 'text-orange-300 border-orange-800' : 'text-gray-500 border-gray-700'}>
-                                  R
-                                </Badge>
-                                <Badge variant="outline" className={entry.user.canWrite ? 'text-orange-300 border-orange-800' : 'text-gray-500 border-gray-700'}>
-                                  W
-                                </Badge>
-                              </div>
+                              <span>
+                                <span className={entry.user.canRead ? 'text-term-yellow' : 'text-term-dim'}>r</span>
+                                <span className={entry.user.canWrite ? 'text-term-yellow' : 'text-term-dim'}>w</span>
+                              </span>
                             ) : (
-                              <span className="text-gray-600">—</span>
+                              <span className="text-term-dim">--</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
-                              <Badge className={entry.effective.canRead ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}>
-                                R
-                              </Badge>
-                              <Badge className={entry.effective.canWrite ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}>
-                                W
-                              </Badge>
-                            </div>
-                            <div className="text-[10px] text-gray-400 mt-1">
+                          <TableCell className="text-center text-xs">
+                            <span className={entry.effective.canRead ? 'text-term-green' : 'text-term-red'}>r</span>
+                            <span className={entry.effective.canWrite ? 'text-term-green' : 'text-term-red'}>w</span>
+                            <div className="text-[10px] text-term-dim mt-0.5">
                               via {entry.effective.source}
                             </div>
                           </TableCell>
@@ -500,10 +448,10 @@ export default function FolderPermissions() {
               </div>
             )}
 
-            <div className="mt-4 flex gap-4 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Domain</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> Group (most-permissive across groups)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> User (highest priority)</span>
+            <div className="mt-3 flex gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-term-blue inline-block" /> domain</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-term-purple inline-block" /> group</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-term-yellow inline-block" /> user</span>
             </div>
           </div>
         </DialogContent>
