@@ -38,14 +38,17 @@ import {
 } from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, Trash2, Search, Mail, Key } from 'lucide-react';
+import { Plus, Trash2, Search, Mail, Key, ShieldOff, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '../../services/api';
 
 export default function UserManagement() {
   const { settings, users, addUser, deleteUser, refreshUsers } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showRevokeDialog, setShowRevokeDialog] = useState(false);
+  const [showReissueDialog, setShowReissueDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Refresh users whenever this page is visited
@@ -112,6 +115,32 @@ export default function UserManagement() {
     }
   };
 
+  const handleRevoke = async () => {
+    if (!selectedUser) return;
+    try {
+      await api.revokeCert(selectedUser.id);
+      toast.success('Certificate revoked successfully');
+      setShowRevokeDialog(false);
+      setSelectedUser(null);
+      await refreshUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke certificate');
+    }
+  };
+
+  const handleReissue = async () => {
+    if (!selectedUser) return;
+    try {
+      await api.reissueCert(selectedUser.id);
+      toast.success('New certificate issued and emailed to user');
+      setShowReissueDialog(false);
+      setSelectedUser(null);
+      await refreshUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to re-issue certificate');
+    }
+  };
+
   const getUserIdentifier = (user: User): string => {
     return user.email || 'N/A';
   };
@@ -168,6 +197,7 @@ export default function UserManagement() {
                 <TableRow className="border-gray-800 hover:bg-gray-800/50">
                   <TableHead className="text-gray-300">Email</TableHead>
                   <TableHead className="text-gray-300">Access</TableHead>
+                  <TableHead className="text-gray-300">Certificate</TableHead>
                   <TableHead className="text-gray-300">Status</TableHead>
                   <TableHead className="text-gray-300">Added</TableHead>
                   <TableHead className="text-gray-300">Permissions</TableHead>
@@ -177,7 +207,7 @@ export default function UserManagement() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow className="border-gray-800">
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       {searchQuery ? 'No users found matching your search' : 'No users yet. Approve an email to grant protected file access.'}
                     </TableCell>
                   </TableRow>
@@ -194,6 +224,17 @@ export default function UserManagement() {
                         <Badge variant="default" className="bg-green-700 text-green-100">
                           Protected
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.certRevoked ? (
+                          <Badge variant="default" className="bg-amber-700 text-amber-100">
+                            Revoked
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" className="bg-green-700 text-green-100">
+                            Active
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.last_login ? 'default' : 'secondary'}>
@@ -214,6 +255,27 @@ export default function UserManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {!user.certRevoked ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { setSelectedUser(user); setShowRevokeDialog(true); }}
+                              className="text-amber-400 hover:text-amber-300"
+                              title="Revoke Certificate"
+                            >
+                              <ShieldOff className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { setSelectedUser(user); setShowReissueDialog(true); }}
+                              className="text-blue-400 hover:text-blue-300"
+                              title="Re-issue Certificate"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -278,6 +340,45 @@ export default function UserManagement() {
             <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revoke Certificate Dialog */}
+      <AlertDialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
+        <AlertDialogContent className="bg-gray-900 border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Revoke Certificate?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This will revoke the client certificate for <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>.
+              They will lose access to protected files immediately.
+              Their account and permissions will be preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevoke} className="bg-amber-600 hover:bg-amber-700">
+              Revoke Certificate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Re-issue Certificate Dialog */}
+      <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
+        <AlertDialogContent className="bg-gray-900 border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Re-issue Certificate?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              A new client certificate will be generated and emailed to <strong>{selectedUser && getUserIdentifier(selectedUser)}</strong>.
+              They will need to install the new certificate to regain file access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReissue} className="bg-blue-600 hover:bg-blue-700">
+              Re-issue Certificate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

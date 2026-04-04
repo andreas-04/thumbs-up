@@ -8,7 +8,7 @@ import os
 import socket
 import ssl
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file
@@ -25,11 +25,13 @@ from models import (
     Group,
     GroupMembership,
     GroupPermission,
+    MtlsMismatchLog,
+    RevokedCertificate,
     User,
     db,
 )
-from utils.email_sender import send_approval_email, send_invite_email
-from utils.generate_certs import generate_client_p12
+from utils.email_sender import send_approval_email, send_invite_email, send_revocation_email
+from utils.generate_certs import generate_client_p12, generate_crl, update_crl_file
 from utils.mdns_advertiser import MDNSAdvertiser
 from utils.qr_generator import QRGenerator
 
@@ -313,15 +315,20 @@ def api_signup():
     db.session.add(new_user)
     db.session.commit()
 
-    # Send approval email with .p12 client certificate
+    # Send approval email with .p12 client certificate and store cert metadata
     if settings and settings.smtp_enabled:
-        send_approval_email(
+        _ok, _err, cert_meta = send_approval_email(
             new_user.email,
             settings.device_name or "ThumbsUp",
             settings,
             ca_cert_path=CONFIG["CERT_PATH"],
             ca_key_path=CONFIG["KEY_PATH"],
         )
+        if cert_meta:
+            new_user.cert_serial_number = format(cert_meta["serial"], "x")
+            new_user.cert_issued_at = cert_meta["not_before"]
+            new_user.cert_expires_at = cert_meta["not_after"]
+            db.session.commit()
 
     # Generate token for immediate login
     token = auth.generate_session_token(new_user)
@@ -565,13 +572,19 @@ def api_create_user():
         if not was_approved:
             settings = SystemSettings.query.first()
             if settings and settings.smtp_enabled:
-                send_approval_email(
+                _ok, _err, cert_meta = send_approval_email(
                     existing_user.email,
                     settings.device_name or "ThumbsUp",
                     settings,
                     ca_cert_path=CONFIG["CERT_PATH"],
                     ca_key_path=CONFIG["KEY_PATH"],
                 )
+                if cert_meta:
+                    existing_user.cert_serial_number = format(cert_meta["serial"], "x")
+                    existing_user.cert_issued_at = cert_meta["not_before"]
+                    existing_user.cert_expires_at = cert_meta["not_after"]
+                    existing_user.cert_revoked = False
+                    db.session.commit()
 
         return jsonify({"user": existing_user.to_dict(include_permissions=True), "approved": True}), 200
 
@@ -579,9 +592,14 @@ def api_create_user():
     # so the user can log in (instead of signing up) and will be prompted to change it.
     p12_bytes = None
     p12_password = None
+    cert_serial = None
+    cert_not_before = None
+    cert_not_after = None
     settings = SystemSettings.query.first()
     try:
-        p12_bytes, p12_password = generate_client_p12(CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email)
+        p12_bytes, p12_password, cert_serial, cert_not_before, cert_not_after = generate_client_p12(
+            CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], email
+        )
     except Exception:
         import logging
 
@@ -596,6 +614,9 @@ def api_create_user():
         role=role,
         is_default_pin=True,
         is_approved=True,
+        cert_serial_number=format(cert_serial, "x") if cert_serial else None,
+        cert_issued_at=cert_not_before,
+        cert_expires_at=cert_not_after,
     )
     db.session.add(new_user)
     db.session.commit()
@@ -670,13 +691,19 @@ def api_update_user(user_id):
     if "approved" in data and bool(data["approved"]) and not was_approved:
         settings = SystemSettings.query.first()
         if settings and settings.smtp_enabled:
-            send_approval_email(
+            _ok, _err, cert_meta = send_approval_email(
                 user.email,
                 settings.device_name or "ThumbsUp",
                 settings,
                 ca_cert_path=CONFIG["CERT_PATH"],
                 ca_key_path=CONFIG["KEY_PATH"],
             )
+            if cert_meta:
+                user.cert_serial_number = format(cert_meta["serial"], "x")
+                user.cert_issued_at = cert_meta["not_before"]
+                user.cert_expires_at = cert_meta["not_after"]
+                user.cert_revoked = False
+                db.session.commit()
 
     return jsonify({"user": user.to_dict()}), 200
 
@@ -699,6 +726,160 @@ def api_delete_user(user_id):
     db.session.commit()
 
     return jsonify({"success": True}), 200
+
+
+# ── Certificate Revocation & Re-issue ────────────────────────────────────────
+
+
+def _rebuild_crl():
+    """Rebuild the CRL file from all revoked certificates in the database."""
+    entries = [
+        {"serial_number": int(rc.serial_number, 16), "revoked_at": rc.revoked_at}
+        for rc in RevokedCertificate.query.all()
+    ]
+    crl_bytes = generate_crl(CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], entries)
+    crl_path = os.path.join(os.path.dirname(CONFIG["CERT_PATH"]), "crl.pem")
+    update_crl_file(crl_bytes, crl_path)
+
+
+def _revoke_user_cert(user, reason, revoked_by_id=None):
+    """Internal helper: revoke a user's current certificate.
+
+    Returns the RevokedCertificate record, or None if user has no cert.
+    """
+    if not user.cert_serial_number:
+        return None
+
+    record = RevokedCertificate(
+        serial_number=user.cert_serial_number,
+        user_id=user.id,
+        reason=reason,
+        revoked_by=revoked_by_id,
+    )
+    db.session.add(record)
+
+    user.cert_revoked = True
+    user.cert_serial_number = None
+    user.cert_issued_at = None
+    user.cert_expires_at = None
+    db.session.commit()
+
+    _rebuild_crl()
+    return record
+
+
+@app.route("/api/v1/users/<int:user_id>/revoke-cert", methods=["POST"])
+@auth.require_admin()
+def api_revoke_cert(user_id):
+    """Revoke a user's client certificate (admin only).
+
+    The user's account and permissions are preserved.  File access via mTLS
+    is blocked until a new certificate is re-issued.
+    """
+    from models import SystemSettings
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
+
+    if user.cert_revoked or not user.cert_serial_number:
+        return jsonify({"error": "User has no active certificate to revoke", "code": "NO_ACTIVE_CERT"}), 400
+
+    token = auth.get_token_from_request()
+    admin_user = auth.get_user_from_token(token)
+
+    record = _revoke_user_cert(user, "admin_revoked", revoked_by_id=admin_user.id if admin_user else None)
+
+    # Send notification email
+    settings = SystemSettings.query.first()
+    if settings and settings.smtp_enabled:
+        send_revocation_email(user.email, settings.device_name or "ThumbsUp", settings)
+
+    return jsonify(
+        {
+            "message": f"Certificate revoked for {user.email}",
+            "revokedSerial": record.serial_number if record else None,
+            "user": user.to_dict(),
+        }
+    ), 200
+
+
+@app.route("/api/v1/users/<int:user_id>/reissue-cert", methods=["POST"])
+@auth.require_admin()
+def api_reissue_cert(user_id):
+    """Re-issue a client certificate for a user (admin only).
+
+    The user's previous certificate must have been revoked first.  A new P12
+    bundle is generated and emailed to the user.
+    """
+    from models import SystemSettings
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
+
+    if user.cert_serial_number and not user.cert_revoked:
+        return jsonify(
+            {
+                "error": "User already has an active certificate. Revoke it first.",
+                "code": "CERT_STILL_ACTIVE",
+            }
+        ), 400
+
+    # Generate new certificate
+    try:
+        p12_bytes, p12_password, serial, not_before, not_after = generate_client_p12(
+            CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], user.email
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).error("Failed to generate client cert for %s", user.email, exc_info=True)
+        return jsonify({"error": "Failed to generate certificate", "code": "CERT_GEN_FAILED"}), 500
+
+    user.cert_serial_number = format(serial, "x")
+    user.cert_issued_at = not_before
+    user.cert_expires_at = not_after
+    user.cert_revoked = False
+    db.session.commit()
+
+    # Email new cert to user
+    settings = SystemSettings.query.first()
+    if settings and settings.smtp_enabled:
+        send_invite_email(
+            user.email,
+            settings.device_name or "ThumbsUp",
+            settings,
+            p12_data=(p12_bytes, p12_password),
+        )
+
+    return jsonify(
+        {
+            "message": f"New certificate issued for {user.email}",
+            "user": user.to_dict(),
+        }
+    ), 200
+
+
+@app.route("/api/v1/users/<int:user_id>/cert-status", methods=["GET"])
+@auth.require_admin()
+def api_cert_status(user_id):
+    """Get certificate status and revocation history for a user (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found", "code": "USER_NOT_FOUND"}), 404
+
+    history = RevokedCertificate.query.filter_by(user_id=user_id).order_by(RevokedCertificate.revoked_at.desc()).all()
+
+    return jsonify(
+        {
+            "serial": user.cert_serial_number,
+            "issuedAt": user.cert_issued_at.isoformat() if user.cert_issued_at else None,
+            "expiresAt": user.cert_expires_at.isoformat() if user.cert_expires_at else None,
+            "isRevoked": user.cert_revoked,
+            "revocationHistory": [r.to_dict() for r in history],
+        }
+    ), 200
 
 
 @app.route("/api/v1/users/<int:user_id>/permissions", methods=["GET"])
@@ -1126,6 +1307,8 @@ def _require_mtls_for_protected(user):
                 cn_value = part[3:].strip()
                 break
         if not cn_value or cn_value.lower() != user.email.lower():
+            # Log the mismatch for abuse detection
+            _log_cn_mismatch(cn_value, user.id)
             return jsonify(
                 {
                     "error": "Client certificate does not match your account. Please install the correct .p12 certificate.",
@@ -1133,6 +1316,47 @@ def _require_mtls_for_protected(user):
                 }
             ), 403
     return None
+
+
+# CN mismatch abuse detection settings
+CN_MISMATCH_THRESHOLD = int(os.getenv("CN_MISMATCH_THRESHOLD", "3"))
+CN_MISMATCH_WINDOW_MINUTES = int(os.getenv("CN_MISMATCH_WINDOW_MINUTES", "60"))
+
+
+def _log_cn_mismatch(presented_cn, authenticated_user_id):
+    """Log a CN mismatch and auto-revoke the abused cert if threshold exceeded."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if not presented_cn:
+        return
+
+    log_entry = MtlsMismatchLog(
+        presented_cn=presented_cn,
+        authenticated_user_id=authenticated_user_id,
+    )
+    db.session.add(log_entry)
+    db.session.commit()
+
+    # Count recent mismatches for this CN within the time window
+    window_start = datetime.utcnow() - timedelta(minutes=CN_MISMATCH_WINDOW_MINUTES)
+    count = MtlsMismatchLog.query.filter(
+        MtlsMismatchLog.presented_cn == presented_cn,
+        MtlsMismatchLog.timestamp >= window_start,
+    ).count()
+
+    if count >= CN_MISMATCH_THRESHOLD:
+        # Auto-revoke the cert belonging to the CN email (the cert being abused)
+        abused_user = User.query.filter_by(email=presented_cn).first()
+        if abused_user and abused_user.cert_serial_number and not abused_user.cert_revoked:
+            logger.warning(
+                "Auto-revoking cert for %s due to %d CN mismatches in %d minutes",
+                presented_cn,
+                count,
+                CN_MISMATCH_WINDOW_MINUTES,
+            )
+            _revoke_user_cert(abused_user, "cn_mismatch_abuse")
 
 
 @app.route("/api/v1/files", methods=["GET"])
@@ -1878,6 +2102,65 @@ def create_default_admin(hostname, pin):
     return default_admin
 
 
+# ── Certificate Expiry Background Task ───────────────────────────────────────
+
+CERT_EXPIRY_CHECK_DAYS = int(os.getenv("CERT_EXPIRY_CHECK_DAYS", "7"))
+CERT_EXPIRY_CHECK_INTERVAL_HOURS = int(os.getenv("CERT_EXPIRY_CHECK_INTERVAL_HOURS", "24"))
+
+
+def _check_expiring_certs():
+    """Revoke certs nearing expiry and notify users."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    with app.app_context():
+        threshold = datetime.utcnow() + timedelta(days=CERT_EXPIRY_CHECK_DAYS)
+        expiring = User.query.filter(
+            User.cert_expires_at <= threshold,
+            User.cert_revoked == False,  # noqa: E712
+            User.cert_serial_number.isnot(None),
+        ).all()
+
+        if not expiring:
+            return
+
+        from models import SystemSettings
+
+        settings = SystemSettings.query.first()
+
+        for user in expiring:
+            logger.info("Auto-revoking expiring cert for %s (expires %s)", user.email, user.cert_expires_at)
+            _revoke_user_cert(user, "expiry_approaching")
+            if settings and settings.smtp_enabled:
+                send_revocation_email(
+                    user.email,
+                    settings.device_name or "ThumbsUp",
+                    settings,
+                    reason="Your certificate is expiring soon.",
+                )
+
+
+def _start_cert_expiry_checker():
+    """Start a daemon thread that periodically checks for expiring certs."""
+    import threading
+    import time
+
+    def _loop():
+        interval = CERT_EXPIRY_CHECK_INTERVAL_HOURS * 3600
+        while True:
+            try:
+                _check_expiring_certs()
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).error("Cert expiry check failed", exc_info=True)
+            time.sleep(interval)
+
+    t = threading.Thread(target=_loop, daemon=True, name="cert-expiry-checker")
+    t.start()
+
+
 def main():
     """Main server entry point."""
     print("=" * 60)
@@ -1934,9 +2217,61 @@ def main():
             db.session.execute(text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''"))
             print("✅ Migrated: added allowed_domains column to system_settings table")
 
+        # Migrate: add cert tracking columns to users if missing
+        cert_user_migrations = [
+            ("cert_serial_number", "VARCHAR(255)", "NULL"),
+            ("cert_revoked", "BOOLEAN", "0"),
+            ("cert_issued_at", "DATETIME", "NULL"),
+            ("cert_expires_at", "DATETIME", "NULL"),
+        ]
+        for col_name, col_type, default_val in cert_user_migrations:
+            if col_name not in user_columns:
+                db.session.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default_val}"))
+                print(f"✅ Migrated: added {col_name} column to users table")
+
+        # Migrate: create revoked_certificates table if missing
+        existing_tables = inspector.get_table_names()
+        if "revoked_certificates" not in existing_tables:
+            db.session.execute(
+                text("""
+                CREATE TABLE revoked_certificates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    serial_number VARCHAR(255) NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    revoked_at DATETIME NOT NULL,
+                    reason VARCHAR(50),
+                    revoked_by INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (revoked_by) REFERENCES users(id)
+                )
+            """)
+            )
+            print("✅ Migrated: created revoked_certificates table")
+
+        # Migrate: create mtls_mismatch_logs table if missing
+        if "mtls_mismatch_logs" not in existing_tables:
+            db.session.execute(
+                text("""
+                CREATE TABLE mtls_mismatch_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    presented_cn VARCHAR(255) NOT NULL,
+                    authenticated_user_id INTEGER NOT NULL,
+                    timestamp DATETIME NOT NULL,
+                    FOREIGN KEY (authenticated_user_id) REFERENCES users(id)
+                )
+            """)
+            )
+            print("✅ Migrated: created mtls_mismatch_logs table")
+
         db.session.commit()
 
         print("✅ Database initialized")
+
+        # Ensure an empty CRL exists so nginx can start with ssl_crl
+        from utils.generate_certs import generate_empty_crl
+
+        crl_path = os.path.join(os.path.dirname(CONFIG["CERT_PATH"]), "crl.pem")
+        generate_empty_crl(CONFIG["CERT_PATH"], CONFIG["KEY_PATH"], crl_path)
 
         # Create default system settings if not exists
         from models import SystemSettings
@@ -1958,6 +2293,9 @@ def main():
 
     # Generate initial access token
     token = auth.generate_guest_token(read_only=not CONFIG["ENABLE_UPLOADS"])
+
+    # Start certificate expiry checker background thread
+    _start_cert_expiry_checker()
 
     # Setup mDNS advertising
     mdns = MDNSAdvertiser(

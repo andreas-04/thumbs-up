@@ -23,6 +23,12 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 
+    # Certificate tracking fields
+    cert_serial_number = db.Column(db.String(255), nullable=True)  # Hex serial of current cert
+    cert_revoked = db.Column(db.Boolean, default=False)  # True if current cert is revoked
+    cert_issued_at = db.Column(db.DateTime, nullable=True)
+    cert_expires_at = db.Column(db.DateTime, nullable=True)
+
     # Many-to-many relationship with Group via GroupMembership
     groups = db.relationship(
         "Group",
@@ -45,6 +51,9 @@ class User(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "groups": [{"id": g.id, "name": g.name} for g in self.groups],
+            "certRevoked": self.cert_revoked,
+            "certIssuedAt": self.cert_issued_at.isoformat() if self.cert_issued_at else None,
+            "certExpiresAt": self.cert_expires_at.isoformat() if self.cert_expires_at else None,
         }
         if include_permissions:
             result["folderPermissions"] = [p.to_dict() for p in self.folder_permissions]
@@ -289,3 +298,47 @@ class GroupMembership(db.Model):
 
     def __repr__(self):
         return f"<GroupMembership group_id={self.group_id} user_id={self.user_id}>"
+
+
+class RevokedCertificate(db.Model):
+    """Record of a revoked client certificate."""
+
+    __tablename__ = "revoked_certificates"
+
+    REASONS = {"admin_revoked", "expiry_approaching", "cn_mismatch_abuse", "reissued"}
+
+    id = db.Column(db.Integer, primary_key=True)
+    serial_number = db.Column(db.String(255), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    revoked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    reason = db.Column(db.String(50), nullable=False)
+    revoked_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    user = db.relationship("User", foreign_keys=[user_id], backref=db.backref("revoked_certs", lazy=True))
+
+    def __repr__(self):
+        return f"<RevokedCertificate serial={self.serial_number} reason={self.reason}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "serialNumber": self.serial_number,
+            "userId": self.user_id,
+            "revokedAt": self.revoked_at.isoformat() if self.revoked_at else None,
+            "reason": self.reason,
+            "revokedBy": self.revoked_by,
+        }
+
+
+class MtlsMismatchLog(db.Model):
+    """Log of client certificate CN mismatches for abuse detection."""
+
+    __tablename__ = "mtls_mismatch_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    presented_cn = db.Column(db.String(255), nullable=False, index=True)
+    authenticated_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<MtlsMismatchLog cn={self.presented_cn} user_id={self.authenticated_user_id}>"
