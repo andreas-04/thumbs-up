@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Shield, AlertCircle } from 'lucide-react';
+import { Terminal, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Signup() {
@@ -22,27 +22,25 @@ export default function Signup() {
     setError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('passwords do not match');
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError('password must be at least 8 characters');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Import and use the API
       const { api } = await import('../../services/api');
       await api.signup({ email, password, username });
       
-      // Domain-allowlisted signup succeeded — proceed to login.
-      toast.success('Account created! A security certificate has been emailed to you. Please install it before logging in.', { duration: 8000 });
+      toast.success('account created -- check email for certificate', { duration: 8000 });
       navigate('/login');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration';
+      const errorMessage = err instanceof Error ? err.message : 'registration failed';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -50,30 +48,28 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-              <Shield className="h-8 w-8 text-white" />
-            </div>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-sm glass">
+        <CardHeader className="space-y-1 text-center pb-4">
+          <div className="flex justify-center mb-3">
+            <Terminal className="h-8 w-8 text-term-green" />
           </div>
-          <CardTitle className="text-2xl text-white">Create Account</CardTitle>
-          <CardDescription className="text-gray-400">
-            Sign up to get started with ThumbsUp File Share
+          <CardTitle className="text-lg text-foreground tracking-tight">sign up</CardTitle>
+          <CardDescription className="text-muted-foreground text-xs">
+            create an account
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {error && (
-              <Alert variant="destructive" className="bg-red-950 border-red-900">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+              <Alert variant="destructive" className="glass border-term-red/20 py-2">
+                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertDescription className="text-term-red text-xs">{error}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-gray-200">Username</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="username" className="text-muted-foreground text-xs">username</Label>
               <Input
                 id="username"
                 type="text"
@@ -81,54 +77,54 @@ export default function Signup() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 autoFocus
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-200">Email</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-muted-foreground text-xs">email</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-200">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-muted-foreground text-xs">password</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-gray-200">Confirm Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword" className="text-muted-foreground text-xs">confirm password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating Account...' : 'Sign Up'}
+            <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+              {loading ? 'creating...' : 'sign up'}
             </Button>
 
-            <div className="text-center text-sm mt-4">
-              <span className="text-gray-400">Already have an account?</span>{' '}
-              <a href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
-                Sign in
+            <div className="text-center text-xs pt-2">
+              <span className="text-muted-foreground">have an account? </span>
+              <a href="/login" className="text-term-blue hover:text-term-cyan transition-colors">
+                sign in
               </a>
             </div>
           </form>

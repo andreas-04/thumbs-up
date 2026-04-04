@@ -92,7 +92,7 @@ def generate_self_signed_cert(
                 key_agreement=False,
                 content_commitment=False,
                 data_encipherment=False,
-                crl_sign=False,
+                crl_sign=True,
                 encipher_only=False,
                 decipher_only=False,
             ),
@@ -205,7 +205,7 @@ def generate_client_cert(ca_cert_path, ca_key_path, user_email, validity_days=36
         encryption_algorithm=serialization.NoEncryption(),
     )
 
-    return client_cert_pem, client_key_pem
+    return client_cert_pem, client_key_pem, cert.serial_number
 
 
 def generate_client_p12(ca_cert_path, ca_key_path, user_email, p12_password=None, validity_days=365):
@@ -229,7 +229,7 @@ def generate_client_p12(ca_cert_path, ca_key_path, user_email, p12_password=None
     from cryptography.hazmat.primitives.serialization import pkcs12
 
     # Generate the client cert + key in PEM form first
-    client_cert_pem, client_key_pem = generate_client_cert(
+    client_cert_pem, client_key_pem, serial_number = generate_client_cert(
         ca_cert_path, ca_key_path, user_email, validity_days=validity_days
     )
 
@@ -260,7 +260,79 @@ def generate_client_p12(ca_cert_path, ca_key_path, user_email, p12_password=None
         encryption_algorithm=serialization.BestAvailableEncryption(password_bytes),
     )
 
-    return p12_bytes, password_str
+    return p12_bytes, password_str, serial_number, client_cert.not_valid_before_utc, client_cert.not_valid_after_utc
+
+
+def generate_crl(ca_cert_path, ca_key_path, revoked_entries):
+    """Generate a PEM-encoded Certificate Revocation List (CRL).
+
+    Args:
+        ca_cert_path: Path to the CA certificate
+        ca_key_path: Path to the CA private key
+        revoked_entries: List of dicts with 'serial_number' (int) and 'revoked_at' (datetime)
+
+    Returns:
+        PEM-encoded CRL bytes.
+    """
+    with open(ca_cert_path, "rb") as f:
+        ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+    with open(ca_key_path, "rb") as f:
+        ca_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+    builder = x509.CertificateRevocationListBuilder()
+    builder = builder.issuer_name(ca_cert.subject)
+    builder = builder.last_update(datetime.now(UTC))
+    builder = builder.next_update(datetime.now(UTC) + timedelta(days=7))
+
+    for entry in revoked_entries:
+        revoked = (
+            x509.RevokedCertificateBuilder()
+            .serial_number(entry["serial_number"])
+            .revocation_date(entry["revoked_at"])
+            .build()
+        )
+        builder = builder.add_revoked_certificate(revoked)
+
+    crl = builder.sign(ca_key, hashes.SHA256(), default_backend())
+    return crl.public_bytes(serialization.Encoding.PEM)
+
+
+def update_crl_file(crl_pem_bytes, crl_path="./certs/crl.pem"):
+    """Atomically write a CRL file to disk.
+
+    Writes to a temp file first, then renames to avoid partial reads by nginx.
+    """
+    import tempfile
+
+    os.makedirs(os.path.dirname(crl_path), exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(crl_path), suffix=".tmp")
+    try:
+        os.write(fd, crl_pem_bytes)
+    finally:
+        os.close(fd)
+    os.replace(tmp_path, crl_path)
+
+
+def _crl_matches_ca(crl_path, ca_cert_path):
+    """Return True if the existing CRL was signed by the current CA."""
+    try:
+        with open(crl_path, "rb") as f:
+            crl = x509.load_pem_x509_crl(f.read(), default_backend())
+        with open(ca_cert_path, "rb") as f:
+            ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+        return crl.is_signature_valid(ca_cert.public_key())
+    except Exception:
+        return False
+
+
+def generate_empty_crl(ca_cert_path, ca_key_path, crl_path="./certs/crl.pem"):
+    """Generate an empty CRL file if none exists or the existing one doesn't match the current CA."""
+    if os.path.exists(crl_path) and _crl_matches_ca(crl_path, ca_cert_path):
+        return
+    crl_bytes = generate_crl(ca_cert_path, ca_key_path, [])
+    update_crl_file(crl_bytes, crl_path)
+    print(f"✅ Empty CRL generated at {crl_path}")
 
 
 if __name__ == "__main__":

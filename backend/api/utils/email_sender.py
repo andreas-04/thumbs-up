@@ -103,12 +103,16 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
     attachments = []
     cert_generated = False
     p12_password = None
+    cert_meta = None
 
     if ca_cert_path and ca_key_path:
         try:
-            p12_bytes, p12_password = generate_client_p12(ca_cert_path, ca_key_path, user_email)
+            p12_bytes, p12_password, serial, not_before, not_after = generate_client_p12(
+                ca_cert_path, ca_key_path, user_email
+            )
             attachments.append(("thumbsup-client.p12", p12_bytes))
             cert_generated = True
+            cert_meta = {"serial": serial, "not_before": not_before, "not_after": not_after}
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)
 
@@ -124,7 +128,9 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
             "<p>Install it on your device to gain access to protected files.</p>"
         )
 
-    return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
+    result = _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
+    # Return (success, error, cert_meta) — cert_meta is None when no cert generated
+    return result[0], result[1], cert_meta
 
 
 def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_key_path=None, p12_data=None):
@@ -143,12 +149,12 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
 
     # Use pre-generated cert data if provided, otherwise generate on the fly
     if p12_data:
-        p12_bytes, p12_password = p12_data
+        p12_bytes, p12_password = p12_data[0], p12_data[1]
         attachments.append(("thumbsup-client.p12", p12_bytes))
         cert_generated = True
     elif ca_cert_path and ca_key_path:
         try:
-            p12_bytes, p12_password = generate_client_p12(ca_cert_path, ca_key_path, user_email)
+            p12_bytes, p12_password, _serial, _nb, _na = generate_client_p12(ca_cert_path, ca_key_path, user_email)
             attachments.append(("thumbsup-client.p12", p12_bytes))
             cert_generated = True
         except Exception as exc:
@@ -188,3 +194,32 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
         )
 
     return _send_email(settings, user_email, subject, body_html, body_text, attachments=attachments)
+
+
+def send_revocation_email(user_email, device_name, settings, reason=None):
+    """Notify a user that their client certificate has been revoked.
+
+    Args:
+        user_email: Recipient email address
+        device_name: Device/service display name
+        settings: SystemSettings object with SMTP configuration
+        reason: Optional human-readable reason string
+    """
+    subject = f"Certificate revoked on {device_name}"
+    reason_text = reason or "Your certificate has been revoked by an administrator."
+
+    body_text = (
+        f"Your client certificate for {device_name} has been revoked.\n\n"
+        f"Reason: {reason_text}\n\n"
+        f"You will no longer be able to access protected files until a new certificate is issued.\n"
+        f"Please contact your administrator for a replacement certificate.\n"
+    )
+    body_html = (
+        f"<h2>Certificate Revoked</h2>"
+        f"<p>Your client certificate for <strong>{device_name}</strong> has been revoked.</p>"
+        f"<p><strong>Reason:</strong> {reason_text}</p>"
+        f"<p>You will no longer be able to access protected files until a new certificate is issued.</p>"
+        f"<p>Please contact your administrator for a replacement certificate.</p>"
+    )
+
+    return _send_email(settings, user_email, subject, body_html, body_text)

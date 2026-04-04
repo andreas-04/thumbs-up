@@ -16,11 +16,11 @@ export default function AdminDashboard() {
   if (!settings) return null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-white">Dashboard</h1>
-        <p className="text-gray-400 mt-1">
-          {settings.deviceName} - File Sharing System
+        <h1 className="text-lg font-medium text-foreground">dashboard</h1>
+        <p className="text-muted-foreground text-xs mt-0.5">
+          {settings.deviceName}
         </p>
       </div>
         <FileBrowser />

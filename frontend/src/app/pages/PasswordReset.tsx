@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Shield, AlertCircle } from 'lucide-react';
+import { Terminal, AlertCircle } from 'lucide-react';
 
 export default function PasswordReset() {
   const [newPassword, setNewPassword] = useState('');
@@ -22,85 +22,75 @@ export default function PasswordReset() {
     setError('');
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('passwords do not match');
       return;
     }
 
     if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('password must be at least 6 characters');
       return;
     }
 
     setLoading(true);
     try {
       const response = await api.changePassword('', newPassword);
-      // Update user in context with new user data
       updateUser(response.user);
-      // Redirect based on role
       navigate(user?.role === 'admin' ? '/admin/dashboard' : '/files');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change password');
+      setError(err instanceof Error ? err.message : 'failed to change password');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-              <Shield className="h-8 w-8 text-white" />
-            </div>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-sm glass">
+        <CardHeader className="space-y-1 text-center pb-4">
+          <div className="flex justify-center mb-3">
+            <Terminal className="h-8 w-8 text-term-yellow" />
           </div>
-          <CardTitle className="text-2xl text-white">Reset Your Password</CardTitle>
-          <CardDescription className="text-gray-400">
-            Please change your default password to continue
+          <CardTitle className="text-lg text-foreground tracking-tight">reset password</CardTitle>
+          <CardDescription className="text-muted-foreground text-xs">
+            change your default password to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {error && (
-              <Alert variant="destructive" className="bg-red-950 border-red-900">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+              <Alert variant="destructive" className="glass border-term-red/20 py-2">
+                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertDescription className="text-term-red text-xs">{error}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="newPassword" className="text-gray-200">New Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="newPassword" className="text-muted-foreground text-xs">new password</Label>
               <Input
                 id="newPassword"
                 type="password"
-                placeholder="Enter new password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 autoFocus
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-gray-200">Confirm Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword" className="text-muted-foreground text-xs">confirm password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Confirm new password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="bg-gray-800 border-gray-700 text-white"
+                className="glass border-glass-border text-foreground h-9 text-sm"
               />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={loading}
-            >
-              {loading ? 'Changing Password...' : 'Change Password'}
+            <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+              {loading ? 'updating...' : 'change password'}
             </Button>
           </form>
         </CardContent>

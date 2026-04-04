@@ -27,6 +27,8 @@ export interface User {
   last_login?: string | null;
   isApproved?: boolean;
   groups?: { id: number; name: string }[];
+  certRevoked?: boolean;
+  certExpiresAt?: string | null;
 }
 
 export type SystemSettingsType = SystemSettings;
@@ -116,6 +118,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         isApproved: u.isApproved,
         folderPermissions: u.folderPermissions || [],
         groups: u.groups || [],
+        certRevoked: u.certRevoked,
+        certExpiresAt: u.certExpiresAt,
       }));
       setUsers(formattedUsers);
     } catch (err) {

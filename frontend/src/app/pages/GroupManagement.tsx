@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
@@ -25,8 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Alert, AlertDescription } from '../components/ui/alert';
-import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
@@ -36,7 +33,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Info,
   FolderOpen,
   ShieldCheck,
   UserPlus,
@@ -195,96 +191,81 @@ export default function GroupManagement() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">Groups</h1>
-          <p className="text-gray-400 mt-1">
-            Manage permission groups and their members
+          <h1 className="text-lg text-foreground">groups</h1>
+          <p className="text-muted-foreground text-xs mt-1">
+            manage permission groups and members
           </p>
         </div>
-        <Button onClick={openCreateDialog} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Group
+        <Button onClick={openCreateDialog} size="sm" className="gap-1.5 h-7 text-xs">
+          <Plus className="h-3.5 w-3.5" />
+          create group
         </Button>
       </div>
 
-      <Alert className="bg-purple-950 border-purple-900">
-        <Info className="h-4 w-4 text-purple-400" />
-        <AlertDescription className="text-purple-300">
-          Group permissions override domain defaults. When a user belongs to multiple groups,
-          the most permissive setting wins. User-level overrides take precedence over group permissions.
-        </AlertDescription>
-      </Alert>
-
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">All Groups</CardTitle>
-          <CardDescription className="text-gray-400">
-            Click a group to manage its permissions and members
-          </CardDescription>
+      <Card className="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-foreground">all groups</CardTitle>
         </CardHeader>
         <CardContent>
           {groups.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">
-              No groups created yet. Click "Create Group" to get started.
+            <p className="text-muted-foreground text-center py-6 text-xs">
+              no groups yet.
             </p>
           ) : (
-            <div className="border border-gray-800 rounded-lg overflow-hidden">
+            <div className="border border-glass-border rounded overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                    <TableHead className="text-gray-300">Group</TableHead>
-                    <TableHead className="text-gray-300">Members</TableHead>
-                    <TableHead className="text-gray-300">Permissions</TableHead>
-                    <TableHead className="text-right text-gray-300">Actions</TableHead>
+                  <TableRow className="border-glass-border hover:bg-glass-highlight">
+                    <TableHead className="text-muted-foreground text-xs">group</TableHead>
+                    <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">members</TableHead>
+                    <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">rules</TableHead>
+                    <TableHead className="text-right text-muted-foreground text-xs"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {groups.map((group) => (
                     <TableRow
                       key={group.id}
-                      className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                      className="border-glass-border hover:bg-glass-highlight cursor-pointer"
                       onClick={() => openDetailDialog(group)}
                     >
-                      <TableCell className="font-medium text-white">
+                      <TableCell className="text-foreground text-xs">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <UsersRound className="h-4 w-4 text-purple-400" />
+                          <div className="flex items-center gap-1.5">
+                            <UsersRound className="h-3.5 w-3.5 text-term-purple" />
                             {group.name}
                           </div>
                           {group.description && (
-                            <p className="text-sm text-gray-500 mt-1">{group.description}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{group.description}</p>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-gray-300 border-gray-700">
-                          {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}
-                        </Badge>
+                      <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
+                        {group.memberCount}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-purple-300 border-purple-800">
-                          {group.permissionCount} {group.permissionCount === 1 ? 'rule' : 'rules'}
-                        </Badge>
+                      <TableCell className="text-term-purple text-xs hidden sm:table-cell">
+                        {group.permissionCount}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openDetailDialog(group)}
-                            className="text-gray-400 hover:text-white"
+                            className="text-muted-foreground hover:text-foreground h-7 w-7 p-0"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(group)}
-                            className="text-gray-400 hover:text-red-400"
+                            className="text-muted-foreground hover:text-term-red h-7 w-7 p-0"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -299,120 +280,120 @@ export default function GroupManagement() {
 
       {/* Create Group Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="glass border-glass-border">
           <DialogHeader>
-            <DialogTitle className="text-white">Create Group</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Create a new permission group. You can add members and permissions after creation.
+            <DialogTitle className="text-foreground text-sm">create group</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              add members and permissions after creation.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-gray-300">Group Name</Label>
+          <div className="space-y-3 py-3">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">group name</Label>
               <Input
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                placeholder="e.g. Engineering"
-                className="bg-gray-800 border-gray-700 text-white"
+                placeholder="engineering"
+                className="glass border-glass-border text-foreground h-8 text-xs"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-gray-300">Description (optional)</Label>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">description</Label>
               <Input
                 value={groupDescription}
                 onChange={(e) => setGroupDescription(e.target.value)}
-                placeholder="e.g. Engineering team members"
-                className="bg-gray-800 border-gray-700 text-white"
+                placeholder="optional"
+                className="glass border-glass-border text-foreground h-8 text-xs"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-gray-700 text-gray-300">
-              Cancel
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="glass border-glass-border text-foreground h-8 text-xs">
+              cancel
             </Button>
-            <Button onClick={handleCreate}>Create</Button>
+            <Button onClick={handleCreate} className="h-8 text-xs">create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Group Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="glass border-glass-border max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <UsersRound className="h-5 w-5 text-purple-400" />
+            <DialogTitle className="text-foreground text-sm flex items-center gap-1.5">
+              <UsersRound className="h-3.5 w-3.5 text-term-purple" />
               {selectedGroup?.name}
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Manage group settings, permissions, and members
+            <DialogDescription className="text-muted-foreground text-xs">
+              manage permissions and members
             </DialogDescription>
           </DialogHeader>
 
-          {/* Metadata section */}
-          <div className="space-y-4 py-2 border-b border-gray-800 pb-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-300">Group Name</Label>
+          {/* Metadata */}
+          <div className="space-y-3 py-2 border-b border-glass-border pb-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-xs">name</Label>
                 <Input
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="glass border-glass-border text-foreground h-8 text-xs"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-gray-300">Description</Label>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-xs">description</Label>
                 <Input
                   value={groupDescription}
                   onChange={(e) => setGroupDescription(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="glass border-glass-border text-foreground h-8 text-xs"
                 />
               </div>
             </div>
-            <Button size="sm" onClick={handleSaveMetadata}>Save Details</Button>
+            <Button size="sm" onClick={handleSaveMetadata} className="h-7 text-xs">save details</Button>
           </div>
 
           {/* Tab switcher */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-1.5 pt-2">
             <Button
               variant={activeTab === 'permissions' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveTab('permissions')}
-              className={activeTab !== 'permissions' ? 'border-gray-700 text-gray-300' : ''}
+              className={`h-7 text-xs ${activeTab !== 'permissions' ? 'glass border-glass-border text-foreground' : ''}`}
             >
-              <ShieldCheck className="h-4 w-4 mr-1" />
-              Permissions
+              <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+              permissions
             </Button>
             <Button
               variant={activeTab === 'members' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveTab('members')}
-              className={activeTab !== 'members' ? 'border-gray-700 text-gray-300' : ''}
+              className={`h-7 text-xs ${activeTab !== 'members' ? 'glass border-glass-border text-foreground' : ''}`}
             >
-              <UserPlus className="h-4 w-4 mr-1" />
-              Members
+              <UserPlus className="h-3.5 w-3.5 mr-1" />
+              members
             </Button>
           </div>
 
           {/* Permissions tab */}
           {activeTab === 'permissions' && (
             <div className="space-y-3">
-              <div className="border border-gray-800 rounded-lg overflow-hidden">
+              <div className="border border-glass-border rounded overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800">
-                      <TableHead className="text-gray-300">Folder</TableHead>
-                      <TableHead className="text-gray-300 w-20 text-center">Read</TableHead>
-                      <TableHead className="text-gray-300 w-20 text-center">Write</TableHead>
+                    <TableRow className="border-glass-border">
+                      <TableHead className="text-muted-foreground text-xs">folder</TableHead>
+                      <TableHead className="text-muted-foreground text-xs w-16 text-center">read</TableHead>
+                      <TableHead className="text-muted-foreground text-xs w-16 text-center">write</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {allFolders.map((folder) => {
                       const perm = getPermission(folder.path);
                       return (
-                        <TableRow key={folder.path} className="border-gray-800">
-                          <TableCell className="text-white">
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="h-4 w-4 text-gray-400" />
+                        <TableRow key={folder.path} className="border-glass-border">
+                          <TableCell className="text-foreground text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                               {folder.path}
                             </div>
                           </TableCell>
@@ -434,46 +415,43 @@ export default function GroupManagement() {
                   </TableBody>
                 </Table>
               </div>
-              <Button onClick={handleSavePermissions}>Save Permissions</Button>
+              <Button onClick={handleSavePermissions} size="sm" className="h-7 text-xs">save permissions</Button>
             </div>
           )}
 
           {/* Members tab */}
           {activeTab === 'members' && (
             <div className="space-y-3">
-              <div className="border border-gray-800 rounded-lg overflow-hidden max-h-[40vh] overflow-y-auto">
+              <div className="border border-glass-border rounded overflow-hidden max-h-[40vh] overflow-y-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800">
-                      <TableHead className="text-gray-300 w-12"></TableHead>
-                      <TableHead className="text-gray-300">User</TableHead>
-                      <TableHead className="text-gray-300">Role</TableHead>
+                    <TableRow className="border-glass-border">
+                      <TableHead className="text-muted-foreground text-xs w-10"></TableHead>
+                      <TableHead className="text-muted-foreground text-xs">user</TableHead>
+                      <TableHead className="text-muted-foreground text-xs">role</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.map((user) => (
-                      <TableRow key={user.id} className="border-gray-800">
+                      <TableRow key={user.id} className="border-glass-border">
                         <TableCell>
                           <Checkbox
                             checked={memberIds.has(user.id)}
                             onCheckedChange={() => toggleMember(user.id)}
                           />
                         </TableCell>
-                        <TableCell className="text-white">{user.email}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={user.role === 'admin' ? 'text-orange-300 border-orange-800' : 'text-gray-300 border-gray-700'}
-                          >
+                        <TableCell className="text-foreground text-xs">{user.email}</TableCell>
+                        <TableCell className="text-xs">
+                          <span className={user.role === 'admin' ? 'text-term-yellow' : 'text-muted-foreground'}>
                             {user.role}
-                          </Badge>
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <Button onClick={handleSaveMembers}>Save Members</Button>
+              <Button onClick={handleSaveMembers} size="sm" className="h-7 text-xs">save members</Button>
             </div>
           )}
         </DialogContent>

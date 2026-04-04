@@ -82,12 +82,12 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <div className="min-h-screen flex items-center justify-center bg-gray-950">
+    element: <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4 text-white">404</h1>
-        <p className="text-gray-400 mb-4">Page not found</p>
-        <a href="/login" className="text-blue-400 hover:underline">
-          Go to Login
+        <h1 className="text-2xl font-medium mb-2 text-foreground">404</h1>
+        <p className="text-muted-foreground text-sm mb-4">not found</p>
+        <a href="/login" className="text-term-blue hover:text-term-cyan transition-colors text-sm">
+          back to login
         </a>
       </div>
     </div>,

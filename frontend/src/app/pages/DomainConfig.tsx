@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
@@ -25,8 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Alert, AlertDescription } from '../components/ui/alert';
-import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
@@ -137,101 +134,81 @@ export default function DomainConfigPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">Domain Configuration</h1>
-          <p className="text-gray-400 mt-1">
-            Set default permissions for users by email domain
+          <h1 className="text-lg text-foreground">domain configuration</h1>
+          <p className="text-muted-foreground text-xs mt-1">
+            default permissions by email domain
           </p>
         </div>
-        <Button onClick={openCreateDialog} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Domain
+        <Button onClick={openCreateDialog} size="sm" className="gap-1.5 h-7 text-xs">
+          <Plus className="h-3.5 w-3.5" />
+          add domain
         </Button>
       </div>
 
-      <Alert className="bg-blue-950 border-blue-900">
-        <Info className="h-4 w-4 text-blue-400" />
-        <AlertDescription className="text-blue-300">
-          Domains listed here are automatically allowlisted for user signup. Users from these
-          domains get the default permissions defined below. Group and user-level overrides
-          take precedence over domain defaults.
-        </AlertDescription>
-      </Alert>
-
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Configured Domains</CardTitle>
-          <CardDescription className="text-gray-400">
-            Click "Edit" to manage default permissions for a domain
-          </CardDescription>
+      <Card className="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-foreground">configured domains</CardTitle>
         </CardHeader>
         <CardContent>
           {domains.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">
-              No domains configured yet. Click "Add Domain" to get started.
+            <p className="text-muted-foreground text-center py-6 text-xs">
+              no domains configured yet.
             </p>
           ) : (
-            <div className="border border-gray-800 rounded-lg overflow-hidden">
+            <div className="border border-glass-border rounded overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                    <TableHead className="text-gray-300">Domain</TableHead>
-                    <TableHead className="text-gray-300">Permissions</TableHead>
-                    <TableHead className="text-right text-gray-300">Actions</TableHead>
+                  <TableRow className="border-glass-border hover:bg-glass-highlight">
+                    <TableHead className="text-muted-foreground text-xs">domain</TableHead>
+                    <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">permissions</TableHead>
+                    <TableHead className="text-right text-muted-foreground text-xs"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {domains.map((domain) => (
-                    <TableRow key={domain.id} className="border-gray-800 hover:bg-gray-800/50">
-                      <TableCell className="font-medium text-white">
-                        <div className="flex items-center gap-2">
-                          <Globe className="h-4 w-4 text-blue-400" />
+                    <TableRow key={domain.id} className="border-glass-border hover:bg-glass-highlight">
+                      <TableCell className="text-foreground text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Globe className="h-3.5 w-3.5 text-term-blue" />
                           {domain.domain}
                         </div>
                       </TableCell>
-                      <TableCell className="text-gray-400">
-                        <div className="flex flex-wrap gap-1">
-                          {domain.permissions.length === 0 ? (
-                            <Badge variant="outline" className="text-gray-500 border-gray-700">
-                              No permissions
-                            </Badge>
-                          ) : (
-                            domain.permissions.slice(0, 3).map((perm) => (
-                              <Badge
-                                key={perm.path}
-                                variant="outline"
-                                className="text-blue-300 border-blue-800"
-                              >
+                      <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
+                        {domain.permissions.length === 0 ? (
+                          <span className="text-term-dim">none</span>
+                        ) : (
+                          <span>
+                            {domain.permissions.slice(0, 3).map((perm) => (
+                              <span key={perm.path} className="mr-2 text-term-blue">
                                 {perm.path} {perm.read ? 'r' : ''}{perm.write ? 'w' : ''}
-                              </Badge>
-                            ))
-                          )}
-                          {domain.permissions.length > 3 && (
-                            <Badge variant="outline" className="text-gray-400 border-gray-700">
-                              +{domain.permissions.length - 3} more
-                            </Badge>
-                          )}
-                        </div>
+                              </span>
+                            ))}
+                            {domain.permissions.length > 3 && (
+                              <span className="text-term-dim">+{domain.permissions.length - 3}</span>
+                            )}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openEditDialog(domain)}
-                            className="text-gray-400 hover:text-white"
+                            className="text-muted-foreground hover:text-foreground h-7 w-7 p-0"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(domain)}
-                            className="text-gray-400 hover:text-red-400"
+                            className="text-muted-foreground hover:text-term-red h-7 w-7 p-0"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -246,46 +223,46 @@ export default function DomainConfigPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="glass border-glass-border max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">
-              {editingDomain ? 'Edit Domain Config' : 'Add Domain Config'}
+            <DialogTitle className="text-foreground text-sm">
+              {editingDomain ? 'edit domain' : 'add domain'}
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Set the domain name and default folder permissions for users from this domain.
+            <DialogDescription className="text-muted-foreground text-xs">
+              set domain name and default folder permissions.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label className="text-gray-300">Domain Name</Label>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">domain name</Label>
               <Input
                 value={domainName}
                 onChange={(e) => setDomainName(e.target.value)}
-                placeholder="e.g. company.com"
-                className="bg-gray-800 border-gray-700 text-white"
+                placeholder="company.com"
+                className="glass border-glass-border text-foreground h-8 text-xs"
               />
             </div>
 
-            <div className="space-y-3">
-              <Label className="text-gray-300">Default Folder Permissions</Label>
-              <div className="border border-gray-800 rounded-lg overflow-hidden">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">folder permissions</Label>
+              <div className="border border-glass-border rounded overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800">
-                      <TableHead className="text-gray-300">Folder</TableHead>
-                      <TableHead className="text-gray-300 w-20 text-center">Read</TableHead>
-                      <TableHead className="text-gray-300 w-20 text-center">Write</TableHead>
+                    <TableRow className="border-glass-border">
+                      <TableHead className="text-muted-foreground text-xs">folder</TableHead>
+                      <TableHead className="text-muted-foreground text-xs w-16 text-center">read</TableHead>
+                      <TableHead className="text-muted-foreground text-xs w-16 text-center">write</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {allFolders.map((folder) => {
                       const perm = getPermission(folder.path);
                       return (
-                        <TableRow key={folder.path} className="border-gray-800">
-                          <TableCell className="text-white">
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="h-4 w-4 text-gray-400" />
+                        <TableRow key={folder.path} className="border-glass-border">
+                          <TableCell className="text-foreground text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                               {folder.path}
                             </div>
                           </TableCell>
@@ -311,11 +288,11 @@ export default function DomainConfigPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)} className="border-gray-700 text-gray-300">
-              Cancel
+            <Button variant="outline" onClick={() => setShowDialog(false)} className="glass border-glass-border text-foreground h-8 text-xs">
+              cancel
             </Button>
-            <Button onClick={handleSave}>
-              {editingDomain ? 'Update' : 'Create'}
+            <Button onClick={handleSave} className="h-8 text-xs">
+              {editingDomain ? 'update' : 'create'}
             </Button>
           </DialogFooter>
         </DialogContent>

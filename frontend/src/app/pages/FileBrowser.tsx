@@ -6,7 +6,6 @@ import { Input } from '../components/ui/input';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
@@ -27,7 +26,6 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
-import { Badge } from '../components/ui/badge';
 import {
   FolderOpen,
   File,
@@ -181,31 +179,31 @@ export default function FileBrowser() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Shared Files</CardTitle>
+    <div className="space-y-4">
+      <Card className="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-foreground">files</CardTitle>
           
           {/* Breadcrumb Navigation */}
-          <div className="pt-4 flex items-center gap-2 text-sm">
+          <div className="pt-2 flex items-center gap-1 text-xs">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigateToFolder('/')}
-              className="text-gray-300 hover:text-white"
+              className="text-muted-foreground hover:text-foreground h-6 px-1.5"
             >
-              <Home className="h-4 w-4" />
+              <Home className="h-3.5 w-3.5" />
             </Button>
             {pathParts.map((part, index) => {
               const path = '/' + pathParts.slice(0, index + 1).join('/');
               return (
-                <div key={path} className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-600" />
+                <div key={path} className="flex items-center gap-1">
+                  <ChevronRight className="h-3 w-3 text-term-dim" />
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => navigateToFolder(path)}
-                    className="text-gray-300 hover:text-white"
+                    className="text-muted-foreground hover:text-foreground h-6 px-1.5 text-xs"
                   >
                     {part}
                   </Button>
@@ -215,14 +213,14 @@ export default function FileBrowser() {
           </div>
 
           {/* Search */}
-          <div className="pt-4">
+          <div className="pt-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search files and folders..."
+                placeholder="filter..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                className="pl-8 glass border-glass-border text-foreground placeholder:text-term-dim h-8 text-xs"
               />
             </div>
           </div>
@@ -238,69 +236,67 @@ export default function FileBrowser() {
           />
 
           {/* Action Buttons */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-3">
             <Button
               size="sm"
               variant="outline"
-              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              className="glass border-glass-border text-foreground hover:bg-glass-highlight h-7 text-xs"
               onClick={handleUploadClick}
               disabled={uploading}
             >
               {uploading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Upload className="h-4 w-4 mr-2" />
+                <Upload className="h-3.5 w-3.5 mr-1.5" />
               )}
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'uploading...' : 'upload'}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              className="glass border-glass-border text-foreground hover:bg-glass-highlight h-7 text-xs"
               onClick={() => { setNewFolderName(''); setShowNewFolderDialog(true); }}
             >
-              <FolderOpen className="h-4 w-4 mr-2" />
-              New Folder
+              <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+              new folder
             </Button>
           </div>
 
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
+          <div className="border border-glass-border rounded overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="border-gray-800 hover:bg-gray-800/50">
-                  <TableHead className="text-gray-300">Name</TableHead>
-                  <TableHead className="text-gray-300">Type</TableHead>
-                  <TableHead className="text-gray-300">Size</TableHead>
-                  <TableHead className="text-gray-300">Modified</TableHead>
-                  <TableHead className="text-right text-gray-300">Actions</TableHead>
+                <TableRow className="border-glass-border hover:bg-glass-highlight">
+                  <TableHead className="text-muted-foreground text-xs">name</TableHead>
+                  <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">size</TableHead>
+                  <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">modified</TableHead>
+                  <TableHead className="text-right text-muted-foreground text-xs w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {/* Back button if not at root */}
                 {currentPath !== '/' && (
                   <TableRow 
-                    className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                    className="border-glass-border hover:bg-glass-highlight cursor-pointer"
                     onClick={goBack}
                   >
-                    <TableCell colSpan={5} className="text-gray-400">
-                      <div className="flex items-center gap-2">
-                        <FolderOpen className="h-4 w-4" />
-                        <span>.. (Parent Directory)</span>
+                    <TableCell colSpan={4} className="text-muted-foreground text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        <span>..</span>
                       </div>
                     </TableCell>
                   </TableRow>
                 )}
 
                 {filteredFiles.length === 0 ? (
-                  <TableRow className="border-gray-800">
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                      {searchQuery ? 'No files found matching your search' : 'This folder is empty'}
+                  <TableRow className="border-glass-border">
+                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-xs">
+                      {searchQuery ? 'no matches' : 'empty'}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredFiles
                     .sort((a, b) => {
-                      // Folders first, then files
                       if (a.type !== b.type) {
                         return a.type === 'folder' ? -1 : 1;
                       }
@@ -309,28 +305,23 @@ export default function FileBrowser() {
                     .map((file) => (
                       <TableRow 
                         key={file.id || file.path} 
-                        className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                        className="border-glass-border hover:bg-glass-highlight cursor-pointer"
                         onClick={() => handleFileClick(file)}
                       >
-                        <TableCell className="font-medium text-white">
-                          <div className="flex items-center gap-2">
+                        <TableCell className="text-foreground text-xs">
+                          <div className="flex items-center gap-1.5">
                             {file.type === 'folder' ? (
-                              <FolderOpen className="h-4 w-4 text-orange-400" />
+                              <FolderOpen className="h-3.5 w-3.5 text-term-yellow" />
                             ) : (
-                              <File className="h-4 w-4 text-blue-400" />
+                              <File className="h-3.5 w-3.5 text-term-blue" />
                             )}
                             {file.name}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={file.type === 'folder' ? 'default' : 'secondary'}>
-                            {file.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-gray-400">
+                        <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
                           {formatFileSize(file.size)}
                         </TableCell>
-                        <TableCell className="text-gray-400">
+                        <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
                           {new Date(file.modifiedAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right">
@@ -342,9 +333,9 @@ export default function FileBrowser() {
                                 e.stopPropagation();
                                 downloadFile(file.path, file.name);
                               }}
-                              className="text-blue-400 hover:text-blue-300"
+                              className="text-term-blue hover:text-term-cyan h-7 w-7 p-0"
                             >
-                              <Download className="h-4 w-4" />
+                              <Download className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </TableCell>
@@ -356,45 +347,37 @@ export default function FileBrowser() {
           </div>
 
           {/* File Stats */}
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-400">
-            <div>
-              {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
-              {' '}
-              ({filteredFiles.filter((f) => f.type === 'folder').length} folder
-              {filteredFiles.filter((f) => f.type === 'folder').length !== 1 ? 's' : ''},
-              {' '}
-              {filteredFiles.filter((f) => f.type === 'file').length} file
-              {filteredFiles.filter((f) => f.type === 'file').length !== 1 ? 's' : ''})
-            </div>
+          <div className="mt-3 text-xs text-muted-foreground">
+            {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
           </div>
         </CardContent>
       </Card>
 
       {/* New Folder Dialog */}
       <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="glass border-glass-border">
           <DialogHeader>
-            <DialogTitle className="text-white">Create New Folder</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Create a new folder in <code className="text-gray-300">{currentPath}</code>
+            <DialogTitle className="text-foreground text-sm">new folder</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              in <code className="text-foreground">{currentPath}</code>
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-2">
-            <Label className="text-gray-300">Folder Name</Label>
+          <div className="py-3 space-y-1">
+            <Label className="text-muted-foreground text-xs">name</Label>
             <Input
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
-              placeholder="e.g. Documents"
-              className="bg-gray-800 border-gray-700 text-white"
+              placeholder="documents"
+              className="glass border-glass-border text-foreground h-8 text-xs"
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); }}
               autoFocus
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewFolderDialog(false)} className="border-gray-700 text-gray-300">
-              Cancel
+            <Button variant="outline" onClick={() => setShowNewFolderDialog(false)} className="glass border-glass-border text-foreground h-8 text-xs">
+              cancel
             </Button>
-            <Button onClick={handleCreateFolder}>Create</Button>
+            <Button onClick={handleCreateFolder} className="h-8 text-xs">create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
