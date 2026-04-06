@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Terminal black bg -->
+  <rect width="32" height="32" rx="5" fill="#060606"/>
+
+  <!-- Scanlines overlay -->
+  <rect width="32" height="1" y="4"  fill="#00ff41" opacity="0.03"/>
+  <rect width="32" height="1" y="8"  fill="#00ff41" opacity="0.03"/>
+  <rect width="32" height="1" y="12" fill="#00ff41" opacity="0.03"/>
+  <rect width="32" height="1" y="16" fill="#00ff41" opacity="0.03"/>
+  <rect width="32" height="1" y="20" fill="#00ff41" opacity="0.03"/>
+  <rect width="32" height="1" y="24" fill="#00ff41" opacity="0.03"/>
+
+  <!-- Left bracket [ -->
+  <rect x="5"  y="9"  width="2" height="14" rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+  <rect x="5"  y="9"  width="5" height="2"  rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+  <rect x="5"  y="21" width="5" height="2"  rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+
+  <!-- Right bracket ] -->
+  <rect x="25" y="9"  width="2" height="14" rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+  <rect x="22" y="9"  width="5" height="2"  rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+  <rect x="22" y="21" width="5" height="2"  rx="0.5" fill="#00ff41" filter="url(#glow)"/>
+
+  <!-- Center cursor block (the dot, but bolder) -->
+  <rect x="13.5" y="13.5" width="5" height="5" rx="0.8" fill="#00ff41" filter="url(#softglow)"/>
+</svg>
