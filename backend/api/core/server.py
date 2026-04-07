@@ -20,6 +20,7 @@ from werkzeug.utils import secure_filename
 from core.auth import TokenAuth
 from core.permissions import check_access, resolve_permissions_detailed
 from models import (
+    AuditLog,
     DomainConfig,
     DomainPermission,
     Group,
@@ -30,6 +31,7 @@ from models import (
     User,
     db,
 )
+from utils.audit import log_audit
 from utils.email_sender import send_approval_email, send_invite_email, send_revocation_email
 from utils.generate_certs import generate_client_p12, generate_crl, update_crl_file
 from utils.mdns_advertiser import MDNSAdvertiser
@@ -240,6 +242,7 @@ def api_login():
     user = auth.authenticate_user(email, password)
 
     if not user:
+        log_audit("auth.login_failed", target_type="user", description=f"Failed login attempt for {email}", status="failure", user_email=email)
         return jsonify({"error": "Invalid credentials", "code": "INVALID_CREDENTIALS"}), 401
 
     # Update last login
@@ -248,6 +251,8 @@ def api_login():
 
     # Generate JWT token
     token = auth.generate_session_token(user)
+
+    log_audit("auth.login", target_type="user", target_id=user.id, description=f"User {user.email} logged in", user_id=user.id, user_email=user.email)
 
     return jsonify({"token": token, "user": user.to_dict()}), 200
 
@@ -333,6 +338,8 @@ def api_signup():
     # Generate token for immediate login
     token = auth.generate_session_token(new_user)
 
+    log_audit("auth.signup", target_type="user", target_id=new_user.id, description=f"New signup: {new_user.email}", user_id=new_user.id, user_email=new_user.email)
+
     return jsonify({"token": token, "user": new_user.to_dict()}), 201
 
 
@@ -340,6 +347,7 @@ def api_signup():
 @auth.require_auth()
 def api_logout():
     """Logout current user."""
+    log_audit("auth.logout", description="User logged out")
     # JWT tokens are stateless, so we just return success
     # Frontend should delete the token
     return jsonify({"success": True}), 200
@@ -409,6 +417,8 @@ def api_change_password():
     user.password_hash = auth.hash_password(new_password)
     user.is_default_pin = False  # Clear the flag
     db.session.commit()
+
+    log_audit("auth.password_change", target_type="user", target_id=user.id, description="Password changed", user_id=user.id, user_email=user.email)
 
     # Generate new token
     new_token = auth.generate_session_token(user)
@@ -505,6 +515,8 @@ def api_update_settings():
 
     settings.updated_at = datetime.utcnow()
     db.session.commit()
+
+    log_audit("settings.update", target_type="settings", description="System settings updated")
 
     return jsonify(settings.to_dict()), 200
 
@@ -630,6 +642,8 @@ def api_create_user():
             p12_data=(p12_bytes, p12_password) if p12_bytes else None,
         )
 
+    log_audit("user.create", target_type="user", target_id=new_user.id, description=f"Created user {new_user.email}")
+
     return jsonify({"user": new_user.to_dict()}), 201
 
 
@@ -705,6 +719,8 @@ def api_update_user(user_id):
                 user.cert_revoked = False
                 db.session.commit()
 
+    log_audit("user.update", target_type="user", target_id=user.id, description=f"Updated user {user.email}")
+
     return jsonify({"user": user.to_dict()}), 200
 
 
@@ -722,8 +738,11 @@ def api_delete_user(user_id):
     if current_user and current_user.id == user_id:
         return jsonify({"error": "Cannot delete yourself", "code": "CANNOT_DELETE_SELF"}), 400
 
+    deleted_email = user.email
     db.session.delete(user)
     db.session.commit()
+
+    log_audit("user.delete", target_type="user", target_id=user_id, description=f"Deleted user {deleted_email}")
 
     return jsonify({"success": True}), 200
 
@@ -795,6 +814,8 @@ def api_revoke_cert(user_id):
     if settings and settings.smtp_enabled:
         send_revocation_email(user.email, settings.device_name or "ThumbsUp", settings)
 
+    log_audit("cert.revoke", target_type="user", target_id=user.id, description=f"Revoked certificate for {user.email}")
+
     return jsonify(
         {
             "message": f"Certificate revoked for {user.email}",
@@ -852,6 +873,8 @@ def api_reissue_cert(user_id):
             settings,
             p12_data=(p12_bytes, p12_password),
         )
+
+    log_audit("cert.reissue", target_type="user", target_id=user.id, description=f"Reissued certificate for {user.email}")
 
     return jsonify(
         {
@@ -937,6 +960,8 @@ def api_update_user_permissions(user_id):
         db.session.add(permission)
 
     db.session.commit()
+
+    log_audit("permission.user_update", target_type="user", target_id=user_id, description=f"Updated permissions for {user.email}")
 
     # Return updated permissions
     permissions = FolderPermission.query.filter_by(user_id=user_id).all()
@@ -1028,6 +1053,9 @@ def api_create_domain():
         db.session.add(dp)
 
     db.session.commit()
+
+    log_audit("domain.create", target_type="domain", target_id=dc.id, description=f"Created domain {dc.domain}")
+
     return jsonify({"domain": dc.to_dict()}), 201
 
 
@@ -1074,6 +1102,9 @@ def api_update_domain(domain_id):
             db.session.add(dp)
 
     db.session.commit()
+
+    log_audit("domain.update", target_type="domain", target_id=dc.id, description=f"Updated domain {dc.domain}")
+
     return jsonify({"domain": dc.to_dict()}), 200
 
 
@@ -1085,8 +1116,12 @@ def api_delete_domain(domain_id):
     if not dc:
         return jsonify({"error": "Domain not found", "code": "DOMAIN_NOT_FOUND"}), 404
 
+    deleted_domain = dc.domain
     db.session.delete(dc)
     db.session.commit()
+
+    log_audit("domain.delete", target_type="domain", target_id=domain_id, description=f"Deleted domain {deleted_domain}")
+
     return jsonify({"success": True}), 200
 
 
@@ -1121,6 +1156,9 @@ def api_create_group():
     grp = Group(name=name, description=data.get("description", "").strip() or None)
     db.session.add(grp)
     db.session.commit()
+
+    log_audit("group.create", target_type="group", target_id=grp.id, description=f"Created group {grp.name}")
+
     return jsonify({"group": grp.to_dict()}), 201
 
 
@@ -1159,6 +1197,9 @@ def api_update_group(group_id):
         grp.description = data["description"].strip() or None
 
     db.session.commit()
+
+    log_audit("group.update", target_type="group", target_id=grp.id, description=f"Updated group {grp.name}")
+
     return jsonify({"group": grp.to_dict(include_members=True)}), 200
 
 
@@ -1170,8 +1211,12 @@ def api_delete_group(group_id):
     if not grp:
         return jsonify({"error": "Group not found", "code": "GROUP_NOT_FOUND"}), 404
 
+    deleted_name = grp.name
     db.session.delete(grp)
     db.session.commit()
+
+    log_audit("group.delete", target_type="group", target_id=group_id, description=f"Deleted group {deleted_name}")
+
     return jsonify({"success": True}), 200
 
 
@@ -1199,6 +1244,9 @@ def api_update_group_permissions(group_id):
 
     db.session.commit()
     perms = GroupPermission.query.filter_by(group_id=group_id).all()
+
+    log_audit("permission.group_update", target_type="group", target_id=grp.id, description=f"Updated permissions for group {grp.name}")
+
     return jsonify({"permissions": [p.to_dict() for p in perms]}), 200
 
 
@@ -1223,6 +1271,9 @@ def api_update_group_members(group_id):
     db.session.commit()
     # Refresh to get updated members
     db.session.refresh(grp)
+
+    log_audit("group.members_update", target_type="group", target_id=grp.id, description=f"Updated members for group {grp.name}")
+
     return jsonify({"group": grp.to_dict(include_members=True)}), 200
 
 
@@ -1263,6 +1314,9 @@ def api_update_user_groups(user_id):
 
     db.session.commit()
     db.session.refresh(user)
+
+    log_audit("permission.user_update", target_type="user", target_id=user.id, description=f"Updated group membership for {user.email}")
+
     return jsonify({"user": user.to_dict(include_permissions=True)}), 200
 
 
@@ -1338,6 +1392,10 @@ def _log_cn_mismatch(presented_cn, authenticated_user_id):
     )
     db.session.add(log_entry)
     db.session.commit()
+
+    log_audit("cert.mtls_mismatch", target_type="user", target_id=authenticated_user_id,
+              description=f"mTLS CN mismatch: presented {presented_cn}", status="failure",
+              user_id=authenticated_user_id)
 
     # Count recent mismatches for this CN within the time window
     window_start = datetime.utcnow() - timedelta(minutes=CN_MISMATCH_WINDOW_MINUTES)
@@ -1462,11 +1520,15 @@ def api_upload_file():
 
     # Return file info
     stat = target_path.stat()
+    file_rel_path = str(Path(path) / filename) if path else filename
+
+    log_audit("file.upload", target_type="file", target_id=file_rel_path, description=f"Uploaded {filename} to /{path}" if path else f"Uploaded {filename}")
+
     return jsonify(
         {
             "file": {
                 "name": filename,
-                "path": str(Path(path) / filename) if path else filename,
+                "path": file_rel_path,
                 "size": stat.st_size,
                 "modifiedAt": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             }
@@ -1501,6 +1563,8 @@ def api_download_file():
 
     if not file_path or not file_path.is_file():
         return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
+
+    log_audit("file.download", target_type="file", target_id=path, description=f"Downloaded {path}")
 
     return send_file(str(file_path), as_attachment=True)
 
@@ -1540,7 +1604,9 @@ def api_create_directory():
 
     try:
         target_dir.mkdir(parents=True, exist_ok=False)
-        return jsonify({"folder": {"name": name, "path": str(Path(path) / name) if path else name}}), 201
+        dir_rel_path = str(Path(path) / name) if path else name
+        log_audit("file.mkdir", target_type="file", target_id=dir_rel_path, description=f"Created directory {name} in /{path}" if path else f"Created directory {name}")
+        return jsonify({"folder": {"name": name, "path": dir_rel_path}}), 201
     except FileExistsError:
         return jsonify({"error": "Directory already exists", "code": "DIR_EXISTS"}), 409
     except Exception as e:
@@ -1583,6 +1649,8 @@ def api_delete_file():
             shutil.rmtree(target_path)
         else:
             target_path.unlink()
+
+        log_audit("file.delete", target_type="file", target_id=path, description=f"Deleted {path}")
 
         return jsonify({"success": True}), 200
     except Exception as e:
@@ -1627,6 +1695,185 @@ def api_get_dashboard_stats():
             "tlsEnabled": settings.tls_enabled if settings else True,
         }
     ), 200
+
+
+# =============================================================================
+# Audit Log Endpoints (admin only)
+# =============================================================================
+
+
+@app.route("/api/v1/audit-logs", methods=["GET"])
+@auth.require_admin()
+def api_get_audit_logs():
+    """Query audit logs with filtering and pagination (admin only)."""
+    page = request.args.get("page", 1, type=int)
+    limit = min(request.args.get("limit", 100, type=int), 500)
+    action = request.args.get("action", "").strip()
+    user_email = request.args.get("user_email", "").strip()
+    status = request.args.get("status", "").strip()
+    since = request.args.get("since", "").strip()
+    search = request.args.get("search", "").strip()
+    category = request.args.get("category", "").strip()
+
+    query = AuditLog.query
+
+    # Category shortcut filters
+    if category == "files":
+        query = query.filter(AuditLog.action.like("file.%"))
+    elif category == "security":
+        query = query.filter(
+            db.or_(
+                AuditLog.action.like("auth.%"),
+                AuditLog.action.like("cert.%"),
+                AuditLog.action.like("permission.%"),
+            )
+        )
+    elif action:
+        query = query.filter(AuditLog.action.like(f"{action}%"))
+
+    if user_email:
+        query = query.filter(AuditLog.user_email.ilike(f"%{user_email}%"))
+
+    if status in ("success", "failure"):
+        query = query.filter(AuditLog.status == status)
+
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00").replace("+00:00", ""))
+            query = query.filter(AuditLog.timestamp > since_dt)
+        except (ValueError, TypeError):
+            pass
+
+    if search:
+        query = query.filter(AuditLog.description.ilike(f"%{search}%"))
+
+    total = query.count()
+    logs = query.order_by(AuditLog.timestamp.desc()).offset((page - 1) * limit).limit(limit).all()
+
+    return jsonify(
+        {
+            "logs": [log.to_dict() for log in logs],
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }
+    ), 200
+
+
+@app.route("/api/v1/audit-logs/stats", methods=["GET"])
+@auth.require_admin()
+def api_get_audit_log_stats():
+    """Get audit log statistics (admin only)."""
+    from sqlalchemy import func
+
+    total = AuditLog.query.count()
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = AuditLog.query.filter(AuditLog.timestamp >= today_start).count()
+
+    failed_auth_today = AuditLog.query.filter(
+        AuditLog.timestamp >= today_start,
+        AuditLog.action == "auth.login_failed",
+    ).count()
+
+    active_users_today = (
+        db.session.query(func.count(func.distinct(AuditLog.user_id)))
+        .filter(AuditLog.timestamp >= today_start, AuditLog.user_id.isnot(None))
+        .scalar()
+    ) or 0
+
+    return jsonify(
+        {
+            "total": total,
+            "today": today,
+            "failedAuthToday": failed_auth_today,
+            "activeUsersToday": active_users_today,
+        }
+    ), 200
+
+
+# =============================================================================
+# System / Docker Log Endpoints (admin only)
+# =============================================================================
+
+
+@app.route("/api/v1/system/logs", methods=["GET"])
+@auth.require_admin()
+def api_get_system_logs():
+    """Stream Docker container logs (admin only).
+
+    Requires the Docker socket to be mounted into the backend container.
+    """
+    container_name = request.args.get("container", "backend").strip()
+    tail = min(request.args.get("tail", 200, type=int), 1000)
+    since_param = request.args.get("since", "").strip()
+
+    allowed_containers = {
+        "backend": "thumbsup-backend",
+        "frontend": "thumbsup-frontend",
+    }
+    docker_name = allowed_containers.get(container_name)
+    if not docker_name:
+        return jsonify({"error": "Invalid container name", "code": "INVALID_CONTAINER"}), 400
+
+    try:
+        import docker
+
+        client = docker.from_env()
+        container = client.containers.get(docker_name)
+
+        kwargs = {"tail": tail, "timestamps": True, "stream": False}
+        if since_param:
+            try:
+                kwargs["since"] = datetime.fromisoformat(since_param.replace("Z", "+00:00").replace("+00:00", ""))
+            except (ValueError, TypeError):
+                pass
+
+        raw_logs = container.logs(**kwargs)
+        lines = raw_logs.decode("utf-8", errors="replace").strip().splitlines()
+
+        parsed = []
+        for line in lines:
+            # Docker timestamp format: 2026-04-06T14:23:01.123456789Z <message>
+            timestamp = ""
+            message = line
+            if len(line) > 30 and line[4] == "-" and "T" in line[:25]:
+                parts = line.split(" ", 1)
+                if len(parts) == 2:
+                    timestamp = parts[0]
+                    message = parts[1]
+
+            # Detect log level
+            level = "info"
+            upper = message.upper()
+            if "ERROR" in upper or "CRITICAL" in upper or "FATAL" in upper:
+                level = "error"
+            elif "WARNING" in upper or "WARN" in upper:
+                level = "warning"
+            elif "DEBUG" in upper:
+                level = "debug"
+
+            parsed.append({"timestamp": timestamp, "level": level, "message": message})
+
+        return jsonify({"logs": parsed, "containerName": docker_name}), 200
+
+    except ImportError:
+        return jsonify(
+            {
+                "error": "Docker SDK not installed. Add 'docker' to requirements.txt.",
+                "code": "DOCKER_SDK_MISSING",
+            }
+        ), 503
+    except Exception as e:
+        error_msg = str(e)
+        if "FileNotFoundError" in error_msg or "ConnectionError" in error_msg or "Error while fetching" in error_msg:
+            return jsonify(
+                {
+                    "error": "Docker socket not available. Mount /var/run/docker.sock to enable system logs.",
+                    "code": "DOCKER_UNAVAILABLE",
+                }
+            ), 503
+        return jsonify({"error": f"Failed to fetch logs: {error_msg}", "code": "LOG_FETCH_ERROR"}), 500
 
 
 # =============================================================================
@@ -2262,6 +2509,31 @@ def main():
             """)
             )
             print("✅ Migrated: created mtls_mismatch_logs table")
+
+        # Migrate: create audit_logs table if missing
+        if "audit_logs" not in existing_tables:
+            db.session.execute(
+                text("""
+                CREATE TABLE audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME NOT NULL,
+                    user_id INTEGER,
+                    user_email VARCHAR(255),
+                    action VARCHAR(100) NOT NULL,
+                    target_type VARCHAR(50),
+                    target_id VARCHAR(255),
+                    description VARCHAR(1024),
+                    ip_address VARCHAR(45),
+                    status VARCHAR(10) NOT NULL DEFAULT 'success',
+                    metadata_json TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                )
+            """)
+            )
+            db.session.execute(text("CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)"))
+            db.session.execute(text("CREATE INDEX ix_audit_logs_action ON audit_logs (action)"))
+            db.session.execute(text("CREATE INDEX ix_audit_timestamp_action ON audit_logs (timestamp, action)"))
+            print("✅ Migrated: created audit_logs table")
 
         db.session.commit()
 
