@@ -515,6 +515,33 @@ class ApiClient {
   }
 
   // ===========================================================================
+  // Guest File Endpoints (no auth required)
+  // ===========================================================================
+
+  async listGuestFiles(params?: {
+    path?: string;
+    search?: string;
+  }): Promise<{
+    files: FileItem[];
+    currentPath: string;
+    parentPath: string | null;
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.path) queryParams.append('path', params.path);
+    if (params?.search) queryParams.append('search', params.search);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/api/v1/guest/files${queryString ? `?${queryString}` : ''}`;
+
+    return this.request(endpoint);
+  }
+
+  getGuestDownloadUrl(path: string): string {
+    const queryParams = new URLSearchParams({ path });
+    return `${this.baseUrl}/api/v1/guest/files/download?${queryParams.toString()}`;
+  }
+
+  // ===========================================================================
   // File Operations Endpoints
   // ===========================================================================
 

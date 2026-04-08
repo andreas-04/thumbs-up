@@ -46,6 +46,7 @@ CONFIG = {
     "HOST": os.getenv("HOST", "0.0.0.0"),
     "PORT": int(os.getenv("PORT", 8443)),  # HTTPS port
     "STORAGE_PATH": os.getenv("STORAGE_PATH", str(BASE_DIR / "storage")),  # Absolute path
+    "GUEST_STORAGE_PATH": os.getenv("GUEST_STORAGE_PATH", str(BASE_DIR / "guest-storage")),  # Guest files
     "CERT_PATH": os.getenv("CERT_PATH", str(BASE_DIR / "certs" / "server_cert.pem")),
     "KEY_PATH": os.getenv("KEY_PATH", str(BASE_DIR / "certs" / "server_key.pem")),
     "TOKEN_EXPIRY_HOURS": int(os.getenv("TOKEN_EXPIRY_HOURS", 24)),
@@ -87,6 +88,9 @@ auth = TokenAuth(token_expiry_hours=CONFIG["TOKEN_EXPIRY_HOURS"], admin_pin=CONF
 
 # Ensure storage directory exists
 os.makedirs(CONFIG["STORAGE_PATH"], exist_ok=True)
+
+# Ensure guest storage directory exists
+os.makedirs(CONFIG["GUEST_STORAGE_PATH"], exist_ok=True)
 
 
 def get_server_url():
@@ -1471,6 +1475,71 @@ def _log_cn_mismatch(presented_cn, authenticated_user_id):
                 CN_MISMATCH_WINDOW_MINUTES,
             )
             _revoke_user_cert(abused_user, "cn_mismatch_abuse")
+
+
+# =============================================================================
+# Guest File Endpoints (no authentication required)
+# =============================================================================
+
+
+def _guest_list_directory(path=""):
+    """List files from the guest storage directory."""
+    guest_base = os.path.join(CONFIG["GUEST_STORAGE_PATH"], "files")
+    os.makedirs(guest_base, exist_ok=True)
+    items = _list_directory(guest_base, path)
+    items.sort(key=lambda x: (x["type"] != "folder", x["name"].lower()))
+    return items
+
+
+def _resolve_guest_file_path(rel_path):
+    """Resolve a virtual path to the guest storage filesystem path."""
+    base = Path(CONFIG["GUEST_STORAGE_PATH"]).resolve() / "files"
+    candidate = (base / rel_path).resolve()
+    if not str(candidate).startswith(str(base)):
+        return None
+    if candidate.exists():
+        return candidate
+    return None
+
+
+@app.route("/api/v1/guest/files", methods=["GET"])
+def api_guest_list_files():
+    """List files available to guests (no authentication required, read-only)."""
+    path = request.args.get("path", "")
+    search = request.args.get("search", "").strip()
+
+    try:
+        files = _guest_list_directory(path)
+
+        if search:
+            files = [f for f in files if search.lower() in f["name"].lower()]
+
+        return jsonify(
+            {
+                "files": files,
+                "currentPath": "/" + path if path else "/",
+                "parentPath": "/" + str(Path(path).parent) if path and path != "." else None,
+            }
+        ), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "code": "FILE_LIST_ERROR"}), 500
+
+
+@app.route("/api/v1/guest/files/download", methods=["GET"])
+def api_guest_download_file():
+    """Download a file from guest storage (no authentication required)."""
+    path = request.args.get("path", "")
+    if not path:
+        return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
+
+    file_path = _resolve_guest_file_path(path)
+
+    if not file_path or not file_path.is_file():
+        return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
+
+    log_audit("file.guest_download", target_type="file", target_id=path, description=f"Guest downloaded {path}")
+
+    return send_file(str(file_path), as_attachment=True)
 
 
 @app.route("/api/v1/files", methods=["GET"])

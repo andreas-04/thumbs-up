@@ -13,6 +13,7 @@ import UserFileBrowser from './pages/UserFileBrowser';
 import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
 import CertRequired from './pages/CertRequired';
+import GuestFileBrowser from './pages/GuestFileBrowser';
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +35,10 @@ export const router = createBrowserRouter([
   {
     path: '/cert-required',
     Component: CertRequired,
+  },
+  {
+    path: '/guest',
+    Component: GuestFileBrowser,
   },
   {
     path: '/files',
