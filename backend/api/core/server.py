@@ -242,7 +242,13 @@ def api_login():
     user = auth.authenticate_user(email, password)
 
     if not user:
-        log_audit("auth.login_failed", target_type="user", description=f"Failed login attempt for {email}", status="failure", user_email=email)
+        log_audit(
+            "auth.login_failed",
+            target_type="user",
+            description=f"Failed login attempt for {email}",
+            status="failure",
+            user_email=email,
+        )
         return jsonify({"error": "Invalid credentials", "code": "INVALID_CREDENTIALS"}), 401
 
     # Update last login
@@ -252,7 +258,14 @@ def api_login():
     # Generate JWT token
     token = auth.generate_session_token(user)
 
-    log_audit("auth.login", target_type="user", target_id=user.id, description=f"User {user.email} logged in", user_id=user.id, user_email=user.email)
+    log_audit(
+        "auth.login",
+        target_type="user",
+        target_id=user.id,
+        description=f"User {user.email} logged in",
+        user_id=user.id,
+        user_email=user.email,
+    )
 
     return jsonify({"token": token, "user": user.to_dict()}), 200
 
@@ -338,7 +351,14 @@ def api_signup():
     # Generate token for immediate login
     token = auth.generate_session_token(new_user)
 
-    log_audit("auth.signup", target_type="user", target_id=new_user.id, description=f"New signup: {new_user.email}", user_id=new_user.id, user_email=new_user.email)
+    log_audit(
+        "auth.signup",
+        target_type="user",
+        target_id=new_user.id,
+        description=f"New signup: {new_user.email}",
+        user_id=new_user.id,
+        user_email=new_user.email,
+    )
 
     return jsonify({"token": token, "user": new_user.to_dict()}), 201
 
@@ -418,7 +438,14 @@ def api_change_password():
     user.is_default_pin = False  # Clear the flag
     db.session.commit()
 
-    log_audit("auth.password_change", target_type="user", target_id=user.id, description="Password changed", user_id=user.id, user_email=user.email)
+    log_audit(
+        "auth.password_change",
+        target_type="user",
+        target_id=user.id,
+        description="Password changed",
+        user_id=user.id,
+        user_email=user.email,
+    )
 
     # Generate new token
     new_token = auth.generate_session_token(user)
@@ -874,7 +901,9 @@ def api_reissue_cert(user_id):
             p12_data=(p12_bytes, p12_password),
         )
 
-    log_audit("cert.reissue", target_type="user", target_id=user.id, description=f"Reissued certificate for {user.email}")
+    log_audit(
+        "cert.reissue", target_type="user", target_id=user.id, description=f"Reissued certificate for {user.email}"
+    )
 
     return jsonify(
         {
@@ -961,7 +990,12 @@ def api_update_user_permissions(user_id):
 
     db.session.commit()
 
-    log_audit("permission.user_update", target_type="user", target_id=user_id, description=f"Updated permissions for {user.email}")
+    log_audit(
+        "permission.user_update",
+        target_type="user",
+        target_id=user_id,
+        description=f"Updated permissions for {user.email}",
+    )
 
     # Return updated permissions
     permissions = FolderPermission.query.filter_by(user_id=user_id).all()
@@ -1120,7 +1154,9 @@ def api_delete_domain(domain_id):
     db.session.delete(dc)
     db.session.commit()
 
-    log_audit("domain.delete", target_type="domain", target_id=domain_id, description=f"Deleted domain {deleted_domain}")
+    log_audit(
+        "domain.delete", target_type="domain", target_id=domain_id, description=f"Deleted domain {deleted_domain}"
+    )
 
     return jsonify({"success": True}), 200
 
@@ -1245,7 +1281,12 @@ def api_update_group_permissions(group_id):
     db.session.commit()
     perms = GroupPermission.query.filter_by(group_id=group_id).all()
 
-    log_audit("permission.group_update", target_type="group", target_id=grp.id, description=f"Updated permissions for group {grp.name}")
+    log_audit(
+        "permission.group_update",
+        target_type="group",
+        target_id=grp.id,
+        description=f"Updated permissions for group {grp.name}",
+    )
 
     return jsonify({"permissions": [p.to_dict() for p in perms]}), 200
 
@@ -1272,7 +1313,12 @@ def api_update_group_members(group_id):
     # Refresh to get updated members
     db.session.refresh(grp)
 
-    log_audit("group.members_update", target_type="group", target_id=grp.id, description=f"Updated members for group {grp.name}")
+    log_audit(
+        "group.members_update",
+        target_type="group",
+        target_id=grp.id,
+        description=f"Updated members for group {grp.name}",
+    )
 
     return jsonify({"group": grp.to_dict(include_members=True)}), 200
 
@@ -1315,7 +1361,12 @@ def api_update_user_groups(user_id):
     db.session.commit()
     db.session.refresh(user)
 
-    log_audit("permission.user_update", target_type="user", target_id=user.id, description=f"Updated group membership for {user.email}")
+    log_audit(
+        "permission.user_update",
+        target_type="user",
+        target_id=user.id,
+        description=f"Updated group membership for {user.email}",
+    )
 
     return jsonify({"user": user.to_dict(include_permissions=True)}), 200
 
@@ -1393,9 +1444,14 @@ def _log_cn_mismatch(presented_cn, authenticated_user_id):
     db.session.add(log_entry)
     db.session.commit()
 
-    log_audit("cert.mtls_mismatch", target_type="user", target_id=authenticated_user_id,
-              description=f"mTLS CN mismatch: presented {presented_cn}", status="failure",
-              user_id=authenticated_user_id)
+    log_audit(
+        "cert.mtls_mismatch",
+        target_type="user",
+        target_id=authenticated_user_id,
+        description=f"mTLS CN mismatch: presented {presented_cn}",
+        status="failure",
+        user_id=authenticated_user_id,
+    )
 
     # Count recent mismatches for this CN within the time window
     window_start = datetime.utcnow() - timedelta(minutes=CN_MISMATCH_WINDOW_MINUTES)
@@ -1522,7 +1578,12 @@ def api_upload_file():
     stat = target_path.stat()
     file_rel_path = str(Path(path) / filename) if path else filename
 
-    log_audit("file.upload", target_type="file", target_id=file_rel_path, description=f"Uploaded {filename} to /{path}" if path else f"Uploaded {filename}")
+    log_audit(
+        "file.upload",
+        target_type="file",
+        target_id=file_rel_path,
+        description=f"Uploaded {filename} to /{path}" if path else f"Uploaded {filename}",
+    )
 
     return jsonify(
         {
@@ -1605,7 +1666,12 @@ def api_create_directory():
     try:
         target_dir.mkdir(parents=True, exist_ok=False)
         dir_rel_path = str(Path(path) / name) if path else name
-        log_audit("file.mkdir", target_type="file", target_id=dir_rel_path, description=f"Created directory {name} in /{path}" if path else f"Created directory {name}")
+        log_audit(
+            "file.mkdir",
+            target_type="file",
+            target_id=dir_rel_path,
+            description=f"Created directory {name} in /{path}" if path else f"Created directory {name}",
+        )
         return jsonify({"folder": {"name": name, "path": dir_rel_path}}), 201
     except FileExistsError:
         return jsonify({"error": "Directory already exists", "code": "DIR_EXISTS"}), 409
