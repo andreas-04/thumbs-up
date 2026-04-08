@@ -13,6 +13,7 @@ import {
   UsersRound,
   Shield,
   Terminal,
+  ScrollText,
 } from 'lucide-react';
 
 export function AdminLayout() {
@@ -27,6 +28,7 @@ export function AdminLayout() {
     { path: '/admin/permissions', label: 'permissions', icon: Shield },
     { path: '/admin/domains', label: 'domains', icon: Globe },
     { path: '/admin/groups', label: 'groups', icon: UsersRound },
+    { path: '/admin/audit-log', label: 'audit log', icon: ScrollText },
   ];
 
   const isActive = (path: string) => location.pathname === path;

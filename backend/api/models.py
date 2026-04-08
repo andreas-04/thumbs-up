@@ -342,3 +342,40 @@ class MtlsMismatchLog(db.Model):
 
     def __repr__(self):
         return f"<MtlsMismatchLog cn={self.presented_cn} user_id={self.authenticated_user_id}>"
+
+
+class AuditLog(db.Model):
+    """Append-only audit log of all system actions."""
+
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_email = db.Column(db.String(255), nullable=True)
+    action = db.Column(db.String(100), nullable=False, index=True)
+    target_type = db.Column(db.String(50), nullable=True)
+    target_id = db.Column(db.String(255), nullable=True)
+    description = db.Column(db.String(1024), nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    status = db.Column(db.String(10), nullable=False, default="success")
+    metadata_json = db.Column(db.Text, nullable=True)
+
+    __table_args__ = (db.Index("ix_audit_timestamp_action", "timestamp", "action"),)
+
+    def __repr__(self):
+        return f"<AuditLog {self.action} by {self.user_email} at {self.timestamp}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "userId": self.user_id,
+            "userEmail": self.user_email,
+            "action": self.action,
+            "targetType": self.target_type,
+            "targetId": self.target_id,
+            "description": self.description,
+            "ipAddress": self.ip_address,
+            "status": self.status,
+        }

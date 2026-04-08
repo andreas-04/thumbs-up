@@ -144,6 +144,61 @@ export interface EffectivePermissionEntry {
 
 export type EffectivePermissions = Record<string, EffectivePermissionEntry>;
 
+// --- Audit Logs ---
+
+export interface AuditLogEntry {
+  id: number;
+  timestamp: string;
+  userId: number | null;
+  userEmail: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  description: string | null;
+  ipAddress: string | null;
+  status: 'success' | 'failure';
+  metadata: Record<string, unknown> | null;
+}
+
+export interface AuditLogResponse {
+  logs: AuditLogEntry[];
+  total: number;
+  page: number;
+  perPage: number;
+  pages: number;
+}
+
+export interface AuditLogStats {
+  total: number;
+  today: number;
+  failedAuthToday: number;
+  activeUsersToday: number;
+}
+
+export interface AuditLogFilters {
+  page?: number;
+  perPage?: number;
+  action?: string;
+  category?: string;
+  userEmail?: string;
+  status?: string;
+  since?: string;
+  search?: string;
+}
+
+export interface SystemLogEntry {
+  timestamp: string;
+  line: string;
+}
+
+export interface SystemLogResponse {
+  container: string;
+  logs: SystemLogEntry[];
+  available: boolean;
+}
+
+export type AuditTab = 'all' | 'files' | 'security' | 'system';
+
 // =============================================================================
 // API Client Class
 // =============================================================================
@@ -661,6 +716,34 @@ class ApiClient {
 
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/api/v1/stats/dashboard');
+  }
+
+  // ===========================================================================
+  // Audit Log Endpoints
+  // ===========================================================================
+
+  async getAuditLogs(filters: AuditLogFilters = {}): Promise<AuditLogResponse> {
+    const params = new URLSearchParams();
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.perPage) params.set('per_page', String(filters.perPage));
+    if (filters.action) params.set('action', filters.action);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.userEmail) params.set('user_email', filters.userEmail);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.since) params.set('since', filters.since);
+    if (filters.search) params.set('search', filters.search);
+    const qs = params.toString();
+    return this.request<AuditLogResponse>(`/api/v1/audit-logs${qs ? `?${qs}` : ''}`);
+  }
+
+  async getAuditLogStats(): Promise<AuditLogStats> {
+    return this.request<AuditLogStats>('/api/v1/audit-logs/stats');
+  }
+
+  async getSystemLogs(container = 'thumbsup-backend', tail = 200): Promise<SystemLogResponse> {
+    return this.request<SystemLogResponse>(
+      `/api/v1/system/logs?container=${encodeURIComponent(container)}&tail=${tail}`
+    );
   }
 }
 

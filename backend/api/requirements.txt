@@ -22,3 +22,6 @@ Pillow>=10.2.0
 python-dotenv==1.0.0
 
 bcrypt==5.0.0
+
+# Docker API (for system log viewer)
+docker>=7.0.0

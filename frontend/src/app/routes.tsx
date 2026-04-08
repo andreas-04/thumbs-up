@@ -8,6 +8,7 @@ import UserManagement from './pages/UserManagement';
 import FolderPermissions from './pages/FolderPermissions';
 import DomainConfigPage from './pages/DomainConfig';
 import GroupManagement from './pages/GroupManagement';
+import AuditLog from './pages/AuditLog';
 import UserFileBrowser from './pages/UserFileBrowser';
 import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
@@ -75,6 +76,10 @@ export const router = createBrowserRouter([
           {
             path: 'groups',
             Component: GroupManagement,
+          },
+          {
+            path: 'audit-log',
+            Component: AuditLog,
           },
         ],
       },
