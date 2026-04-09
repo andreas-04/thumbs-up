@@ -46,7 +46,6 @@ CONFIG = {
     "HOST": os.getenv("HOST", "0.0.0.0"),
     "PORT": int(os.getenv("PORT", 8443)),  # HTTPS port
     "STORAGE_PATH": os.getenv("STORAGE_PATH", str(BASE_DIR / "storage")),  # Absolute path
-    "GUEST_STORAGE_PATH": os.getenv("GUEST_STORAGE_PATH", str(BASE_DIR / "guest-storage")),  # Guest files
     "CERT_PATH": os.getenv("CERT_PATH", str(BASE_DIR / "certs" / "server_cert.pem")),
     "KEY_PATH": os.getenv("KEY_PATH", str(BASE_DIR / "certs" / "server_key.pem")),
     "TOKEN_EXPIRY_HOURS": int(os.getenv("TOKEN_EXPIRY_HOURS", 24)),
@@ -89,8 +88,8 @@ auth = TokenAuth(token_expiry_hours=CONFIG["TOKEN_EXPIRY_HOURS"], admin_pin=CONF
 # Ensure storage directory exists
 os.makedirs(CONFIG["STORAGE_PATH"], exist_ok=True)
 
-# Ensure guest storage directory exists
-os.makedirs(CONFIG["GUEST_STORAGE_PATH"], exist_ok=True)
+# Ensure guest storage directory exists (subdirectory of main storage)
+os.makedirs(os.path.join(CONFIG["STORAGE_PATH"], "files", "guest"), exist_ok=True)
 
 
 def get_server_url():
@@ -1484,7 +1483,7 @@ def _log_cn_mismatch(presented_cn, authenticated_user_id):
 
 def _guest_list_directory(path=""):
     """List files from the guest storage directory."""
-    guest_base = os.path.join(CONFIG["GUEST_STORAGE_PATH"], "files")
+    guest_base = os.path.join(CONFIG["STORAGE_PATH"], "files", "guest")
     os.makedirs(guest_base, exist_ok=True)
     items = _list_directory(guest_base, path)
     items.sort(key=lambda x: (x["type"] != "folder", x["name"].lower()))
@@ -1493,7 +1492,7 @@ def _guest_list_directory(path=""):
 
 def _resolve_guest_file_path(rel_path):
     """Resolve a virtual path to the guest storage filesystem path."""
-    base = Path(CONFIG["GUEST_STORAGE_PATH"]).resolve() / "files"
+    base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files" / "guest"
     candidate = (base / rel_path).resolve()
     if not str(candidate).startswith(str(base)):
         return None

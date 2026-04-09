@@ -57,5 +57,3 @@ volumes:
     driver: local
   terracrate-certs:
     driver: local
-  thumbsup-guest-storage:
-    driver: local
