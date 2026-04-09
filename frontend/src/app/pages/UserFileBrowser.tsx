@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { api } from '../../services/api';
+import FilePreview, { getPreviewType } from '../components/FilePreview';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -52,6 +53,7 @@ export default function UserFileBrowser() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const loadFiles = async (path: string = '/') => {
     setLoading(true);
@@ -109,6 +111,10 @@ export default function UserFileBrowser() {
       const newPath = item.path.startsWith('/') ? item.path : '/' + item.path;
       loadFiles(newPath);
       setSearchQuery('');
+    } else if (getPreviewType(item.name) !== 'none') {
+      setPreviewFile(item);
+    } else {
+      handleDownload(item);
     }
   };
 
@@ -387,6 +393,20 @@ export default function UserFileBrowser() {
           </CardContent>
         </Card>
       </main>
+
+      {/* File Preview */}
+      {previewFile && (
+        <FilePreview
+          filePath={previewFile.path}
+          fileName={previewFile.name}
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          onDownload={() => {
+            handleDownload(previewFile);
+            setPreviewFile(null);
+          }}
+        />
+      )}
     </div>
   );
 }

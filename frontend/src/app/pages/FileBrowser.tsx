@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useData, FileItem } from '../contexts/DataContext';
 import { api } from '../../services/api';
+import FilePreview, { getPreviewType } from '../components/FilePreview';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -57,6 +58,9 @@ export default function FileBrowser() {
   // Delete state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
+
+  // Preview state
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   // Drag state
   const [dragItem, setDragItem] = useState<FileItem | null>(null);
@@ -234,6 +238,8 @@ export default function FileBrowser() {
     if (file.type === 'folder') {
       const newPath = file.path.startsWith('/') ? file.path : '/' + file.path;
       navigateToFolder(newPath);
+    } else if (getPreviewType(file.name) !== 'none') {
+      setPreviewFile(file);
     } else {
       downloadFile(file.path, file.name);
     }
@@ -549,6 +555,20 @@ export default function FileBrowser() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* File Preview */}
+      {previewFile && (
+        <FilePreview
+          filePath={previewFile.path}
+          fileName={previewFile.name}
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          onDownload={() => {
+            downloadFile(previewFile.path, previewFile.name);
+            setPreviewFile(null);
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

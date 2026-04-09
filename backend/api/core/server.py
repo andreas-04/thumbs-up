@@ -1630,6 +1630,39 @@ def api_download_file():
     return send_file(str(file_path), as_attachment=True)
 
 
+@app.route("/api/v1/files/preview", methods=["GET"])
+@auth.require_auth()
+def api_preview_file():
+    """Stream file inline for in-browser preview (requires authentication)."""
+    import mimetypes
+
+    path = request.args.get("path", "")
+    if not path:
+        return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
+
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+
+    if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
+        parent = str(Path(path).parent)
+        folder_path = "/" if parent == "." else "/" + parent
+        if not user_has_access(user, folder_path):
+            return jsonify({"error": "Read access denied", "code": "READ_ACCESS_DENIED"}), 403
+
+    file_path = resolve_file_path(path)
+    if not file_path or not file_path.is_file():
+        return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
+
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    if not mime_type:
+        mime_type = "application/octet-stream"
+
+    return send_file(str(file_path), as_attachment=False, mimetype=mime_type, conditional=True)
+
+
 @app.route("/api/v1/files/mkdir", methods=["POST"])
 @auth.require_auth()
 def api_create_directory():

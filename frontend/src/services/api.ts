@@ -573,6 +573,15 @@ class ApiClient {
     return this.request<Response>(endpoint);
   }
 
+  async previewFile(path: string): Promise<Response> {
+    const url = `${this.baseUrl}/api/v1/files/preview?path=${encodeURIComponent(path)}`;
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error(`Preview failed (HTTP ${response.status})`);
+    return response;
+  }
+
   async createDirectory(path: string, name: string): Promise<{ folder: { name: string; path: string } }> {
     return this.request<{ folder: { name: string; path: string } }>(
       '/api/v1/files/mkdir',
