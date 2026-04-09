@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import FilePreview, { getPreviewType } from '../components/FilePreview';
 import {
   Card,
   CardContent,
@@ -47,6 +48,7 @@ export default function GuestFileBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const loadFiles = async (path: string = '/') => {
     setLoading(true);
@@ -81,6 +83,10 @@ export default function GuestFileBrowser() {
       const newPath = item.path.startsWith('/') ? item.path : '/' + item.path;
       loadFiles(newPath);
       setSearchQuery('');
+    } else if (getPreviewType(item.name) !== 'none') {
+      setPreviewFile(item);
+    } else {
+      handleDownload(item);
     }
   };
 
@@ -311,6 +317,17 @@ export default function GuestFileBrowser() {
           </CardContent>
         </Card>
       </main>
+
+      {previewFile && (
+        <FilePreview
+          filePath={previewFile.path}
+          fileName={previewFile.name}
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          onDownload={() => handleDownload(previewFile)}
+          fetchContent={(path) => api.previewGuestFile(path)}
+        />
+      )}
     </div>
   );
 }

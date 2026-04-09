@@ -111,6 +111,12 @@ export default function AdminLogin() {
                 </a>
               </div>
             )}
+
+            <div className="text-center text-xs pt-1">
+              <a href="/guest" className="text-muted-foreground hover:text-foreground transition-colors">
+                continue as guest
+              </a>
+            </div>
           </form>
         </CardContent>
       </Card>

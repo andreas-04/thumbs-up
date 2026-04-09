@@ -1932,7 +1932,9 @@ def api_move_file():
 
     new_location = dest_parent / source.name
     if new_location.exists():
-        return jsonify({"error": "An item with that name already exists in the destination", "code": "NAME_EXISTS"}), 409
+        return jsonify(
+            {"error": "An item with that name already exists in the destination", "code": "NAME_EXISTS"}
+        ), 409
 
     # Prevent moving a directory into itself
     if source.is_dir() and str(new_location.resolve()).startswith(str(source.resolve())):
@@ -1940,6 +1942,7 @@ def api_move_file():
 
     try:
         import shutil
+
         shutil.move(str(source), str(new_location))
         new_rel = str(Path(dest_dir) / source.name) if dest_dir else source.name
         log_audit(
@@ -2163,7 +2166,9 @@ def api_get_system_logs():
                     "error": "Docker socket not available. Mount /var/run/docker.sock to enable system logs.",
                 }
             ), 200
-        return jsonify({"logs": [], "container": docker_name, "available": False, "error": f"Failed to fetch logs: {error_msg}"}), 500
+        return jsonify(
+            {"logs": [], "container": docker_name, "available": False, "error": f"Failed to fetch logs: {error_msg}"}
+        ), 500
 
 
 # =============================================================================

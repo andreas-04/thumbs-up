@@ -609,6 +609,13 @@ class ApiClient {
     return response;
   }
 
+  async previewGuestFile(path: string): Promise<Response> {
+    const url = `${this.baseUrl}/api/v1/guest/files/download?path=${encodeURIComponent(path)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Preview failed (HTTP ${response.status})`);
+    return response;
+  }
+
   async createDirectory(path: string, name: string): Promise<{ folder: { name: string; path: string } }> {
     return this.request<{ folder: { name: string; path: string } }>(
       '/api/v1/files/mkdir',
