@@ -592,6 +592,26 @@ class ApiClient {
     });
   }
 
+  async renameFile(path: string, newName: string): Promise<{ success: boolean; newPath: string; newName: string }> {
+    return this.request<{ success: boolean; newPath: string; newName: string }>(
+      '/api/v1/files/rename',
+      {
+        method: 'POST',
+        body: JSON.stringify({ path, newName }),
+      }
+    );
+  }
+
+  async moveFile(srcPath: string, destDir: string): Promise<{ success: boolean; newPath: string }> {
+    return this.request<{ success: boolean; newPath: string }>(
+      '/api/v1/files/move',
+      {
+        method: 'POST',
+        body: JSON.stringify({ srcPath, destDir }),
+      }
+    );
+  }
+
   // ===========================================================================
   // Domain Config Endpoints
   // ===========================================================================

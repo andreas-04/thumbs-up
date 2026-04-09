@@ -50,7 +50,7 @@ CONFIG = {
     "KEY_PATH": os.getenv("KEY_PATH", str(BASE_DIR / "certs" / "server_key.pem")),
     "TOKEN_EXPIRY_HOURS": int(os.getenv("TOKEN_EXPIRY_HOURS", 24)),
     "ENABLE_UPLOADS": os.getenv("ENABLE_UPLOADS", "true").lower() == "true",
-    "ENABLE_DELETE": os.getenv("ENABLE_DELETE", "false").lower() == "true",
+    "ENABLE_DELETE": os.getenv("ENABLE_DELETE", "true").lower() == "true",
     "SERVICE_NAME": os.getenv("SERVICE_NAME", "TerraCrate File Share"),
     "MDNS_HOSTNAME": os.getenv("MDNS_HOSTNAME", socket.gethostname()),
     "MAX_UPLOAD_SIZE": int(os.getenv("MAX_UPLOAD_SIZE", 100 * 1024 * 1024)),  # 100MB
@@ -1721,6 +1721,135 @@ def api_delete_file():
         return jsonify({"success": True}), 200
     except Exception as e:
         return jsonify({"error": str(e), "code": "DELETE_ERROR"}), 500
+
+
+@app.route("/api/v1/files/rename", methods=["POST"])
+@auth.require_auth()
+def api_rename_file():
+    """Rename a file or directory (requires authentication)."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    path = data.get("path", "").strip().lstrip("/")
+    new_name = data.get("newName", "").strip()
+
+    if not path:
+        return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
+    if not new_name:
+        return jsonify({"error": "New name required", "code": "MISSING_NAME"}), 400
+
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+
+    if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
+        parent = str(Path(path).parent)
+        check_path = "/" if parent == "." else "/" + parent
+        if not user_has_access(user, check_path, require_write=True):
+            return jsonify({"error": "Write access denied", "code": "WRITE_ACCESS_DENIED"}), 403
+
+    target_path = resolve_file_path(path)
+    if not target_path or not target_path.exists():
+        return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
+
+    safe_name = secure_filename(new_name)
+    if not safe_name:
+        return jsonify({"error": "Invalid file name", "code": "INVALID_NAME"}), 400
+
+    new_path = target_path.parent / safe_name
+    if new_path.exists():
+        return jsonify({"error": "A file with that name already exists", "code": "NAME_EXISTS"}), 409
+
+    # Ensure new path stays within storage
+    storage_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files"
+    if not str(new_path.resolve()).startswith(str(storage_base)):
+        return jsonify({"error": "Invalid path", "code": "INVALID_PATH"}), 400
+
+    try:
+        target_path.rename(new_path)
+        parent_rel = str(Path(path).parent)
+        new_rel = (parent_rel + "/" + safe_name).lstrip("/").lstrip(".")
+        if new_rel.startswith("/"):
+            new_rel = new_rel[1:]
+        log_audit(
+            "file.rename",
+            target_type="file",
+            target_id=path,
+            description=f"Renamed {path} to {new_rel}",
+        )
+        return jsonify({"success": True, "newPath": new_rel, "newName": safe_name}), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "code": "RENAME_ERROR"}), 500
+
+
+@app.route("/api/v1/files/move", methods=["POST"])
+@auth.require_auth()
+def api_move_file():
+    """Move a file or directory to a new location (requires authentication)."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required", "code": "MISSING_BODY"}), 400
+
+    src_path = data.get("srcPath", "").strip().lstrip("/")
+    dest_dir = data.get("destDir", "").strip().lstrip("/")
+
+    if not src_path:
+        return jsonify({"error": "Source path required", "code": "MISSING_SRC"}), 400
+
+    token = auth.get_token_from_request()
+    user = auth.get_user_from_token(token)
+
+    if user.role != "admin":
+        mtls_err = _require_mtls_for_protected(user)
+        if mtls_err:
+            return mtls_err
+        # Need write access on both source parent and destination
+        src_parent = str(Path(src_path).parent)
+        src_check = "/" if src_parent == "." else "/" + src_parent
+        dest_check = "/" + dest_dir if dest_dir else "/"
+        if not user_has_access(user, src_check, require_write=True):
+            return jsonify({"error": "Write access denied on source", "code": "WRITE_ACCESS_DENIED"}), 403
+        if not user_has_access(user, dest_check, require_write=True):
+            return jsonify({"error": "Write access denied on destination", "code": "WRITE_ACCESS_DENIED"}), 403
+
+    source = resolve_file_path(src_path)
+    if not source or not source.exists():
+        return jsonify({"error": "Source not found", "code": "FILE_NOT_FOUND"}), 404
+
+    storage_base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files"
+    dest_parent = (storage_base / dest_dir).resolve() if dest_dir else storage_base
+
+    # Guard against directory traversal
+    if not str(dest_parent).startswith(str(storage_base)):
+        return jsonify({"error": "Invalid destination", "code": "INVALID_PATH"}), 400
+
+    if not dest_parent.exists() or not dest_parent.is_dir():
+        return jsonify({"error": "Destination directory not found", "code": "DEST_NOT_FOUND"}), 404
+
+    new_location = dest_parent / source.name
+    if new_location.exists():
+        return jsonify({"error": "An item with that name already exists in the destination", "code": "NAME_EXISTS"}), 409
+
+    # Prevent moving a directory into itself
+    if source.is_dir() and str(new_location.resolve()).startswith(str(source.resolve())):
+        return jsonify({"error": "Cannot move a directory into itself", "code": "INVALID_MOVE"}), 400
+
+    try:
+        import shutil
+        shutil.move(str(source), str(new_location))
+        new_rel = str(Path(dest_dir) / source.name) if dest_dir else source.name
+        log_audit(
+            "file.move",
+            target_type="file",
+            target_id=src_path,
+            description=f"Moved {src_path} to {new_rel}",
+        )
+        return jsonify({"success": True, "newPath": new_rel}), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "code": "MOVE_ERROR"}), 500
 
 
 @app.route("/api/v1/stats/dashboard", methods=["GET"])

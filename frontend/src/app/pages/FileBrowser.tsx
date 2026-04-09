@@ -34,8 +34,10 @@ import {
   Search,
   Download,
   Upload,
-  Lock,
   Loader2,
+  Trash2,
+  Pencil,
+  GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -47,6 +49,19 @@ export default function FileBrowser() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Rename state
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
+  const [renameName, setRenameName] = useState('');
+
+  // Delete state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
+
+  // Drag state
+  const [dragItem, setDragItem] = useState<FileItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
@@ -57,7 +72,6 @@ export default function FileBrowser() {
 
     setUploading(true);
     try {
-      // API expects a relative path without leading slash; root is empty string
       const apiPath = currentPath === '/' ? '' : currentPath.replace(/^\/+/, '');
       for (let i = 0; i < selectedFiles.length; i++) {
         await api.uploadFile(selectedFiles[i], apiPath);
@@ -72,7 +86,6 @@ export default function FileBrowser() {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
-      // Reset input so re-selecting the same file triggers onChange
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -84,7 +97,6 @@ export default function FileBrowser() {
       return;
     }
     try {
-      // API expects a relative path without leading slash; root is empty string
       const apiPath = currentPath === '/' ? '' : currentPath.replace(/^\/+/, '');
       await api.createDirectory(apiPath, name);
       toast.success(`Folder "${name}" created`);
@@ -96,19 +108,105 @@ export default function FileBrowser() {
     }
   };
 
+  const handleRename = async () => {
+    if (!renameTarget) return;
+    const name = renameName.trim();
+    if (!name) {
+      toast.error('Name is required');
+      return;
+    }
+    try {
+      const filePath = renameTarget.path.replace(/^\/+/, '');
+      await api.renameFile(filePath, name);
+      toast.success(`Renamed to "${name}"`);
+      setShowRenameDialog(false);
+      setRenameTarget(null);
+      refreshFiles(currentPath);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const filePath = deleteTarget.path.replace(/^\/+/, '');
+      await api.deleteFile(filePath);
+      toast.success(`Deleted "${deleteTarget.name}"`);
+      setShowDeleteDialog(false);
+      setDeleteTarget(null);
+      refreshFiles(currentPath);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  // Drag-and-drop handlers
+  const handleDragStart = (e: React.DragEvent, file: FileItem) => {
+    setDragItem(file);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', file.path);
+  };
+
+  const handleDragOver = (e: React.DragEvent, folder: FileItem | 'parent') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragItem) return;
+    // Cannot drop onto self
+    if (folder !== 'parent' && folder.path === dragItem.path) return;
+    e.dataTransfer.dropEffect = 'move';
+    const targetPath = folder === 'parent'
+      ? (currentPath === '/' ? '/' : '/' + currentPath.split('/').filter(Boolean).slice(0, -1).join('/') || '/')
+      : folder.path;
+    setDropTarget(targetPath);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDropTarget(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, folder: FileItem | 'parent') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTarget(null);
+
+    if (!dragItem) return;
+    if (folder !== 'parent' && folder.path === dragItem.path) return;
+
+    const destDir = folder === 'parent'
+      ? (() => {
+          const parts = currentPath.split('/').filter(Boolean);
+          parts.pop();
+          return parts.join('/');
+        })()
+      : folder.path.replace(/^\/+/, '');
+
+    try {
+      const srcPath = dragItem.path.replace(/^\/+/, '');
+      await api.moveFile(srcPath, destDir);
+      toast.success(`Moved "${dragItem.name}" to /${destDir || 'root'}`);
+      refreshFiles(currentPath);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Move failed');
+    }
+    setDragItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragItem(null);
+    setDropTarget(null);
+  };
+
   if (!settings) return null;
 
-  // Files from API are already for the current directory, no filtering needed
-  // Filter by search
   const filteredFiles = files.filter((f) =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calculate path breadcrumbs
   const pathParts = currentPath.split('/').filter(Boolean);
 
   const navigateToFolder = (path: string) => {
-    // Normalize path to always have a leading slash
     const normalizedPath = path === '/' ? '/' : '/' + path.replace(/^\/+/, '');
     refreshFiles(normalizedPath);
     setSearchQuery('');
@@ -142,17 +240,14 @@ export default function FileBrowser() {
   };
 
   const downloadFile = (filePath: string, fileName: string) => {
-    // Create a download link using the API endpoint
     const token = localStorage.getItem('auth_token');
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const url = `${baseUrl}/api/v1/files/download?path=${encodeURIComponent(filePath)}`;
     
-    // Create a temporary anchor element to trigger the download
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
     
-    // If we have a token, we need to fetch with auth and create a blob URL
     if (token) {
       fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -171,7 +266,6 @@ export default function FileBrowser() {
         })
         .catch(err => console.error('Download error:', err));
     } else {
-      // No auth needed, direct download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -266,19 +360,24 @@ export default function FileBrowser() {
             <Table>
               <TableHeader>
                 <TableRow className="border-glass-border hover:bg-glass-highlight">
+                  <TableHead className="text-muted-foreground text-xs w-6"></TableHead>
                   <TableHead className="text-muted-foreground text-xs">name</TableHead>
                   <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">size</TableHead>
                   <TableHead className="text-muted-foreground text-xs hidden sm:table-cell">modified</TableHead>
-                  <TableHead className="text-right text-muted-foreground text-xs w-12"></TableHead>
+                  <TableHead className="text-right text-muted-foreground text-xs w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {/* Back button if not at root */}
                 {currentPath !== '/' && (
                   <TableRow 
-                    className="border-glass-border hover:bg-glass-highlight cursor-pointer"
+                    className={`border-glass-border hover:bg-glass-highlight cursor-pointer ${dropTarget === (currentPath === '/' ? '/' : '/' + currentPath.split('/').filter(Boolean).slice(0, -1).join('/') || '/') ? 'bg-term-blue/20' : ''}`}
                     onClick={goBack}
+                    onDragOver={(e) => handleDragOver(e, 'parent')}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, 'parent')}
                   >
+                    <TableCell className="w-6"></TableCell>
                     <TableCell colSpan={4} className="text-muted-foreground text-xs">
                       <div className="flex items-center gap-1.5">
                         <FolderOpen className="h-3.5 w-3.5" />
@@ -290,7 +389,7 @@ export default function FileBrowser() {
 
                 {filteredFiles.length === 0 ? (
                   <TableRow className="border-glass-border">
-                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-xs">
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-xs">
                       {searchQuery ? 'no matches' : 'empty'}
                     </TableCell>
                   </TableRow>
@@ -302,45 +401,85 @@ export default function FileBrowser() {
                       }
                       return a.name.localeCompare(b.name);
                     })
-                    .map((file) => (
-                      <TableRow 
-                        key={file.id || file.path} 
-                        className="border-glass-border hover:bg-glass-highlight cursor-pointer"
-                        onClick={() => handleFileClick(file)}
-                      >
-                        <TableCell className="text-foreground text-xs">
-                          <div className="flex items-center gap-1.5">
-                            {file.type === 'folder' ? (
-                              <FolderOpen className="h-3.5 w-3.5 text-term-yellow" />
-                            ) : (
-                              <File className="h-3.5 w-3.5 text-term-blue" />
-                            )}
-                            {file.name}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
-                          {formatFileSize(file.size)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
-                          {new Date(file.modifiedAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {file.type === 'file' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                downloadFile(file.path, file.name);
-                              }}
-                              className="text-term-blue hover:text-term-cyan h-7 w-7 p-0"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    .map((file) => {
+                      const isDropping = file.type === 'folder' && dropTarget === file.path;
+                      const isDragging = dragItem?.path === file.path;
+                      return (
+                        <TableRow 
+                          key={file.id || file.path} 
+                          className={`border-glass-border hover:bg-glass-highlight cursor-pointer ${isDropping ? 'bg-term-blue/20' : ''} ${isDragging ? 'opacity-40' : ''}`}
+                          onClick={() => handleFileClick(file)}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, file)}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={file.type === 'folder' ? (e) => handleDragOver(e, file) : undefined}
+                          onDragLeave={file.type === 'folder' ? handleDragLeave : undefined}
+                          onDrop={file.type === 'folder' ? (e) => handleDrop(e, file) : undefined}
+                        >
+                          <TableCell className="w-6 px-1">
+                            <GripVertical className="h-3 w-3 text-muted-foreground/50 cursor-grab" />
+                          </TableCell>
+                          <TableCell className="text-foreground text-xs">
+                            <div className="flex items-center gap-1.5">
+                              {file.type === 'folder' ? (
+                                <FolderOpen className="h-3.5 w-3.5 text-term-yellow" />
+                              ) : (
+                                <File className="h-3.5 w-3.5 text-term-blue" />
+                              )}
+                              {file.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
+                            {formatFileSize(file.size)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
+                            {new Date(file.modifiedAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {file.type === 'file' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    downloadFile(file.path, file.name);
+                                  }}
+                                  className="text-term-blue hover:text-term-cyan h-7 w-7 p-0"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenameTarget(file);
+                                  setRenameName(file.name);
+                                  setShowRenameDialog(true);
+                                }}
+                                className="text-muted-foreground hover:text-foreground h-7 w-7 p-0"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(file);
+                                  setShowDeleteDialog(true);
+                                }}
+                                className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                 )}
               </TableBody>
             </Table>
@@ -349,6 +488,7 @@ export default function FileBrowser() {
           {/* File Stats */}
           <div className="mt-3 text-xs text-muted-foreground">
             {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
+            {dragItem && <span className="ml-2 text-term-blue">drag to a folder to move</span>}
           </div>
         </CardContent>
       </Card>
@@ -378,6 +518,53 @@ export default function FileBrowser() {
               cancel
             </Button>
             <Button onClick={handleCreateFolder} className="h-8 text-xs">create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent className="glass border-glass-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground text-sm">rename</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              rename <code className="text-foreground">{renameTarget?.name}</code>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3 space-y-1">
+            <Label className="text-muted-foreground text-xs">new name</Label>
+            <Input
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              className="glass border-glass-border text-foreground h-8 text-xs"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRenameDialog(false)} className="glass border-glass-border text-foreground h-8 text-xs">
+              cancel
+            </Button>
+            <Button onClick={handleRename} className="h-8 text-xs">rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="glass border-glass-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground text-sm">delete {deleteTarget?.type === 'folder' ? 'folder' : 'file'}</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              permanently delete <code className="text-foreground">{deleteTarget?.name}</code>?
+              {deleteTarget?.type === 'folder' && ' this will delete all contents inside.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="glass border-glass-border text-foreground h-8 text-xs">
+              cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} className="h-8 text-xs">delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

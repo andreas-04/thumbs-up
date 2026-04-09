@@ -16,7 +16,7 @@ services:
       - MDNS_HOSTNAME=${MDNS_HOSTNAME:-terracrate}
       - TOKEN_EXPIRY_HOURS=24
       - ENABLE_UPLOADS=true
-      - ENABLE_DELETE=false
+      - ENABLE_DELETE=true
       - SERVICE_NAME=Terracrate File Share
       - CORS_ORIGINS=*
     volumes:
