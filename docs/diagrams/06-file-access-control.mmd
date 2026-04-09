@@ -12,7 +12,7 @@ flowchart TD
     CheckmTLS{mTLS verified?<br/>X-SSL-Client-Verify<br/>== SUCCESS}
     DenyCert["403 Client Certificate<br/>Required"]
     CheckCN{Cert CN ==<br/>User email?}
-    DenyMismatch["403 Certificate<br/>Mismatch"]
+    DenyMismatch["403 Certificate<br/>Mismatch<br/>(logged to MtlsMismatchLog)"]
 
     %% Layered ACL check
     ResolvePerms["Resolve effective permissions<br/>Domain → Group → User tiers<br/>(core/permissions.py)"]

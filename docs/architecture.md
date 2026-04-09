@@ -106,11 +106,15 @@ Flask 3.0.0 HTTPS server providing a versioned REST API (`/api/v1/*`) plus legac
 | `DATABASE_URI` | `sqlite:////app/data/terracrate.db` | SQLAlchemy database URI |
 | `TOKEN_EXPIRY_HOURS` | `24` | User JWT lifetime |
 | `ENABLE_UPLOADS` | `true` | Allow file uploads |
-| `ENABLE_DELETE` | `false` | Allow file/folder deletion |
+| `ENABLE_DELETE` | `true` | Allow file/folder deletion |
 | `MAX_UPLOAD_SIZE` | `104857600` | Upload limit (100 MB) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 | `MDNS_HOSTNAME` | `socket.gethostname()` | mDNS hostname |
 | `SERVICE_NAME` | `TerraCrate File Share` | Advertised service name |
+| `CN_MISMATCH_THRESHOLD` | `3` | Auto-revoke cert after N CN mismatches |
+| `CN_MISMATCH_WINDOW_MINUTES` | `60` | Time window (minutes) for mismatch counting |
+| `CERT_EXPIRY_CHECK_DAYS` | `7` | Days before expiry to auto-revoke cert |
+| `CERT_EXPIRY_CHECK_INTERVAL_HOURS` | `24` | How often (hours) to check for expiring certs |
 
 **API Endpoints (`/api/v1/`)**:
 
@@ -150,8 +154,17 @@ Flask 3.0.0 HTTPS server providing a versioned REST API (`/api/v1/*`) plus legac
 | `POST` | `/files/upload` | Auth | Upload file (mTLS required for non-admin) |
 | `GET` | `/files/download` | Auth | Download file |
 | `POST` | `/files/mkdir` | Auth | Create directory |
+| `POST` | `/files/rename` | Auth | Rename file/directory |
+| `POST` | `/files/move` | Auth | Move file/directory to new location |
+| `GET` | `/files/preview` | Auth | Stream file inline for in-browser preview |
 | `DELETE` | `/files` | Auth | Delete file/directory |
 | `GET` | `/stats/dashboard` | Admin | Dashboard statistics |
+| `POST` | `/users/<id>/revoke-cert` | Admin | Revoke user's client certificate |
+| `POST` | `/users/<id>/reissue-cert` | Admin | Re-issue client certificate |
+| `GET` | `/users/<id>/cert-status` | Admin | Get cert status + revocation history |
+| `GET` | `/audit-logs` | Admin | Query audit logs with filtering/pagination |
+| `GET` | `/audit-logs/stats` | Admin | Get audit log statistics |
+| `GET` | `/system/logs` | Admin | Stream Docker container logs |
 
 **Legacy HTML Endpoints** (backward compatibility):
 - `/admin/login`, `/admin/first-setup`, `/register`, `/login`, `/logout`
@@ -159,12 +172,13 @@ Flask 3.0.0 HTTPS server providing a versioned REST API (`/api/v1/*`) plus legac
 - `/download/<path>`, `/upload`, `/health`
 
 **Startup Process**:
-1. `start.sh` creates directories, generates SSL certs if missing, validates `ADMIN_PIN`
+1. `start.sh` creates directories, generates SSL certs if missing, verifies CRL matches current CA, validates `ADMIN_PIN`
 2. `core/server.py` initializes the database, runs schema migrations
 3. Creates default `SystemSettings` if missing
 4. Creates default admin user (`admin@<hostname>.local`) if no admin exists
 5. Sets up mDNS advertising
-6. Starts Flask with SSL context on port 8443
+6. Starts background certificate expiry checker thread
+7. Starts Flask with SSL context on port 8443
 
 ### 2. Authentication System (`backend/api/core/auth.py`)
 
@@ -223,7 +237,7 @@ Tier 3: User Overrides (most specific)
 
 SQLAlchemy ORM with SQLite (configurable via `DATABASE_URI`).
 
-**User**: `id`, `email` (unique), `password_hash`, `role` (admin/user), `is_default_pin`, `is_approved`, `created_at`, `last_login`. Many-to-many relationship with `Group` via `GroupMembership`.
+**User**: `id`, `email` (unique), `password_hash`, `role` (admin/user), `is_default_pin`, `is_approved`, `created_at`, `last_login`, `cert_serial_number`, `cert_revoked`, `cert_issued_at`, `cert_expires_at`. Many-to-many relationship with `Group` via `GroupMembership`.
 
 **SystemSettings** (singleton): `auth_method` (email/email+password/username+password), `tls_enabled`, `https_port`, `device_name`, SMTP configuration (`smtp_enabled`, `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `smtp_from_email`, `smtp_use_tls`), `allowed_domains` (comma-separated domain allowlist for self-registration).
 
@@ -239,7 +253,13 @@ SQLAlchemy ORM with SQLite (configurable via `DATABASE_URI`).
 
 **GroupMembership**: Association table — `group_id` (FK), `user_id` (FK). Unique on `(group_id, user_id)`.
 
-All foreign keys use `CASCADE` delete.
+**RevokedCertificate**: `serial_number` (indexed), `user_id` (FK, SET NULL), `revoked_at`, `reason` (one of: `admin_revoked`, `expiry_approaching`, `cn_mismatch_abuse`, `reissued`), `revoked_by` (FK, SET NULL).
+
+**MtlsMismatchLog**: `presented_cn` (indexed), `authenticated_user_id` (FK, CASCADE), `timestamp`. Tracks CN mismatches for abuse detection.
+
+**AuditLog**: `timestamp`, `user_id` (FK, SET NULL), `user_email`, `action`, `target_type`, `target_id`, `description`, `ip_address`, `status`, `metadata_json`. Records all significant admin and system actions.
+
+All foreign keys use `CASCADE` delete (except `RevokedCertificate` which uses `SET NULL`).
 
 ### 5. Certificate Management (`backend/api/utils/generate_certs.py`)
 
@@ -263,12 +283,19 @@ Self-signed X.509 certificate generation using the `cryptography` library.
 - Wraps client cert + key + CA chain into a `.p12` file
 - Generated with random password for secure delivery via email
 
+**Certificate Revocation List** (`generate_crl`, `update_crl_file`, `generate_empty_crl`):
+- `generate_crl(ca_cert, ca_key, revoked_serials)` — generates a PEM-encoded CRL including all revoked serial numbers
+- `update_crl_file(crl_path, ca_cert, ca_key, revoked_serials)` — atomically writes CRL to disk
+- `generate_empty_crl(ca_cert_path, ca_key_path, crl_path)` — creates an empty CRL if none exists or if the existing CRL doesn’t match the current CA
+- `_crl_matches_ca(crl_path, ca_cert)` — verifies the existing CRL was signed by the current CA
+
 ### 6. SMTP Email Service (`backend/api/utils/email_sender.py`)
 
 Sends email notifications using `smtplib` with configuration from `SystemSettings`.
 
 - `send_approval_email(user_email, ...)` — notifies user of account approval, optionally attaches a `.p12` client certificate
 - `send_invite_email(user_email, ...)` — sends invitation with embedded P12 certificate and temporary password
+- `send_revocation_email(user_email, ...)` — notifies user that their client certificate has been revoked
 - Supports TLS/STARTTLS, multipart emails (HTML + text + attachments)
 
 ### 7. mDNS Service Discovery (`backend/api/utils/mdns_advertiser.py`)
@@ -279,7 +306,7 @@ Platform-agnostic service advertisement for zero-configuration networking.
 - **macOS**: Zeroconf/Bonjour library
 - **Windows**: Informational fallback
 
-Advertises `_smb._tcp` service. On the host, Avahi also advertises `_https._tcp` on port 443 via a static service file.
+Advertises `_https._tcp` service at startup. On the host, Avahi also advertises `_https._tcp` on port 443 via a static service file.
 
 ### 8. QR Code Generator (`backend/api/utils/qr_generator.py`)
 
@@ -288,11 +315,42 @@ Generates QR codes embedding access URLs with authentication tokens for mobile d
 - Returns PIL Image, base64-encoded PNG, file output, or ASCII art
 - URL format: `{base_url}/auth?token={token}`
 
+### 9. Audit Logging (`backend/api/utils/audit.py`)
+
+Records administrative and system actions for compliance and forensics. All audit entries are stored in the `AuditLog` database model.
+
+- Tracks actions such as user creation/approval, permission changes, certificate operations, and file management
+- Records the acting user, target entity, action type, IP address, and status
+- Supports structured metadata via JSON
+- Queryable via `/api/v1/audit-logs` with filtering by action, user, date range, and pagination
+- Statistics endpoint `/api/v1/audit-logs/stats` provides aggregate summaries
+
+### 10. Certificate Revocation System
+
+Full lifecycle management for client certificate revocation, integrated across the backend, Nginx, and admin UI.
+
+**Revocation Triggers**:
+- **Admin-initiated**: Via `/api/v1/users/<id>/revoke-cert` endpoint or user management UI
+- **CN mismatch abuse**: Automatic revocation when a certificate’s CN is used by a non-matching user more than `CN_MISMATCH_THRESHOLD` times within `CN_MISMATCH_WINDOW_MINUTES`
+- **Expiry approaching**: Background thread auto-revokes certificates within `CERT_EXPIRY_CHECK_DAYS` of expiration (checked every `CERT_EXPIRY_CHECK_INTERVAL_HOURS`)
+- **Reissue**: Old certificate is automatically revoked when a new one is issued via `/api/v1/users/<id>/reissue-cert`
+
+**CRL Distribution**:
+- Backend generates/updates a PEM-encoded CRL file on each revocation event
+- CRL is stored in the shared `terracrate-certs` volume at `/app/certs/crl.pem`
+- Nginx configured with `ssl_crl` directive to check the CRL on every mTLS handshake
+- `start.sh` ensures CRL exists and matches the current CA on startup
+
+**Certificate Status Tracking**:
+- `User` model tracks `cert_serial_number`, `cert_revoked`, `cert_issued_at`, `cert_expires_at`
+- `RevokedCertificate` model maintains a permanent revocation history with reason codes
+- `MtlsMismatchLog` model tracks CN mismatches for abuse detection
+
 ## Frontend Application
 
 ### Technology Stack
 
-- **React 19** with TypeScript (strict mode)
+- **React 18** with TypeScript (strict mode)
 - **Vite** build tool with `@vitejs/plugin-react`
 - **React Router v7** for client-side routing
 - **Tailwind CSS 4** + shadcn/ui components (Radix UI primitives)
@@ -314,6 +372,7 @@ src/
 │   │   └── DataContext.tsx      # Global state: settings, users, domains, groups, files
 │   ├── components/
 │   │   ├── AdminLayout.tsx     # Sidebar navigation + responsive layout
+│   │   ├── FilePreview.tsx     # Dialog for previewing images/text/PDF inline
 │   │   ├── ProtectedRoute.tsx  # Redirects to /login if unauthenticated
 │   │   ├── GuestRoute.tsx      # Redirects to /admin/dashboard if authenticated
 │   │   ├── SystemStatus.tsx    # Dashboard stats cards
@@ -324,14 +383,15 @@ src/
 │       ├── PasswordReset.tsx   # Forced password change flow
 │       ├── CertRequired.tsx    # Client cert installation instructions
 │       ├── AdminDashboard.tsx  # File browser + system stats
+│       ├── AuditLog.tsx        # Audit log viewer with filtering
 │       ├── SystemSettings.tsx  # Domain allowlist + SMTP config
-│       ├── UserManagement.tsx  # Approve/manage users
+│       ├── UserManagement.tsx  # Approve/manage users + cert operations
 │       ├── FolderPermissions.tsx # Per-user permission overrides + effective view
 │       ├── DomainConfig.tsx    # Domain-level permission defaults
 │       ├── GroupManagement.tsx # Groups with members + permissions
-│       ├── FileBrowser.tsx     # Admin file management
+│       ├── FileBrowser.tsx     # Admin file management (legacy, not routed)
 │       ├── UserFileBrowser.tsx # Authenticated user file browser
-│       └── GuestFileBrowser.tsx # Legacy guest file browser
+│       └── GuestFileBrowser.tsx # Legacy guest file browser (not routed)
 └── services/
     └── api.ts                  # ApiClient class wrapping all backend endpoints
 ```
@@ -351,10 +411,11 @@ src/
 | `/admin/permissions` | FolderPermissions | Auth (JWT only) | Permission management |
 | `/admin/domains` | DomainConfig | Auth (JWT only) | Domain config |
 | `/admin/groups` | GroupManagement | Auth (JWT only) | Group management |
+| `/admin/audit-log` | AuditLog | Auth (JWT only) | Audit log viewer |
 
 ### State Management
 
-**AuthContext**: Manages `isAuthenticated`, `user`, `loading` state. On mount, checks localStorage for existing token and validates via `/auth/me`. Provides `login()`, `logout()`, `updateUser()`.
+**AuthContext**: Manages `isAuthenticated`, `user`, `loading`, `certRevoked` state. On mount, checks localStorage for existing token and validates via `/auth/me`. Provides `login()`, `logout()`, `updateUser()`. The `certRevoked` flag is derived from the user object for easy access by components.
 
 **DataContext**: Manages global application state — `settings`, `users`, `domains`, `groups`, `files`, `currentPath`. On authentication change, loads all relevant data (settings always, admin-only resources fail silently for non-admins).
 
@@ -366,9 +427,12 @@ The frontend container runs Nginx on **port 443** with TLS:
 - **Public pages**: `/`, `/login`, `/signup`, `/reset-password`, `/cert-required` — no client cert
 - **Admin pages**: `/admin/*` — no client cert (JWT auth only)
 - **Protected pages**: `/files`, `/guest/files` — **mTLS enforced**, redirects to `/cert-required` on failure
+- **CRL checking**: `ssl_crl` directive configured to check certificate revocation list on every mTLS handshake
 - **Static assets**: `/assets/*` — cached 1 year
+- **Gzip compression**: Enabled for text, CSS, XML, JavaScript, and JSON responses (min 1024 bytes)
 - **Security headers**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`
 - Passes `X-SSL-Client-Verify` and `X-SSL-Client-S-DN` headers to backend for mTLS verification
+- `underscores_in_headers on` enabled for passing SSL headers
 
 ## Security Model
 
@@ -392,9 +456,11 @@ The frontend container runs Nginx on **port 443** with TLS:
 - Network-isolated (local WiFi, optional AP fallback)
 - Time-limited JWT tokens (2h admin, 24h user)
 - Upload size limits (100 MB default)
-- File deletion disabled by default
+- Certificate Revocation List (CRL) for immediate mTLS access termination
+- CN mismatch abuse detection with automatic certificate revocation
 - Path traversal prevention in file operations
 - Security headers (XSS, clickjacking, MIME sniffing)
+- Audit logging of all administrative actions
 
 ## Deployment
 
@@ -419,7 +485,7 @@ services:
   backend:
     image: python:3.11
     port: 8443 (HTTPS)
-    volumes: storage (bind), terracrate-db, terracrate-certs
+    volumes: storage (bind), terracrate-db, terracrate-certs, /var/run/docker.sock (read-only)
     healthcheck: urllib to https://localhost:8443/health
 
   frontend:
@@ -430,8 +496,9 @@ services:
     healthcheck: wget to https://localhost/
 ```
 
-**Named volumes**: `terracrate-db` (SQLite database), `terracrate-certs` (shared TLS certificates)
+**Named volumes**: `terracrate-db` (SQLite database), `terracrate-certs` (shared TLS certificates + CRL)
 **Bind mount**: `./backend/api/storage` → `/app/storage` (user files)
+**Docker socket**: `/var/run/docker.sock` mounted read-only in the backend container for the system logs endpoint
 
 ### Environment Variables (`.env`)
 
@@ -482,7 +549,7 @@ services:
 ### Discovery
 - **Hostname**: `<MDNS_HOSTNAME>.local` (default: `terracrate.local`)
 - **Avahi service file** advertises `_https._tcp` on port 443
-- **In-app mDNS** advertises `_smb._tcp` (legacy)
+- **In-app mDNS** advertises `_https._tcp` on the backend port
 
 ### WiFi AP Fallback
 When no known WiFi network is available:
@@ -500,16 +567,17 @@ When no known WiFi network is available:
 | Flask-SQLAlchemy | 3.1.1 | ORM (SQLite) |
 | PyJWT | 2.8.0 | JWT authentication |
 | bcrypt | 5.0.0 | Password hashing |
-| cryptography | 41.0.7+ | Certificate generation |
+| cryptography | 41.0.7+ | Certificate generation + CRL |
 | qrcode + Pillow | 7.4.2+ / 10.2.0+ | QR code generation |
 | python-dotenv | 1.0.0 | Environment config |
+| docker | 7.0.0+ | Docker API (system log viewer) |
 | Ruff | — | Linting (configured in pyproject.toml) |
 | pytest | — | Testing framework |
 
 ### Frontend
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| React | 19 | UI framework |
+| React | 18 | UI framework |
 | TypeScript | — | Type safety (strict) |
 | Vite | — | Build tool + dev server |
 | React Router | 7.13+ | Client-side routing |
@@ -532,10 +600,11 @@ When no known WiFi network is available:
 ## Design Principles
 
 1. **Zero Configuration**: mDNS eliminates manual IP management; WiFi AP fallback ensures connectivity
-2. **Security by Default**: HTTPS-only, mTLS for file access, JWT for admin, uploads disabled by default for deletion
+2. **Security by Default**: HTTPS-only, mTLS for file access, JWT for admin, CRL-based certificate revocation
 3. **Self-Contained**: No cloud dependencies, runs entirely on local hardware
 4. **Layered Permissions**: Domain → Group → User override model with tri-state (allow/deny/inherit) semantics
 5. **Certificate-Based Access**: Client certificates for non-admin users, delivered via email with P12 bundles
+6. **Auditability**: All administrative actions logged with user, target, and timestamp for compliance and forensics
 
 ## Storage Structure
 
@@ -548,7 +617,8 @@ When no known WiFi network is available:
 └── terracrate.db         # SQLite database
 /app/certs/
 ├── server_cert.pem     # Server TLS certificate (also CA)
-└── server_key.pem      # Server private key
+├── server_key.pem      # Server private key
+└── crl.pem             # Certificate Revocation List
 ```
 
 ## Testing Strategy
@@ -567,6 +637,7 @@ Backend tests use **pytest** with an in-memory SQLite database. Test configurati
 | `test_signup.py` | Domain allowlist enforcement, disallowed domain rejection, account claiming flow, multi-domain support, admin settings updates |
 | `test_utils.py` | File listing (sort order, hidden file exclusion, macOS metadata filtering), path resolution, directory traversal prevention |
 | `test_generate_certs.py` | Client cert generation, X.509 subject fields (CN, O, OU), SAN email, CA=False constraint, CLIENT_AUTH EKU, issuer/signature validation, custom validity periods |
+| `test_revocation.py` | Certificate revocation flow, CRL generation, auto-revocation on CN mismatch abuse, expiry-approaching revocation, reissue flow, revocation reason codes |
 
 ### Frontend Static Analysis
 
@@ -591,7 +662,8 @@ Triggered by changes in `backend/**`, `docker-compose.yml`, or the workflow file
 5. **Certificate validation** — generates a test server cert and verifies the output files exist
 
 **`docker` job** (depends on `validate`):
-1. **Build backend image** — `docker/build-push-action` with GitHub Actions cache (`type=gha`), push disabled
+1. **Validate docker compose config** — `docker compose config --quiet`
+2. **Build backend image** — `docker/build-push-action` with GitHub Actions cache (`type=gha`), push disabled
 
 ### Frontend CI (`.github/workflows/frontend-ci.yml`)
 
@@ -653,19 +725,8 @@ Automated browser tests covering critical user flows to complement the existing 
   - Certificate required redirect when client cert is missing
 - CI integration: dedicated GitHub Actions job running after docker image builds, using the built images
 
-### Certificate Revocation
-
-Ability to revoke issued client certificates so that dismissed or compromised users lose mTLS access immediately, without waiting for certificate expiry.
-
-**Planned approach**:
-- Maintain a Certificate Revocation List (CRL) or OCSP responder backed by the SQLite database
-- Admin UI action: "Revoke Certificate" on the user management page, recording the cert serial number
-- Backend generates/updates a PEM-encoded CRL file on each revocation
-- Nginx configured with `ssl_crl` directive to check the CRL on every mTLS handshake
-- Optionally support short-lived certificates (e.g., 7-day validity) as a complementary measure to reduce the window of exposure
-
 ---
 
-**Document Version**: 2.1
-**Last Updated**: March 31, 2026
+**Document Version**: 3.0
+**Last Updated**: April 9, 2026
 **Maintained By**: TerraCrate Development Team

@@ -8,29 +8,33 @@ graph TB
         subgraph FrontendContainer["Frontend Container (nginx)"]
             Nginx["Nginx Reverse Proxy<br/>Port 443 (HTTPS)"]
             SPA["React SPA<br/>Static Assets"]
-            mTLS["mTLS Termination"]
+            mTLS["mTLS Termination + CRL Check"]
         end
 
         subgraph BackendContainer["Backend Container (Flask)"]
             Flask["Flask API Server<br/>Port 8443"]
             Auth["JWT Auth Module<br/>core/auth.py"]
             PermResolver["Permission Resolver<br/>core/permissions.py"]
-            FileOps["File Operations"]
+            FileOps["File Operations<br/>(CRUD + rename/move/preview)"]
             UserMgmt["User & Group Management"]
-            CertGen["Certificate Generator<br/>utils/generate_certs.py"]
+            CertGen["Certificate Generator<br/>+ CRL Management<br/>utils/generate_certs.py"]
+            CertRevoke["Certificate Revocation<br/>Engine"]
             EmailSvc["Email Service<br/>utils/email_sender.py"]
+            AuditLog["Audit Logger<br/>utils/audit.py"]
+            DockerAPI["Docker API Client<br/>(system logs)"]
         end
 
         subgraph Storage["Persistent Volumes"]
             DB[("SQLite Database<br/>terracrate-db")]
-            Certs["TLS Certificates<br/>terracrate-certs"]
+            Certs["TLS Certificates + CRL<br/>terracrate-certs"]
             FileStore["File Storage<br/>(terracrate-storage/files/)"]
         end
     end
 
-    subgraph External["External Services"]
+    subgraph Host["Host Services"]
         SMTP["SMTP Server<br/>(Email Delivery)"]
         mDNS["Avahi / mDNS<br/>Service Discovery"]
+        DockerSock["Docker Socket<br/>/var/run/docker.sock"]
     end
 
     Browser -->|"HTTPS + mTLS"| Nginx
@@ -45,12 +49,18 @@ graph TB
     Flask --- FileOps
     Flask --- UserMgmt
     Flask --- CertGen
+    Flask --- CertRevoke
     Flask --- EmailSvc
+    Flask --- AuditLog
+    Flask --- DockerAPI
 
     Auth -->|"Query/Update"| DB
     UserMgmt -->|"CRUD"| DB
     PermResolver -->|"Resolve tiers"| DB
+    AuditLog -->|"Write logs"| DB
+    CertRevoke -->|"Revocation records"| DB
     FileOps -->|"Read/Write"| FileStore
-    CertGen -->|"Store/Load"| Certs
+    CertGen -->|"Store/Load<br/>certs + CRL"| Certs
     EmailSvc -->|"SMTP"| SMTP
+    DockerAPI -->|"Read-only"| DockerSock
     Flask -.->|"Advertise"| mDNS

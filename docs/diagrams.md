@@ -14,6 +14,8 @@ Architectural and flow diagrams for the TerraCrate secure file sharing system. S
 | 6 | File Access Control Flow | [06-file-access-control.mmd](diagrams/06-file-access-control.mmd) | [PNG](diagrams/png/06-file-access-control.png) |
 | 7 | User Onboarding & Approval Workflow | [07-user-onboarding.mmd](diagrams/07-user-onboarding.mmd) | [PNG](diagrams/png/07-user-onboarding.png) |
 | 8 | Database Entity Relationship Diagram | [08-database-erd.mmd](diagrams/08-database-erd.mmd) | [PNG](diagrams/png/08-database-erd.png) |
+| 9 | Certificate Revocation Flow | [09-certificate-revocation.mmd](diagrams/09-certificate-revocation.mmd) | [PNG](diagrams/png/09-certificate-revocation.png) |
+| 10 | Audit Logging Architecture | [10-audit-logging.mmd](diagrams/10-audit-logging.mmd) | [PNG](diagrams/png/10-audit-logging.png) |
 
 ## Rendering PNGs
 
@@ -30,5 +32,5 @@ Requires [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) (`npm install 
 
 ---
 
-*Document Version: 2.1*
-*Last Updated: March 2026*
+*Document Version: 3.0*
+*Last Updated: April 2026*

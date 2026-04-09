@@ -6,10 +6,11 @@ sequenceDiagram
     participant SMTP as SMTP Server
     participant NewUser as New User
     participant BrowserCert as User's Browser
-    participant NginxTLS as Nginx (mTLS)
+    participant NginxTLS as Nginx (mTLS + CRL)
     participant Backend as Flask Backend
+    participant DB as SQLite DB
 
-    Note over Admin,Backend: Phase 1 — Certificate Generation (Admin creates user)
+    Note over Admin,DB: Phase 1 — Certificate Generation (Admin creates user)
     Admin->>API: POST /api/v1/users<br/>{email, role: "user"}
     API->>CertGen: generate_client_p12(ca_cert, ca_key, email)
     CertGen->>CertGen: Generate RSA 2048-bit client key
@@ -17,24 +18,31 @@ sequenceDiagram
     CertGen->>CertGen: Sign with Server CA key (SHA256)
     CertGen->>CertGen: Bundle into PKCS#12 (.p12)<br/>with random password
     CertGen-->>API: Return {p12_bytes, password}
+    API->>DB: Save cert_serial_number,<br/>cert_issued_at, cert_expires_at
     API->>API: Create User record<br/>password_hash = hash(p12_password)<br/>is_default_pin = true
 
-    Note over Admin,Backend: Phase 2 — Certificate Distribution
+    Note over Admin,DB: Phase 2 — Certificate Distribution
     API->>Email: send_invite_email(email, p12_bytes, password)
     Email->>SMTP: Send email with:<br/>• .p12 file attachment<br/>• Import password<br/>• Login instructions
     SMTP-->>NewUser: Email delivered
     NewUser->>NewUser: Import .p12 into<br/>browser/OS cert store
 
-    Note over Admin,Backend: Phase 3 — mTLS Handshake
+    Note over Admin,DB: Phase 3 — mTLS Handshake (with CRL check)
     NewUser->>BrowserCert: Access https://terracrate.local
     BrowserCert->>NginxTLS: TLS ClientHello
     NginxTLS->>BrowserCert: ServerHello + CertificateRequest
     BrowserCert->>BrowserCert: Select matching client cert
     BrowserCert->>NginxTLS: Client Certificate (signed by CA)
     NginxTLS->>NginxTLS: Verify cert against<br/>ssl_client_certificate (CA)
-    NginxTLS->>NginxTLS: Set headers:<br/>X-SSL-Client-Verify: SUCCESS<br/>X-SSL-Client-S-DN: CN=email
+    NginxTLS->>NginxTLS: Check cert serial against<br/>ssl_crl (crl.pem)
 
-    Note over Admin,Backend: Phase 4 — Backend Certificate Verification
+    alt Certificate revoked (in CRL)
+        NginxTLS-->>BrowserCert: 403 Certificate Revoked
+    else Certificate valid
+        NginxTLS->>NginxTLS: Set headers:<br/>X-SSL-Client-Verify: SUCCESS<br/>X-SSL-Client-S-DN: CN=email
+    end
+
+    Note over Admin,DB: Phase 4 — Backend Certificate Verification
     NginxTLS->>Backend: Forward request + SSL headers
     Backend->>Backend: Extract X-SSL-Client-Verify
     Backend->>Backend: Parse CN from X-SSL-Client-S-DN
@@ -42,6 +50,13 @@ sequenceDiagram
 
     alt CN matches user email
         Backend-->>NginxTLS: 200 OK (proceed)
-    else CN mismatch or verify != SUCCESS
+    else CN mismatch
+        Backend->>DB: Log MtlsMismatchLog
+        Backend->>Backend: Check mismatch count<br/>in time window
+        alt Threshold exceeded
+            Backend->>DB: Create RevokedCertificate
+            Backend->>CertGen: Rebuild CRL with new serial
+            Backend->>Email: send_revocation_email()
+        end
         Backend-->>NginxTLS: 403 CLIENT_CERT_REQUIRED
     end

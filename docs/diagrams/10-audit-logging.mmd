@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph Sources["Audit Event Sources"]
+        UserAPI["User Management<br/>Create, update, delete,<br/>approve users"]
+        CertOps["Certificate Operations<br/>Issue, revoke, reissue certs"]
+        PermOps["Permission Changes<br/>Domain, group, user<br/>permission updates"]
+        FileOps["File Operations<br/>Upload, delete, rename,<br/>move files"]
+        AuthEvents["Auth Events<br/>Login, signup, password<br/>changes"]
+        SettingsOps["System Settings<br/>Configuration changes"]
+    end
+
+    subgraph AuditModule["Audit Logger (utils/audit.py)"]
+        LogEntry["Create AuditLog Entry<br/>• timestamp<br/>• user_id + user_email<br/>• action type<br/>• target_type + target_id<br/>• description<br/>• ip_address<br/>• status<br/>• metadata_json"]
+    end
+
+    subgraph Storage["Persistent Storage"]
+        DB[("SQLite Database<br/>audit_logs table")]
+    end
+
+    subgraph QueryAPI["Query Endpoints"]
+        ListLogs["GET /api/v1/audit-logs<br/>Filter by: action, user,<br/>date range, status<br/>Pagination support"]
+        LogStats["GET /api/v1/audit-logs/stats<br/>Aggregate summaries"]
+    end
+
+    subgraph Frontend["Admin UI"]
+        AuditPage["Audit Log Page<br/>/admin/audit-log<br/>Filterable table view"]
+    end
+
+    UserAPI --> LogEntry
+    CertOps --> LogEntry
+    PermOps --> LogEntry
+    FileOps --> LogEntry
+    AuthEvents --> LogEntry
+    SettingsOps --> LogEntry
+
+    LogEntry --> DB
+
+    DB --> ListLogs
+    DB --> LogStats
+
+    ListLogs --> AuditPage
+    LogStats --> AuditPage

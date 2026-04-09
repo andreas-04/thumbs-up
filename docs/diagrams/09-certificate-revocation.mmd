@@ -1,0 +1,62 @@
+flowchart TD
+    subgraph Triggers["Revocation Triggers"]
+        AdminRevoke["Admin Action<br/>POST /api/v1/users/id/revoke-cert"]
+        CNAbuse["CN Mismatch Abuse<br/>Threshold exceeded in time window"]
+        ExpiryApproach["Expiry Approaching<br/>Background thread checks<br/>every CERT_EXPIRY_CHECK_INTERVAL_HOURS"]
+        Reissue["Certificate Reissue<br/>POST /api/v1/users/id/reissue-cert<br/>Old cert auto-revoked"]
+    end
+
+    subgraph RevocationProcess["Revocation Process"]
+        GetSerial["Get cert serial_number<br/>from User record"]
+        CreateRecord["Create RevokedCertificate<br/>record in DB"]
+        UpdateUser["Update User:<br/>cert_revoked = true"]
+        RebuildCRL["Rebuild CRL<br/>generate_crl() with all<br/>revoked serial numbers"]
+        WriteCRL["Atomically write<br/>crl.pem to disk"]
+        AuditEntry["Write AuditLog entry"]
+    end
+
+    subgraph Notification["Notification"]
+        SendEmail["send_revocation_email()<br/>Notify user of revocation"]
+    end
+
+    subgraph Enforcement["Enforcement"]
+        NginxCRL["Nginx ssl_crl directive<br/>Checks crl.pem on<br/>every mTLS handshake"]
+        Reject["403 Certificate Revoked<br/>Connection refused"]
+    end
+
+    subgraph ReissueFlow["Reissue Flow"]
+        GenNewCert["generate_client_p12()<br/>New cert + key + P12"]
+        UpdateSerial["Update User:<br/>cert_serial_number = new<br/>cert_revoked = false<br/>cert_issued_at = now"]
+        EmailNewCert["send_invite_email()<br/>with new P12 attachment"]
+    end
+
+    AdminRevoke --> GetSerial
+    CNAbuse --> GetSerial
+    ExpiryApproach --> GetSerial
+    Reissue --> GetSerial
+
+    GetSerial --> CreateRecord
+    CreateRecord --> UpdateUser
+    UpdateUser --> RebuildCRL
+    RebuildCRL --> WriteCRL
+    WriteCRL --> AuditEntry
+    AuditEntry --> SendEmail
+
+    WriteCRL --> NginxCRL
+    NginxCRL --> Reject
+
+    Reissue --> GenNewCert
+    GenNewCert --> UpdateSerial
+    UpdateSerial --> EmailNewCert
+
+    subgraph CNMismatchDetail["CN Mismatch Detection"]
+        LogMismatch["Log MtlsMismatchLog<br/>presented_cn + user_id"]
+        CountWindow["Count mismatches in<br/>CN_MISMATCH_WINDOW_MINUTES"]
+        ThresholdCheck{Count >= <br/>CN_MISMATCH_THRESHOLD?}
+        FindAbused["Find user whose email<br/>matches presented_cn"]
+        AutoRevoke["Auto-revoke victim's cert<br/>reason: cn_mismatch_abuse"]
+    end
+
+    LogMismatch --> CountWindow --> ThresholdCheck
+    ThresholdCheck -->|Yes| FindAbused --> AutoRevoke --> GetSerial
+    ThresholdCheck -->|No| Ignore(["No action"])

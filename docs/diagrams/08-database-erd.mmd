@@ -8,6 +8,10 @@ erDiagram
         boolean is_approved "Approved for file access"
         datetime created_at "Default: utcnow"
         datetime last_login "Nullable"
+        string cert_serial_number "Current cert serial, nullable"
+        boolean cert_revoked "Default: false"
+        datetime cert_issued_at "Nullable"
+        datetime cert_expires_at "Nullable"
     }
 
     GROUPS {
@@ -61,7 +65,7 @@ erDiagram
 
     SYSTEM_SETTINGS {
         int id PK
-        string mode "Legacy, unused"
+        string mode "open or protected"
         string auth_method "email, email+password, username+password"
         boolean tls_enabled "Default: true"
         int https_port "Default: 8443"
@@ -76,8 +80,41 @@ erDiagram
         boolean smtp_use_tls "Default: true"
     }
 
+    REVOKED_CERTIFICATES {
+        int id PK
+        string serial_number "Indexed, not null"
+        int user_id FK "References users.id, SET NULL"
+        datetime revoked_at "Default: utcnow"
+        string reason "admin_revoked, expiry_approaching, cn_mismatch_abuse, reissued"
+        int revoked_by FK "References users.id, SET NULL"
+    }
+
+    MTLS_MISMATCH_LOGS {
+        int id PK
+        string presented_cn "Indexed, not null"
+        int authenticated_user_id FK "References users.id, CASCADE"
+        datetime timestamp "Default: utcnow"
+    }
+
+    AUDIT_LOGS {
+        int id PK
+        datetime timestamp "Default: utcnow, indexed"
+        int user_id FK "References users.id, SET NULL"
+        string user_email "Denormalized for log retention"
+        string action "Action type, indexed"
+        string target_type "Entity type"
+        string target_id "Entity ID"
+        string description "Human-readable description"
+        string ip_address "Request IP"
+        string status "success, failure, etc."
+        text metadata_json "Structured JSON metadata"
+    }
+
     USERS ||--o{ GROUP_MEMBERSHIPS : "belongs to"
     GROUPS ||--o{ GROUP_MEMBERSHIPS : "has"
     GROUPS ||--o{ GROUP_PERMISSIONS : "has"
     USERS ||--o{ FOLDER_PERMISSIONS : "has overrides"
     DOMAIN_CONFIGS ||--o{ DOMAIN_PERMISSIONS : "has"
+    USERS ||--o{ REVOKED_CERTIFICATES : "has revoked"
+    USERS ||--o{ MTLS_MISMATCH_LOGS : "has mismatches"
+    USERS ||--o{ AUDIT_LOGS : "performed"

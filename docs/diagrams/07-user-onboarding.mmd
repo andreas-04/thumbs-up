@@ -36,7 +36,7 @@ sequenceDiagram
     FE->>API: POST /api/v1/users<br/>{email, password?, role}
     API->>CertGen: generate_client_p12(email)
     CertGen-->>API: {p12_bytes, password}
-    API->>DB: Create User<br/>is_approved = true<br/>is_default_pin = true<br/>password = p12_password
+    API->>DB: Create User<br/>is_approved = true<br/>is_default_pin = true<br/>password = p12_password<br/>cert_serial_number = serial
     API->>Email: send_invite_email<br/>(email, p12 attachment, password)
     Email-->>User: Email with .p12 cert<br/>+ temporary password
     API-->>FE: 201 {user}

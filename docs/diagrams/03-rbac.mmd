@@ -21,9 +21,10 @@ graph TB
     subgraph Enforcement["Enforcement Points"]
         JWTCheck["JWT Token Validation<br/>@auth.require_auth()"]
         AdminCheck["Admin Role Check<br/>@auth.require_admin()"]
-        mTLSCheck["mTLS Certificate Check<br/>X-SSL-Client-Verify"]
+        mTLSCheck["mTLS Certificate Check<br/>X-SSL-Client-Verify<br/>+ CRL revocation check"]
         ACLCheck["Layered ACL Check<br/>check_access() via<br/>resolve_permissions()"]
         ApprovalCheck["Approval Check<br/>is_approved flag"]
+        AuditCheck["Audit Logging<br/>utils/audit.py"]
     end
 
     Admin -->|"Full Access"| SysMgmt
