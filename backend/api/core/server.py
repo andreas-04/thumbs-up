@@ -2071,37 +2071,31 @@ def api_get_system_logs():
                     timestamp = parts[0]
                     message = parts[1]
 
-            # Detect log level
-            level = "info"
-            upper = message.upper()
-            if "ERROR" in upper or "CRITICAL" in upper or "FATAL" in upper:
-                level = "error"
-            elif "WARNING" in upper or "WARN" in upper:
-                level = "warning"
-            elif "DEBUG" in upper:
-                level = "debug"
+            parsed.append({"timestamp": timestamp, "line": message})
 
-            parsed.append({"timestamp": timestamp, "level": level, "message": message})
-
-        return jsonify({"logs": parsed, "containerName": docker_name}), 200
+        return jsonify({"logs": parsed, "container": docker_name, "available": True}), 200
 
     except ImportError:
         return jsonify(
             {
+                "logs": [],
+                "container": docker_name,
+                "available": False,
                 "error": "Docker SDK not installed. Add 'docker' to requirements.txt.",
-                "code": "DOCKER_SDK_MISSING",
             }
-        ), 503
+        ), 200
     except Exception as e:
         error_msg = str(e)
         if "FileNotFoundError" in error_msg or "ConnectionError" in error_msg or "Error while fetching" in error_msg:
             return jsonify(
                 {
+                    "logs": [],
+                    "container": docker_name,
+                    "available": False,
                     "error": "Docker socket not available. Mount /var/run/docker.sock to enable system logs.",
-                    "code": "DOCKER_UNAVAILABLE",
                 }
-            ), 503
-        return jsonify({"error": f"Failed to fetch logs: {error_msg}", "code": "LOG_FETCH_ERROR"}), 500
+            ), 200
+        return jsonify({"logs": [], "container": docker_name, "available": False, "error": f"Failed to fetch logs: {error_msg}"}), 500
 
 
 # =============================================================================

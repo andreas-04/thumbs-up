@@ -773,7 +773,7 @@ class ApiClient {
     return this.request<AuditLogStats>('/api/v1/audit-logs/stats');
   }
 
-  async getSystemLogs(container = 'terracrate-backend', tail = 200): Promise<SystemLogResponse> {
+  async getSystemLogs(container = 'backend', tail = 200): Promise<SystemLogResponse> {
     return this.request<SystemLogResponse>(
       `/api/v1/system/logs?container=${encodeURIComponent(container)}&tail=${tail}`
     );
