@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QR Code generator for easy access to ThumbsUp server.
+QR Code generator for easy access to TerraCrate server.
 Generates QR codes containing access URLs with embedded tokens.
 """
 

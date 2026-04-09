@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-mDNS/Avahi service advertiser for ThumbsUp.
+mDNS/Avahi service advertiser for TerraCrate.
 Makes the server discoverable on the local network.
 """
 
@@ -10,9 +10,9 @@ import socket
 
 
 class MDNSAdvertiser:
-    """Advertise ThumbsUp service via mDNS/Avahi."""
+    """Advertise TerraCrate service via mDNS/Avahi."""
 
-    def __init__(self, service_name="ThumbsUp File Share", port=445, service_type="_smb._tcp", hostname=None):
+    def __init__(self, service_name="TerraCrate File Share", port=445, service_type="_smb._tcp", hostname=None):
         """
         Initialize mDNS advertiser.
 
@@ -172,7 +172,7 @@ class MDNSAdvertiser:
 
 # Example usage
 if __name__ == "__main__":
-    advertiser = MDNSAdvertiser(service_name="ThumbsUp File Share", port=445)
+    advertiser = MDNSAdvertiser(service_name="TerraCrate File Share", port=445)
 
     try:
         advertiser.advertise()

@@ -237,7 +237,7 @@ function SystemLogPane({
 
         <span className="text-term-dim">--container=</span>
         <div className="flex gap-1">
-          {['thumbsup-backend', 'thumbsup-frontend'].map((c) => (
+          {['TerraCrate-backend', 'TerraCrate-frontend'].map((c) => (
             <button
               key={c}
               onClick={() => onContainerChange(c)}
@@ -247,7 +247,7 @@ function SystemLogPane({
                   : 'border-glass-border text-term-dim hover:text-foreground'
               }`}
             >
-              {c.replace('thumbsup-', '')}
+              {c.replace('TerraCrate-', '')}
             </button>
           ))}
         </div>
@@ -452,7 +452,7 @@ export default function AuditLog() {
   const [securityState, setSecurityState] = useState<TabState>(initialTabState('security'));
 
   // System tab state
-  const [sysContainer, setSysContainer] = useState('thumbsup-backend');
+  const [sysContainer, setSysContainer] = useState('TerraCrate-backend');
   const [sysTail, setSysTail] = useState(200);
   const [sysGrep, setSysGrep] = useState('');
   const [sysLogs, setSysLogs] = useState<SystemLogEntry[]>([]);
@@ -727,7 +727,7 @@ export default function AuditLog() {
       <div className="flex-1 min-h-0 flex flex-col rounded border border-glass-border overflow-hidden shadow-[0_0_15px_rgba(74,222,128,0.05)]">
         {/* Window chrome */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-glass-border bg-glass-bg">
-          <span className="text-term-dim text-xs ml-2">thumbsup audit-log</span>
+          <span className="text-term-dim text-xs ml-2">TerraCrate audit-log</span>
           {stats && (
             <span className="text-term-dim text-xs ml-auto">
               ─── {stats.total.toLocaleString()} entries ───

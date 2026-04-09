@@ -57,7 +57,7 @@ export function AdminLayout() {
           <div className="flex items-center justify-between px-4 py-4 border-b border-glass-border">
             <div className="flex items-center gap-2">
               <Terminal className="h-4 w-4 text-term-green" />
-              <span className="text-sm font-medium text-foreground tracking-tight">thumbs-up</span>
+              <span className="text-sm font-medium text-foreground tracking-tight">TerraCrate</span>
             </div>
             <Button
               variant="ghost"
@@ -117,7 +117,7 @@ export function AdminLayout() {
           >
             <Menu className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-muted-foreground">thumbs-up</span>
+          <span className="text-sm text-muted-foreground">TerraCrate</span>
           <div className="w-7" />
         </header>
 

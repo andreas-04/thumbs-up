@@ -1,5 +1,5 @@
 """
-Email notification utility for ThumbsUp.
+Email notification utility for TerraCrate.
 Uses Python's built-in smtplib — no extra dependencies required.
 """
 

@@ -1,5 +1,5 @@
 """
-Audit logging utility for ThumbsUp.
+Audit logging utility for TerraCrate.
 
 Provides a single ``log_audit()`` helper that writes to the ``audit_logs``
 table.  Failures are silently caught so that audit logging never breaks the

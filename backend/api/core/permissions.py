@@ -1,5 +1,5 @@
 """
-Layered permission resolver for ThumbsUp.
+Layered permission resolver for TerraCrate.
 
 Resolves effective permissions for a user by merging three tiers:
   1. Domain defaults  – from DomainConfig matching the user's email domain

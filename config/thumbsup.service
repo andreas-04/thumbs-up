@@ -1,5 +1,5 @@
 [Unit]
-Description=ThumbsUp File Sharing Service
+Description=TerraCrate File Sharing Service
 After=network.target
 
 [Service]

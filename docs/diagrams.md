@@ -1,6 +1,6 @@
-# ThumbsUp System Diagrams
+# TerraCrate System Diagrams
 
-Architectural and flow diagrams for the ThumbsUp secure file sharing system. Source files are in `diagrams/` as `.mmd` (Mermaid) files with rendered PNGs in `diagrams/png/`.
+Architectural and flow diagrams for the TerraCrate secure file sharing system. Source files are in `diagrams/` as `.mmd` (Mermaid) files with rendered PNGs in `diagrams/png/`.
 
 ## Diagrams
 

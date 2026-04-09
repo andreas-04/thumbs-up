@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ThumbsUp Web Server Startup Script
+# TerraCrate Web Server Startup Script
 # Ensures dependencies and starts the Flask server
 #
 
@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
-echo "Starting ThumbsUp Web Server"
+echo "Starting TerraCrate Web Server"
 echo "========================================"
 echo ""
 

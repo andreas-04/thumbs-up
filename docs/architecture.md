@@ -1,8 +1,8 @@
-# ThumbsUp Architecture
+# TerraCrate Architecture
 
 ## Overview
 
-ThumbsUp is a secure, portable Wi-Fi file sharing system designed for on-demand file access without reliance on cloud infrastructure. It runs as two Docker containers — a Flask REST API backend and a React SPA frontend served by Nginx — orchestrated via Docker Compose on a Raspberry Pi (or any Linux host). The system provides HTTPS file sharing with JWT authentication, mutual TLS (mTLS) for regular users, a three-tier folder permission model, SMTP email notifications with client certificate delivery, and mDNS service discovery.
+TerraCrate is a secure, portable Wi-Fi file sharing system designed for on-demand file access without reliance on cloud infrastructure. It runs as two Docker containers — a Flask REST API backend and a React SPA frontend served by Nginx — orchestrated via Docker Compose on a Raspberry Pi (or any Linux host). The system provides HTTPS file sharing with JWT authentication, mutual TLS (mTLS) for regular users, a three-tier folder permission model, SMTP email notifications with client certificate delivery, and mDNS service discovery.
 
 ## System Architecture
 
@@ -110,7 +110,7 @@ Flask 3.0.0 HTTPS server providing a versioned REST API (`/api/v1/*`) plus legac
 | `MAX_UPLOAD_SIZE` | `104857600` | Upload limit (100 MB) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 | `MDNS_HOSTNAME` | `socket.gethostname()` | mDNS hostname |
-| `SERVICE_NAME` | `ThumbsUp File Share` | Advertised service name |
+| `SERVICE_NAME` | `TerraCrate File Share` | Advertised service name |
 
 **API Endpoints (`/api/v1/`)**:
 
@@ -247,7 +247,7 @@ Self-signed X.509 certificate generation using the `cryptography` library.
 
 **Server Certificate** (`generate_self_signed_cert`):
 - RSA 2048-bit key, SHA256 signature
-- Subject: `C=US, ST=California, L=San Francisco, O=ThumbsUp, CN=<hostname>`
+- Subject: `C=US, ST=California, L=San Francisco, O=TerraCrate, CN=<hostname>`
 - SANs: hostname, hostname.local, localhost, host IP, 127.0.0.1
 - BasicConstraints: CA=True (acts as CA to sign client certs)
 - Validity: 365 days
@@ -405,7 +405,7 @@ Run on the target Raspberry Pi (requires root):
 1. **Generates `.env`** with `MDNS_HOSTNAME` and `AP_PASSPHRASE`
 2. **Installs Avahi** daemon for mDNS (`thumbsup.local` discovery)
 3. **Installs WiFi AP fallback** — hostapd + dnsmasq. If wpa_supplicant fails to associate within 10 seconds, switches wlan0 to Access Point mode:
-   - SSID: `ThumbsUp-AP`, WPA2-PSK
+   - SSID: `TerraCrate-AP`, WPA2-PSK
    - DHCP range: `192.168.4.10–50`
    - AP IP: `192.168.4.1`
 4. **Installs systemd services**:
@@ -486,7 +486,7 @@ services:
 
 ### WiFi AP Fallback
 When no known WiFi network is available:
-- SSID: `ThumbsUp-AP` (WPA2-PSK)
+- SSID: `TerraCrate-AP` (WPA2-PSK)
 - Gateway: `192.168.4.1`
 - DHCP: `192.168.4.10–50`
 
@@ -668,4 +668,4 @@ Ability to revoke issued client certificates so that dismissed or compromised us
 
 **Document Version**: 2.1
 **Last Updated**: March 31, 2026
-**Maintained By**: ThumbsUp Development Team
+**Maintained By**: TerraCrate Development Team

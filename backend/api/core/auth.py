@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Token-based authentication system for ThumbsUp.
+Token-based authentication system for TerraCrate.
 Generates and validates JWT tokens for secure access with database-backed user accounts.
 """
 
