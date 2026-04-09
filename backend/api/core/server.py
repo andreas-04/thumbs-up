@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ThumbsUp API v2 - Main Server
+TerraCrate API v2 - Main Server
 Ad-hoc file sharing server with web interface.
 """
 
@@ -51,11 +51,11 @@ CONFIG = {
     "TOKEN_EXPIRY_HOURS": int(os.getenv("TOKEN_EXPIRY_HOURS", 24)),
     "ENABLE_UPLOADS": os.getenv("ENABLE_UPLOADS", "true").lower() == "true",
     "ENABLE_DELETE": os.getenv("ENABLE_DELETE", "false").lower() == "true",
-    "SERVICE_NAME": os.getenv("SERVICE_NAME", "ThumbsUp File Share"),
+    "SERVICE_NAME": os.getenv("SERVICE_NAME", "TerraCrate File Share"),
     "MDNS_HOSTNAME": os.getenv("MDNS_HOSTNAME", socket.gethostname()),
     "MAX_UPLOAD_SIZE": int(os.getenv("MAX_UPLOAD_SIZE", 100 * 1024 * 1024)),  # 100MB
     "ADMIN_PIN": os.getenv("ADMIN_PIN"),  # Must be set via environment
-    "DATABASE_URI": os.getenv("DATABASE_URI", f"sqlite:///{BASE_DIR}/data/thumbsup.db"),
+    "DATABASE_URI": os.getenv("DATABASE_URI", f"sqlite:///{BASE_DIR}/data/terracrate.db"),
     "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "*"),  # Comma-separated origins or '*'
 }
 
@@ -337,7 +337,7 @@ def api_signup():
     if settings and settings.smtp_enabled:
         _ok, _err, cert_meta = send_approval_email(
             new_user.email,
-            settings.device_name or "ThumbsUp",
+            settings.device_name or "TerraCrate",
             settings,
             ca_cert_path=CONFIG["CERT_PATH"],
             ca_key_path=CONFIG["KEY_PATH"],
@@ -613,7 +613,7 @@ def api_create_user():
             if settings and settings.smtp_enabled:
                 _ok, _err, cert_meta = send_approval_email(
                     existing_user.email,
-                    settings.device_name or "ThumbsUp",
+                    settings.device_name or "TerraCrate",
                     settings,
                     ca_cert_path=CONFIG["CERT_PATH"],
                     ca_key_path=CONFIG["KEY_PATH"],
@@ -664,7 +664,7 @@ def api_create_user():
     if settings and settings.smtp_enabled:
         send_invite_email(
             new_user.email,
-            settings.device_name or "ThumbsUp",
+            settings.device_name or "TerraCrate",
             settings,
             p12_data=(p12_bytes, p12_password) if p12_bytes else None,
         )
@@ -734,7 +734,7 @@ def api_update_user(user_id):
         if settings and settings.smtp_enabled:
             _ok, _err, cert_meta = send_approval_email(
                 user.email,
-                settings.device_name or "ThumbsUp",
+                settings.device_name or "TerraCrate",
                 settings,
                 ca_cert_path=CONFIG["CERT_PATH"],
                 ca_key_path=CONFIG["KEY_PATH"],
@@ -839,7 +839,7 @@ def api_revoke_cert(user_id):
     # Send notification email
     settings = SystemSettings.query.first()
     if settings and settings.smtp_enabled:
-        send_revocation_email(user.email, settings.device_name or "ThumbsUp", settings)
+        send_revocation_email(user.email, settings.device_name or "TerraCrate", settings)
 
     log_audit("cert.revoke", target_type="user", target_id=user.id, description=f"Revoked certificate for {user.email}")
 
@@ -896,7 +896,7 @@ def api_reissue_cert(user_id):
     if settings and settings.smtp_enabled:
         send_invite_email(
             user.email,
-            settings.device_name or "ThumbsUp",
+            settings.device_name or "TerraCrate",
             settings,
             p12_data=(p12_bytes, p12_password),
         )
@@ -1387,7 +1387,7 @@ def _require_mtls_for_protected(user):
 
     nginx forwards ``X-SSL-Client-Verify`` (``SUCCESS`` when the client
     presented a certificate verified against the CA) and ``X-SSL-Client-S-DN``
-    (the certificate subject DN, e.g. ``O=thumbsup,OU=member,CN=user@example.com``).
+    (the certificate subject DN, e.g. ``O=terracrate,OU=member,CN=user@example.com``).
 
     This function also verifies that the certificate's CN matches the
     authenticated user's email so that one user's cert cannot be used to
@@ -1875,8 +1875,8 @@ def api_get_system_logs():
     since_param = request.args.get("since", "").strip()
 
     allowed_containers = {
-        "backend": "thumbsup-backend",
-        "frontend": "thumbsup-frontend",
+        "backend": "terracrate-backend",
+        "frontend": "terracrate-frontend",
     }
     docker_name = allowed_containers.get(container_name)
     if not docker_name:
@@ -2448,7 +2448,7 @@ def _check_expiring_certs():
             if settings and settings.smtp_enabled:
                 send_revocation_email(
                     user.email,
-                    settings.device_name or "ThumbsUp",
+                    settings.device_name or "TerraCrate",
                     settings,
                     reason="Your certificate is expiring soon.",
                 )
@@ -2477,7 +2477,7 @@ def _start_cert_expiry_checker():
 def main():
     """Main server entry point."""
     print("=" * 60)
-    print(f"ThumbsUp API v2 - {CONFIG['SERVICE_NAME']}")
+    print(f"TerraCrate API v2 - {CONFIG['SERVICE_NAME']}")
     print("=" * 60)
 
     # Check certificates
@@ -2495,113 +2495,6 @@ def main():
     # Initialize database tables
     with app.app_context():
         db.create_all()
-
-        # Migrate: add is_approved column if missing (for existing databases)
-        from sqlalchemy import inspect as sa_inspect
-        from sqlalchemy import text
-
-        inspector = sa_inspect(db.engine)
-        user_columns = [col["name"] for col in inspector.get_columns("users")]
-        if "is_approved" not in user_columns:
-            db.session.execute(text("ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 0"))
-            db.session.commit()
-            print("✅ Migrated: added is_approved column to users table")
-
-        # Migrate: add SMTP columns to system_settings if missing
-        settings_columns = [col["name"] for col in inspector.get_columns("system_settings")]
-        smtp_migrations = [
-            ("smtp_enabled", "BOOLEAN", "0"),
-            ("smtp_host", "VARCHAR(255)", "''"),
-            ("smtp_port", "INTEGER", "587"),
-            ("smtp_username", "VARCHAR(255)", "''"),
-            ("smtp_password", "VARCHAR(255)", "''"),
-            ("smtp_from_email", "VARCHAR(255)", "''"),
-            ("smtp_use_tls", "BOOLEAN", "1"),
-        ]
-        for col_name, col_type, default_val in smtp_migrations:
-            if col_name not in settings_columns:
-                db.session.execute(
-                    text(f"ALTER TABLE system_settings ADD COLUMN {col_name} {col_type} DEFAULT {default_val}")
-                )
-                print(f"✅ Migrated: added {col_name} column to system_settings table")
-
-        # Migrate: add allowed_domains column to system_settings if missing
-        if "allowed_domains" not in settings_columns:
-            db.session.execute(text("ALTER TABLE system_settings ADD COLUMN allowed_domains TEXT DEFAULT ''"))
-            print("✅ Migrated: added allowed_domains column to system_settings table")
-
-        # Migrate: add cert tracking columns to users if missing
-        cert_user_migrations = [
-            ("cert_serial_number", "VARCHAR(255)", "NULL"),
-            ("cert_revoked", "BOOLEAN", "0"),
-            ("cert_issued_at", "DATETIME", "NULL"),
-            ("cert_expires_at", "DATETIME", "NULL"),
-        ]
-        for col_name, col_type, default_val in cert_user_migrations:
-            if col_name not in user_columns:
-                db.session.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default_val}"))
-                print(f"✅ Migrated: added {col_name} column to users table")
-
-        # Migrate: create revoked_certificates table if missing
-        existing_tables = inspector.get_table_names()
-        if "revoked_certificates" not in existing_tables:
-            db.session.execute(
-                text("""
-                CREATE TABLE revoked_certificates (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    serial_number VARCHAR(255) NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    revoked_at DATETIME NOT NULL,
-                    reason VARCHAR(50),
-                    revoked_by INTEGER,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
-                    FOREIGN KEY (revoked_by) REFERENCES users(id)
-                )
-            """)
-            )
-            print("✅ Migrated: created revoked_certificates table")
-
-        # Migrate: create mtls_mismatch_logs table if missing
-        if "mtls_mismatch_logs" not in existing_tables:
-            db.session.execute(
-                text("""
-                CREATE TABLE mtls_mismatch_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    presented_cn VARCHAR(255) NOT NULL,
-                    authenticated_user_id INTEGER NOT NULL,
-                    timestamp DATETIME NOT NULL,
-                    FOREIGN KEY (authenticated_user_id) REFERENCES users(id)
-                )
-            """)
-            )
-            print("✅ Migrated: created mtls_mismatch_logs table")
-
-        # Migrate: create audit_logs table if missing
-        if "audit_logs" not in existing_tables:
-            db.session.execute(
-                text("""
-                CREATE TABLE audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME NOT NULL,
-                    user_id INTEGER,
-                    user_email VARCHAR(255),
-                    action VARCHAR(100) NOT NULL,
-                    target_type VARCHAR(50),
-                    target_id VARCHAR(255),
-                    description VARCHAR(1024),
-                    ip_address VARCHAR(45),
-                    status VARCHAR(10) NOT NULL DEFAULT 'success',
-                    metadata_json TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-            """)
-            )
-            db.session.execute(text("CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)"))
-            db.session.execute(text("CREATE INDEX ix_audit_logs_action ON audit_logs (action)"))
-            db.session.execute(text("CREATE INDEX ix_audit_timestamp_action ON audit_logs (timestamp, action)"))
-            print("✅ Migrated: created audit_logs table")
-
-        db.session.commit()
 
         print("✅ Database initialized")
 

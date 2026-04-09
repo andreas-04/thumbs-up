@@ -211,7 +211,7 @@ class TestAdminEmailUsesHostname:
         from core import server as srv
         from models import User, db
 
-        for hostname in ("thumbsup", "pi-home", "mydevice"):
+        for hostname in ("terracrate", "pi-home", "mydevice"):
             # Clean up any admin created in a previous iteration
             User.query.filter_by(role="admin").delete()
             db.session.commit()

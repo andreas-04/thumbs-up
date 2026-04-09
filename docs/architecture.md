@@ -1,8 +1,8 @@
-# ThumbsUp Architecture
+# TerraCrate Architecture
 
 ## Overview
 
-ThumbsUp is a secure, portable Wi-Fi file sharing system designed for on-demand file access without reliance on cloud infrastructure. It runs as two Docker containers — a Flask REST API backend and a React SPA frontend served by Nginx — orchestrated via Docker Compose on a Raspberry Pi (or any Linux host). The system provides HTTPS file sharing with JWT authentication, mutual TLS (mTLS) for regular users, a three-tier folder permission model, SMTP email notifications with client certificate delivery, and mDNS service discovery.
+TerraCrate is a secure, portable Wi-Fi file sharing system designed for on-demand file access without reliance on cloud infrastructure. It runs as two Docker containers — a Flask REST API backend and a React SPA frontend served by Nginx — orchestrated via Docker Compose on a Raspberry Pi (or any Linux host). The system provides HTTPS file sharing with JWT authentication, mutual TLS (mTLS) for regular users, a three-tier folder permission model, SMTP email notifications with client certificate delivery, and mDNS service discovery.
 
 ## System Architecture
 
@@ -61,7 +61,7 @@ ThumbsUp is a secure, portable Wi-Fi file sharing system designed for on-demand 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              Systemd (thumbsup.service)                 │
+│              Systemd (terracrate.service)                 │
 │                 docker compose up -d                    │
 └────────────────┬────────────────────────────────────────┘
                  │
@@ -79,7 +79,7 @@ ThumbsUp is a secure, portable Wi-Fi file sharing system designed for on-demand 
 │     ┌─────┴──────────┬──────────────┘                   │
 │     │                │                                   │
 │  ┌──▼────┐  ┌────────▼──────┐  ┌──────────────┐       │
-│  │ files │  │ thumbsup-certs│  │ thumbsup-db  │       │
+│  │ files │  │ terracrate-certs│  │ terracrate-db  │       │
 │  │(bind) │  │ (named vol)   │  │ (named vol)  │       │
 │  └───────┘  └───────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────┘
@@ -103,14 +103,14 @@ Flask 3.0.0 HTTPS server providing a versioned REST API (`/api/v1/*`) plus legac
 | `STORAGE_PATH` | `/app/storage` | Root storage directory |
 | `CERT_PATH` | `/app/certs/server_cert.pem` | Server TLS certificate |
 | `KEY_PATH` | `/app/certs/server_key.pem` | Server TLS private key |
-| `DATABASE_URI` | `sqlite:////app/data/thumbsup.db` | SQLAlchemy database URI |
+| `DATABASE_URI` | `sqlite:////app/data/terracrate.db` | SQLAlchemy database URI |
 | `TOKEN_EXPIRY_HOURS` | `24` | User JWT lifetime |
 | `ENABLE_UPLOADS` | `true` | Allow file uploads |
 | `ENABLE_DELETE` | `false` | Allow file/folder deletion |
 | `MAX_UPLOAD_SIZE` | `104857600` | Upload limit (100 MB) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 | `MDNS_HOSTNAME` | `socket.gethostname()` | mDNS hostname |
-| `SERVICE_NAME` | `ThumbsUp File Share` | Advertised service name |
+| `SERVICE_NAME` | `TerraCrate File Share` | Advertised service name |
 
 **API Endpoints (`/api/v1/`)**:
 
@@ -247,14 +247,14 @@ Self-signed X.509 certificate generation using the `cryptography` library.
 
 **Server Certificate** (`generate_self_signed_cert`):
 - RSA 2048-bit key, SHA256 signature
-- Subject: `C=US, ST=California, L=San Francisco, O=ThumbsUp, CN=<hostname>`
+- Subject: `C=US, ST=California, L=San Francisco, O=TerraCrate, CN=<hostname>`
 - SANs: hostname, hostname.local, localhost, host IP, 127.0.0.1
 - BasicConstraints: CA=True (acts as CA to sign client certs)
 - Validity: 365 days
 
 **Client Certificate** (`generate_client_cert`):
 - RSA 2048-bit, signed by the server CA
-- Subject: `O=thumbsup, OU=member, CN=<user_email>`
+- Subject: `O=terracrate, OU=member, CN=<user_email>`
 - SANs: user email (RFC822Name)
 - ExtendedKeyUsage: ClientAuth
 - Validity: 365 days
@@ -403,13 +403,13 @@ The frontend container runs Nginx on **port 443** with TLS:
 Run on the target Raspberry Pi (requires root):
 
 1. **Generates `.env`** with `MDNS_HOSTNAME` and `AP_PASSPHRASE`
-2. **Installs Avahi** daemon for mDNS (`thumbsup.local` discovery)
+2. **Installs Avahi** daemon for mDNS (`terracrate.local` discovery)
 3. **Installs WiFi AP fallback** — hostapd + dnsmasq. If wpa_supplicant fails to associate within 10 seconds, switches wlan0 to Access Point mode:
-   - SSID: `ThumbsUp-AP`, WPA2-PSK
+   - SSID: `TerraCrate-AP`, WPA2-PSK
    - DHCP range: `192.168.4.10–50`
    - AP IP: `192.168.4.1`
 4. **Installs systemd services**:
-   - `thumbsup.service` — runs `docker compose up -d` on boot
+   - `terracrate.service` — runs `docker compose up -d` on boot
    - `wifi-fallback.service` — runs wifi-check.sh after network target
 
 ### Docker Compose
@@ -419,18 +419,18 @@ services:
   backend:
     image: python:3.11
     port: 8443 (HTTPS)
-    volumes: storage (bind), thumbsup-db, thumbsup-certs
+    volumes: storage (bind), terracrate-db, terracrate-certs
     healthcheck: urllib to https://localhost:8443/health
 
   frontend:
     image: nginx:alpine (multi-stage: node:22-slim build → nginx)
     port: 443 (HTTPS)
-    volumes: thumbsup-certs (read-only)
+    volumes: terracrate-certs (read-only)
     depends_on: backend (healthy)
     healthcheck: wget to https://localhost/
 ```
 
-**Named volumes**: `thumbsup-db` (SQLite database), `thumbsup-certs` (shared TLS certificates)
+**Named volumes**: `terracrate-db` (SQLite database), `terracrate-certs` (shared TLS certificates)
 **Bind mount**: `./backend/api/storage` → `/app/storage` (user files)
 
 ### Environment Variables (`.env`)
@@ -438,7 +438,7 @@ services:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADMIN_PIN` | `1234` | Initial admin password |
-| `MDNS_HOSTNAME` | `thumbsup` | mDNS hostname (→ `thumbsup.local`) |
+| `MDNS_HOSTNAME` | `terracrate` | mDNS hostname (→ `terracrate.local`) |
 | `AP_PASSPHRASE` | *(prompted)* | WiFi AP fallback passphrase |
 
 ## Data Flow
@@ -480,13 +480,13 @@ services:
 | 5353 | Avahi | mDNS service discovery (UDP, host) |
 
 ### Discovery
-- **Hostname**: `<MDNS_HOSTNAME>.local` (default: `thumbsup.local`)
+- **Hostname**: `<MDNS_HOSTNAME>.local` (default: `terracrate.local`)
 - **Avahi service file** advertises `_https._tcp` on port 443
 - **In-app mDNS** advertises `_smb._tcp` (legacy)
 
 ### WiFi AP Fallback
 When no known WiFi network is available:
-- SSID: `ThumbsUp-AP` (WPA2-PSK)
+- SSID: `TerraCrate-AP` (WPA2-PSK)
 - Gateway: `192.168.4.1`
 - DHCP: `192.168.4.10–50`
 
@@ -525,7 +525,7 @@ When no known WiFi network is available:
 |-----------|---------|
 | Docker + Docker Compose | Containerization |
 | Nginx | Reverse proxy, TLS termination, mTLS, static serving |
-| Systemd | Service lifecycle (thumbsup.service, wifi-fallback.service) |
+| Systemd | Service lifecycle (terracrate.service, wifi-fallback.service) |
 | Avahi | Host-level mDNS advertisement |
 | hostapd + dnsmasq | WiFi Access Point fallback |
 
@@ -545,7 +545,7 @@ When no known WiFi network is available:
     ├── [folders]/      # Folders with permission-controlled access
     └── [files]         # Individual files
 /app/data/
-└── thumbsup.db         # SQLite database
+└── terracrate.db         # SQLite database
 /app/certs/
 ├── server_cert.pem     # Server TLS certificate (also CA)
 └── server_key.pem      # Server private key
@@ -635,7 +635,7 @@ Support for mounting LUKS-encrypted external USB drives as the file storage back
 **Planned approach**:
 - `setup.sh` detects attached block devices and offers to initialize a LUKS2 partition
 - Passphrase stored securely (e.g., systemd-cryptsetup or TPM-backed keyslot on supported hardware)
-- `thumbsup.service` gains a dependency on the LUKS mount unit, unlocking at boot
+- `terracrate.service` gains a dependency on the LUKS mount unit, unlocking at boot
 - `STORAGE_PATH` in Docker Compose points to the decrypted mount point
 - Graceful degradation: if no encrypted drive is attached, falls back to local storage with a warning in the admin dashboard
 
@@ -668,4 +668,4 @@ Ability to revoke issued client certificates so that dismissed or compromised us
 
 **Document Version**: 2.1
 **Last Updated**: March 31, 2026
-**Maintained By**: ThumbsUp Development Team
+**Maintained By**: TerraCrate Development Team

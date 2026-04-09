@@ -1,5 +1,5 @@
 """
-Email notification utility for ThumbsUp.
+Email notification utility for TerraCrate.
 Uses Python's built-in smtplib — no extra dependencies required.
 """
 
@@ -110,7 +110,7 @@ def send_approval_email(user_email, device_name, settings, ca_cert_path=None, ca
             p12_bytes, p12_password, serial, not_before, not_after = generate_client_p12(
                 ca_cert_path, ca_key_path, user_email
             )
-            attachments.append(("thumbsup-client.p12", p12_bytes))
+            attachments.append(("terracrate-client.p12", p12_bytes))
             cert_generated = True
             cert_meta = {"serial": serial, "not_before": not_before, "not_after": not_after}
         except Exception as exc:
@@ -150,12 +150,12 @@ def send_invite_email(user_email, device_name, settings, ca_cert_path=None, ca_k
     # Use pre-generated cert data if provided, otherwise generate on the fly
     if p12_data:
         p12_bytes, p12_password = p12_data[0], p12_data[1]
-        attachments.append(("thumbsup-client.p12", p12_bytes))
+        attachments.append(("terracrate-client.p12", p12_bytes))
         cert_generated = True
     elif ca_cert_path and ca_key_path:
         try:
             p12_bytes, p12_password, _serial, _nb, _na = generate_client_p12(ca_cert_path, ca_key_path, user_email)
-            attachments.append(("thumbsup-client.p12", p12_bytes))
+            attachments.append(("terracrate-client.p12", p12_bytes))
             cert_generated = True
         except Exception as exc:
             logger.error("Failed to generate client cert for %s: %s", user_email, exc)

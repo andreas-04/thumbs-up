@@ -58,7 +58,7 @@ export default function AdminLogin() {
             <Terminal className="h-8 w-8 text-term-green" />
           </div>
           <CardTitle className="text-lg text-foreground tracking-tight">
-            thumbs-up
+            TerraCrate
           </CardTitle>
           <CardDescription className="text-muted-foreground text-xs">
             authenticate to continue

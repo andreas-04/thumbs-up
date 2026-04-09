@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Self-signed certificate generator for ThumbsUp server.
+Self-signed certificate generator for TerraCrate server.
 Generates server certificate and private key for HTTPS.
 """
 
@@ -47,7 +47,7 @@ def generate_self_signed_cert(
             x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
             x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "California"),
             x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "ThumbsUp"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "TerraCrate"),
             x509.NameAttribute(NameOID.COMMON_NAME, hostname),
         ]
     )
@@ -153,7 +153,7 @@ def generate_client_cert(ca_cert_path, ca_key_path, user_email, validity_days=36
     # Build client certificate subject
     subject = x509.Name(
         [
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "thumbsup"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "terracrate"),
             x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "member"),
             x509.NameAttribute(NameOID.COMMON_NAME, user_email),
         ]

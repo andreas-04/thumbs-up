@@ -187,7 +187,7 @@ export default function UserFileBrowser() {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-term-green" />
-            <span className="text-sm text-foreground">thumbs-up</span>
+            <span className="text-sm text-foreground">TerraCrate</span>
           </div>
           <div className="flex items-center gap-1">
             <Button

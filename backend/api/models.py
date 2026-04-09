@@ -1,5 +1,5 @@
 """
-Database models for ThumbsUp authentication system.
+Database models for TerraCrate authentication system.
 """
 
 from datetime import datetime
@@ -72,7 +72,7 @@ class SystemSettings(db.Model):
     )  # 'email', 'email+password', 'username+password'
     tls_enabled = db.Column(db.Boolean, default=True)
     https_port = db.Column(db.Integer, default=8443)
-    device_name = db.Column(db.String(255), default="ThumbsUp File Share")
+    device_name = db.Column(db.String(255), default="TerraCrate File Share")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # SMTP email notification settings

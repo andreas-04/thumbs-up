@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QR Code generator for easy access to ThumbsUp server.
+QR Code generator for easy access to TerraCrate server.
 Generates QR codes containing access URLs with embedded tokens.
 """
 
@@ -18,7 +18,7 @@ class QRGenerator:
         Initialize QR code generator.
 
         Args:
-            base_url: Base server URL (e.g., https://thumbsup.local:8443)
+            base_url: Base server URL (e.g., https://terracrate.local:8443)
             token: Access token to embed in URL
         """
         self.base_url = base_url.rstrip("/")
@@ -123,7 +123,7 @@ class QRGenerator:
 # Example usage
 if __name__ == "__main__":
     # Example: Generate QR code for local server
-    generator = QRGenerator(base_url="https://thumbsup.local:8443", token="example_token_12345")
+    generator = QRGenerator(base_url="https://terracrate.local:8443", token="example_token_12345")
 
     # Print access URL
     print("Access URL:")

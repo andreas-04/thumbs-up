@@ -43,7 +43,7 @@ class TestGenerateClientCert:
         subject = cert.subject
 
         assert subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == "alice@example.com"
-        assert subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)[0].value == "thumbsup"
+        assert subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)[0].value == "terracrate"
         assert subject.get_attributes_for_oid(NameOID.ORGANIZATIONAL_UNIT_NAME)[0].value == "member"
 
     def test_san_contains_email(self, tmp_path):

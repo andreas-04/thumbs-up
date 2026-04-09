@@ -6,23 +6,23 @@ services:
     build:
       context: ./backend/api
       dockerfile: Dockerfile
-    container_name: thumbsup-backend
-    hostname: ${MDNS_HOSTNAME:-thumbsup}
+    container_name: terracrate-backend
+    hostname: ${MDNS_HOSTNAME:-terracrate}
     network_mode: host
     environment:
       - ADMIN_PIN=${ADMIN_PIN:-1234}
       - HOST=0.0.0.0
       - PORT=8443
-      - MDNS_HOSTNAME=${MDNS_HOSTNAME:-thumbsup}
+      - MDNS_HOSTNAME=${MDNS_HOSTNAME:-terracrate}
       - TOKEN_EXPIRY_HOURS=24
       - ENABLE_UPLOADS=true
       - ENABLE_DELETE=false
-      - SERVICE_NAME=ThumbsUp File Share
+      - SERVICE_NAME=Terracrate File Share
       - CORS_ORIGINS=*
     volumes:
       - ./backend/api/storage:/app/storage
-      - thumbsup-db:/app/data
-      - thumbsup-certs:/app/certs
+      - terracrate-db:/app/data
+      - terracrate-certs:/app/certs
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     healthcheck:
@@ -37,13 +37,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: thumbsup-frontend
+    container_name: terracrate-frontend
     network_mode: host
     depends_on:
       backend:
         condition: service_healthy
     volumes:
-      - thumbsup-certs:/etc/nginx/certs:ro
+      - terracrate-certs:/etc/nginx/certs:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=1", "--spider", "https://localhost/"]
@@ -53,7 +53,7 @@ services:
       start_period: 5s
 
 volumes:
-  thumbsup-db:
+  terracrate-db:
     driver: local
-  thumbsup-certs:
+  terracrate-certs:
     driver: local

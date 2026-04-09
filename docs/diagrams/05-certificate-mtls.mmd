@@ -13,7 +13,7 @@ sequenceDiagram
     Admin->>API: POST /api/v1/users<br/>{email, role: "user"}
     API->>CertGen: generate_client_p12(ca_cert, ca_key, email)
     CertGen->>CertGen: Generate RSA 2048-bit client key
-    CertGen->>CertGen: Create X.509 certificate<br/>Subject: O=thumbsup, OU=member, CN=email<br/>Extensions: CLIENT_AUTH
+    CertGen->>CertGen: Create X.509 certificate<br/>Subject: O=terracrate, OU=member, CN=email<br/>Extensions: CLIENT_AUTH
     CertGen->>CertGen: Sign with Server CA key (SHA256)
     CertGen->>CertGen: Bundle into PKCS#12 (.p12)<br/>with random password
     CertGen-->>API: Return {p12_bytes, password}
@@ -26,7 +26,7 @@ sequenceDiagram
     NewUser->>NewUser: Import .p12 into<br/>browser/OS cert store
 
     Note over Admin,Backend: Phase 3 — mTLS Handshake
-    NewUser->>BrowserCert: Access https://thumbsup.local
+    NewUser->>BrowserCert: Access https://terracrate.local
     BrowserCert->>NginxTLS: TLS ClientHello
     NginxTLS->>BrowserCert: ServerHello + CertificateRequest
     BrowserCert->>BrowserCert: Select matching client cert

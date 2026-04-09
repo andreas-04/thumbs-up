@@ -1,5 +1,5 @@
 /**
- * API Service Layer for ThumbsUp Frontend
+ * API Service Layer for TerraCrate Frontend
  * Provides typed functions for all backend REST API endpoints
  */
 
@@ -555,8 +555,12 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Upload failed');
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+      throw new Error(`Upload failed (HTTP ${response.status})`);
     }
 
     return response.json();
@@ -740,7 +744,7 @@ class ApiClient {
     return this.request<AuditLogStats>('/api/v1/audit-logs/stats');
   }
 
-  async getSystemLogs(container = 'thumbsup-backend', tail = 200): Promise<SystemLogResponse> {
+  async getSystemLogs(container = 'terracrate-backend', tail = 200): Promise<SystemLogResponse> {
     return this.request<SystemLogResponse>(
       `/api/v1/system/logs?container=${encodeURIComponent(container)}&tail=${tail}`
     );

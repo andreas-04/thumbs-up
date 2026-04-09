@@ -16,7 +16,7 @@ jobs:
       - name: Create source archive
         run: |
           TAG=${GITHUB_REF_NAME}
-          zip -r "thumbs-up-${TAG}-source.zip" . \
+          zip -r "terracrate-${TAG}-source.zip" . \
             --exclude "*.git*" \
             --exclude "*node_modules*" \
             --exclude "*.pem" \
@@ -28,5 +28,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: thumbs-up-${{ github.ref_name }}-source.zip
+          files: terracrate-${{ github.ref_name }}-source.zip
           generate_release_notes: true

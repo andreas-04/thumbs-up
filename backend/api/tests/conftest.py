@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for ThumbsUp backend tests.
+Shared pytest fixtures for TerraCrate backend tests.
 """
 
 import os

@@ -27,7 +27,8 @@ echo "wifi-check: no WiFi association detected — switching to Access Point mod
 
 # Stop wpa_supplicant so it does not fight with hostapd over the interface
 systemctl stop wpa_supplicant 2>/dev/null || true
-killall wpa_supplicant 2>/dev/null || true
+# Kill only the wpa_supplicant instance for our interface (not all interfaces)
+pkill -f "wpa_supplicant.*-i${IFACE}" 2>/dev/null || true
 
 # Bring the interface up and assign the static AP address
 ip link set "$IFACE" up

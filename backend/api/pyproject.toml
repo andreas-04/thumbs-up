@@ -1,5 +1,5 @@
 [project]
-name = "thumbsup-backend"
+name = "terracrate-backend"
 version = "1.0.0"
 requires-python = ">=3.11"
 

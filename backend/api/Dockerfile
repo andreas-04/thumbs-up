@@ -1,4 +1,4 @@
-# Dockerfile for ThumbsUp Backend API v2 Webserver
+# Dockerfile for TerraCrate Backend API v2 Webserver
 FROM python:3.11
 
 # Set working directory
@@ -32,11 +32,11 @@ ENV PORT=8443
 ENV STORAGE_PATH=/app/storage
 ENV CERT_PATH=/app/certs/server_cert.pem
 ENV KEY_PATH=/app/certs/server_key.pem
-ENV DATABASE_URI=sqlite:////app/data/thumbsup.db
+ENV DATABASE_URI=sqlite:////app/data/terracrate.db
 ENV TOKEN_EXPIRY_HOURS=24
 ENV ENABLE_UPLOADS=true
 ENV ENABLE_DELETE=false
-ENV SERVICE_NAME="ThumbsUp File Share"
+ENV SERVICE_NAME="TerraCrate File Share"
 ENV MAX_UPLOAD_SIZE=104857600
 
 # ADMIN_PIN MUST be set (either in docker run -e ADMIN_PIN=xxxx or in compose)

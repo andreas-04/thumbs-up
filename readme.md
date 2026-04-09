@@ -1,6 +1,6 @@
-# Thumbs Up File Share
+# TerraCrate File Share
 
-Thumbs up is a self hosted file sharing NAS solution for a Raspberry Pi
+TerraCrate is a self hosted file sharing NAS solution for a Raspberry Pi
 
 ## Quick Start
 
@@ -8,21 +8,21 @@ Thumbs up is a self hosted file sharing NAS solution for a Raspberry Pi
 
 `sudo ./setup.sh`
 
-This installs avahi-daemon and applies the avahi service config, enabling your NAS to be discoverable on your LAN via mDNS over a `.local` domain. A default `.env` file is generated with `MDNS_HOSTNAME=thumbsup` if one does not already exist.
+This installs avahi-daemon and applies the avahi service config, enabling your NAS to be discoverable on your LAN via mDNS over a `.local` domain. A default `.env` file is generated with `MDNS_HOSTNAME=terracrate` if one does not already exist.
 
 `docker compose up -d`
 
-Navigate to `https://thumbsup.local`
+Navigate to `https://terracrate.local`
 
 Login via:
-- **username**: admin@thumbsup.local
+- **username**: admin@terracrate.local
 - **password**: 1234
 
 You will be asked to change your password after initial login.
 
 ## Customizing the mDNS Hostname
 
-By default, your device is advertised as `thumbsup.local`. To use a different hostname:
+By default, your device is advertised as `terracrate.local`. To use a different hostname:
 
 1. Edit the `.env` file in the project root and update the `MDNS_HOSTNAME` value:
    ```
