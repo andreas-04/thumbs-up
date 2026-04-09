@@ -237,7 +237,7 @@ function SystemLogPane({
 
         <span className="text-term-dim">--container=</span>
         <div className="flex gap-1">
-          {['TerraCrate-backend', 'TerraCrate-frontend'].map((c) => (
+          {['backend', 'frontend'].map((c) => (
             <button
               key={c}
               onClick={() => onContainerChange(c)}
@@ -247,7 +247,7 @@ function SystemLogPane({
                   : 'border-glass-border text-term-dim hover:text-foreground'
               }`}
             >
-              {c.replace('TerraCrate-', '')}
+              {c}
             </button>
           ))}
         </div>
@@ -452,7 +452,7 @@ export default function AuditLog() {
   const [securityState, setSecurityState] = useState<TabState>(initialTabState('security'));
 
   // System tab state
-  const [sysContainer, setSysContainer] = useState('TerraCrate-backend');
+  const [sysContainer, setSysContainer] = useState('backend');
   const [sysTail, setSysTail] = useState(200);
   const [sysGrep, setSysGrep] = useState('');
   const [sysLogs, setSysLogs] = useState<SystemLogEntry[]>([]);
