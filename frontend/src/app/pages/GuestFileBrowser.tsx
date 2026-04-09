@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import FilePreview, { getPreviewType } from '../components/FilePreview';
 import {
   Card,
   CardContent,
@@ -30,7 +31,6 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { useAuth } from '../contexts/AuthContext';
 
 interface FileItem {
   id: string;
@@ -42,20 +42,20 @@ interface FileItem {
 }
 
 export default function GuestFileBrowser() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState('/');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const loadFiles = async (path: string = '/') => {
     setLoading(true);
     setError(null);
     try {
       const apiPath = path === '/' ? '' : path.replace(/^\//, '');
-      const { files } = await api.listFiles({ path: apiPath });
+      const { files } = await api.listGuestFiles({ path: apiPath });
       setFileItems(files.map(f => ({
         id: f.id || f.path,
         name: f.name,
@@ -83,12 +83,15 @@ export default function GuestFileBrowser() {
       const newPath = item.path.startsWith('/') ? item.path : '/' + item.path;
       loadFiles(newPath);
       setSearchQuery('');
+    } else if (getPreviewType(item.name) !== 'none') {
+      setPreviewFile(item);
+    } else {
+      handleDownload(item);
     }
   };
 
   const handleDownload = (item: FileItem) => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const url = `${baseUrl}/api/v1/files/download?path=${encodeURIComponent(item.path)}`;
+    const url = api.getGuestDownloadUrl(item.path);
 
     const link = document.createElement('a');
     link.href = url;
@@ -107,8 +110,7 @@ export default function GuestFileBrowser() {
     setSearchQuery('');
   };
 
-  const handleSignIn = async () => {
-    await logout();
+  const handleSignIn = () => {
     navigate('/login');
   };
 
@@ -315,6 +317,17 @@ export default function GuestFileBrowser() {
           </CardContent>
         </Card>
       </main>
+
+      {previewFile && (
+        <FilePreview
+          filePath={previewFile.path}
+          fileName={previewFile.name}
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          onDownload={() => handleDownload(previewFile)}
+          fetchContent={(path) => api.previewGuestFile(path)}
+        />
+      )}
     </div>
   );
 }

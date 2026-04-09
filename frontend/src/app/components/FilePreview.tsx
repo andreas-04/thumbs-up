@@ -66,9 +66,10 @@ interface FilePreviewProps {
   open: boolean;
   onClose: () => void;
   onDownload: () => void;
+  fetchContent?: (path: string) => Promise<Response>;
 }
 
-export default function FilePreview({ filePath, fileName, open, onClose, onDownload }: FilePreviewProps) {
+export default function FilePreview({ filePath, fileName, open, onClose, onDownload, fetchContent }: FilePreviewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -89,7 +90,8 @@ export default function FilePreview({ filePath, fileName, open, onClose, onDownl
 
     const load = async () => {
       try {
-        const response = await api.previewFile(filePath.replace(/^\/+/, ''));
+        const fetcher = fetchContent ?? ((p: string) => api.previewFile(p));
+        const response = await fetcher(filePath.replace(/^\/+/, ''));
         if (previewType === 'text') {
           const text = await response.text();
           setTextContent(text);

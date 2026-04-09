@@ -208,6 +208,7 @@ export default function FileBrowser() {
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const isGuestMode = currentPath === '/guest' || currentPath.startsWith('/guest/');
   const pathParts = currentPath.split('/').filter(Boolean);
 
   const navigateToFolder = (path: string) => {
@@ -216,8 +217,12 @@ export default function FileBrowser() {
     setSearchQuery('');
   };
 
+  const switchToGuest = () => navigateToFolder('/guest');
+  const switchToFiles = () => navigateToFolder('/');
+
   const goBack = () => {
-    if (currentPath === '/') return;
+    const root = isGuestMode ? '/guest' : '/';
+    if (currentPath === root) return;
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
     const parentPath = parts.length === 0 ? '/' : '/' + parts.join('/');
@@ -282,14 +287,28 @@ export default function FileBrowser() {
     <div className="space-y-4">
       <Card className="glass">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-foreground">files</CardTitle>
+        <CardTitle className="text-sm text-foreground flex items-center gap-1">
+            <button
+              onClick={switchToFiles}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${!isGuestMode ? 'bg-glass-highlight text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              files
+            </button>
+            <span className="text-term-dim">/</span>
+            <button
+              onClick={switchToGuest}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${isGuestMode ? 'bg-glass-highlight text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              guest
+            </button>
+          </CardTitle>
           
           {/* Breadcrumb Navigation */}
           <div className="pt-2 flex items-center gap-1 text-xs">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigateToFolder('/')}
+              onClick={() => navigateToFolder(isGuestMode ? '/guest' : '/')}
               className="text-muted-foreground hover:text-foreground h-6 px-1.5"
             >
               <Home className="h-3.5 w-3.5" />

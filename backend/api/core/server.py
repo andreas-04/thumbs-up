@@ -88,6 +88,9 @@ auth = TokenAuth(token_expiry_hours=CONFIG["TOKEN_EXPIRY_HOURS"], admin_pin=CONF
 # Ensure storage directory exists
 os.makedirs(CONFIG["STORAGE_PATH"], exist_ok=True)
 
+# Ensure guest storage directory exists (subdirectory of main storage)
+os.makedirs(os.path.join(CONFIG["STORAGE_PATH"], "files", "guest"), exist_ok=True)
+
 
 def get_server_url():
     """Get the server's access URL."""
@@ -1473,6 +1476,71 @@ def _log_cn_mismatch(presented_cn, authenticated_user_id):
             _revoke_user_cert(abused_user, "cn_mismatch_abuse")
 
 
+# =============================================================================
+# Guest File Endpoints (no authentication required)
+# =============================================================================
+
+
+def _guest_list_directory(path=""):
+    """List files from the guest storage directory."""
+    guest_base = os.path.join(CONFIG["STORAGE_PATH"], "files", "guest")
+    os.makedirs(guest_base, exist_ok=True)
+    items = _list_directory(guest_base, path)
+    items.sort(key=lambda x: (x["type"] != "folder", x["name"].lower()))
+    return items
+
+
+def _resolve_guest_file_path(rel_path):
+    """Resolve a virtual path to the guest storage filesystem path."""
+    base = Path(CONFIG["STORAGE_PATH"]).resolve() / "files" / "guest"
+    candidate = (base / rel_path).resolve()
+    if not str(candidate).startswith(str(base)):
+        return None
+    if candidate.exists():
+        return candidate
+    return None
+
+
+@app.route("/api/v1/guest/files", methods=["GET"])
+def api_guest_list_files():
+    """List files available to guests (no authentication required, read-only)."""
+    path = request.args.get("path", "")
+    search = request.args.get("search", "").strip()
+
+    try:
+        files = _guest_list_directory(path)
+
+        if search:
+            files = [f for f in files if search.lower() in f["name"].lower()]
+
+        return jsonify(
+            {
+                "files": files,
+                "currentPath": "/" + path if path else "/",
+                "parentPath": "/" + str(Path(path).parent) if path and path != "." else None,
+            }
+        ), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "code": "FILE_LIST_ERROR"}), 500
+
+
+@app.route("/api/v1/guest/files/download", methods=["GET"])
+def api_guest_download_file():
+    """Download a file from guest storage (no authentication required)."""
+    path = request.args.get("path", "")
+    if not path:
+        return jsonify({"error": "Path required", "code": "MISSING_PATH"}), 400
+
+    file_path = _resolve_guest_file_path(path)
+
+    if not file_path or not file_path.is_file():
+        return jsonify({"error": "File not found", "code": "FILE_NOT_FOUND"}), 404
+
+    log_audit("file.guest_download", target_type="file", target_id=path, description=f"Guest downloaded {path}")
+
+    return send_file(str(file_path), as_attachment=True)
+
+
 @app.route("/api/v1/files", methods=["GET"])
 @auth.require_auth()
 def api_list_files():
@@ -1864,7 +1932,9 @@ def api_move_file():
 
     new_location = dest_parent / source.name
     if new_location.exists():
-        return jsonify({"error": "An item with that name already exists in the destination", "code": "NAME_EXISTS"}), 409
+        return jsonify(
+            {"error": "An item with that name already exists in the destination", "code": "NAME_EXISTS"}
+        ), 409
 
     # Prevent moving a directory into itself
     if source.is_dir() and str(new_location.resolve()).startswith(str(source.resolve())):
@@ -1872,6 +1942,7 @@ def api_move_file():
 
     try:
         import shutil
+
         shutil.move(str(source), str(new_location))
         new_rel = str(Path(dest_dir) / source.name) if dest_dir else source.name
         log_audit(
@@ -2095,7 +2166,9 @@ def api_get_system_logs():
                     "error": "Docker socket not available. Mount /var/run/docker.sock to enable system logs.",
                 }
             ), 200
-        return jsonify({"logs": [], "container": docker_name, "available": False, "error": f"Failed to fetch logs: {error_msg}"}), 500
+        return jsonify(
+            {"logs": [], "container": docker_name, "available": False, "error": f"Failed to fetch logs: {error_msg}"}
+        ), 500
 
 
 # =============================================================================
