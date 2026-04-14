@@ -1,0 +1,861 @@
+\documentclass[12pt,letterpaper]{report}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{tocloft}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+% Header/Footer setup
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\leftmark}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Hyperlink setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue
+}
+
+% Chapter/Section formatting
+\titleformat{\chapter}[display]
+{\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{-20pt}{20pt}
+
+\begin{document}
+
+% ============================================
+% COVER PAGE
+% ============================================
+\begin{titlepage}
+    \centering
+    \vspace*{1cm}
+    
+    
+    \vspace{1.5cm}
+    
+    % Title
+    {\huge\bfseries Design Report\par}
+    \vspace{0.5cm}
+    {\Large TerraCrate \par}
+    
+    \vspace{2cm}
+    
+    % Author information
+    {\large
+    \textbf{Prepared by:}\\
+    \vspace{0.3cm}
+    Andreas Neacsu\\
+    \vspace{1cm}
+    
+    \textbf{Course:}\\
+    ENGR XXX - Senior Design\\
+    \vspace{0.5cm}
+    
+    \textbf{Client:}\\
+    Konstantinos Kolias\\
+    \vspace{1cm}
+    
+    \textbf{Department of Computer Science}\\
+    College of Engineering\\
+    University of Idaho\\
+    \vspace{1cm}
+    
+    \today
+    }
+    
+    \vfill
+    
+\end{titlepage}
+
+% ============================================
+% TABLE OF CONTENTS
+% ============================================
+\tableofcontents
+\newpage
+
+% ============================================
+% Executive Summary 
+% ============================================
+\chapter*{Executive Summary }
+\addcontentsline{toc}{chapter}{Executive Summary}
+
+TerraCrate is a secure, portable Wi-Fi file sharing system built on a Raspberry Pi that provides on-demand file access without reliance on cloud infrastructure. The system addresses a growing need for privacy-aware, self-hosted storage solutions in environments where commercial cloud services are infeasible, untrusted, or unavailable---such as field deployments, air-gapped networks, and community organizations that require full custody of shared data.
+
+The solution runs as two Docker containers---a Flask REST API backend and a React single-page application frontend served by Nginx---orchestrated via Docker Compose. Key features include HTTPS-only communication with TLS 1.2/1.3, mutual TLS (mTLS) authentication using X.509 client certificates for regular users, JWT-based authentication for administrators, and a three-tier folder permission model (domain defaults, group permissions, user overrides) that provides fine-grained access control. The system supports self-registration with domain allowlists, SMTP email delivery of PKCS\#12 client certificate bundles, certificate revocation with CRL enforcement at the Nginx layer, mDNS zero-configuration service discovery via Avahi, and a Wi-Fi access point fallback mode for infrastructure-less environments.
+
+From a technical standpoint, TerraCrate's layered security architecture ensures defense in depth: bcrypt password hashing, HMAC-SHA256 signed JWTs with short-lived admin sessions (2 hours), CN mismatch abuse detection with automatic certificate revocation, path traversal prevention, and comprehensive audit logging of all administrative actions. The entire system is self-contained on commodity hardware, eliminating external dependencies and reducing the attack surface to the local wireless network.
+
+The backend is validated by a comprehensive unit test suite covering authentication, the three-tier permission resolver, certificate generation and revocation, user signup flows, and file utility functions. The frontend enforces quality through ESLint, TypeScript strict mode, and Vite production build verification. A CI/CD pipeline with three GitHub Actions workflows automates linting, formatting, testing, Docker image builds, and release packaging on every push to the main branch.
+% ============================================
+% LIST OF TABLES
+% ============================================
+\listoftables
+\addcontentsline{toc}{chapter}{List of Tables}
+\newpage
+
+% ============================================
+% MAIN CONTENT
+% ============================================
+
+\chapter{Background}
+
+The proliferation of personal data across devices, applications, and networked services has created a heightened need for secure, user-controlled, and infrastructure-independent storage solutions. Commercial cloud-based file sharing platforms, while convenient, introduce dependencies on third-party infrastructure, opaque data handling practices, and connectivity requirements that make them unsuitable for many sensitive or resource-constrained environments. Field deployments, air-gapped networks, and organizations operating under strict data sovereignty requirements all demand alternatives that keep data custody entirely in the hands of its owner.
+
+This project was proposed by Dr.\ Konstantinos Kolias of the University of Idaho Department of Computer Science as a senior design capstone. The client's motivation centers on guiding students through the complete design process of a cybersecurity-centric system---from threat modeling and protocol selection to low-level implementation and testing---while producing a functional prototype that addresses a real and contemporary need. The capstone specification calls for a portable, secure Wi-Fi-enabled Network-Attached Storage (NAS) device built on a Raspberry Pi or equivalent single-board computer, paired with a USB storage drive to serve as an ephemeral file-sharing node. The system must advertise itself over a local network, securely authenticate clients using X.509 certificates, and allow authenticated file access---all without reliance on external infrastructure.
+
+The core requirements outlined by the client include mutual TLS authentication, certificate revocation, a web-based management interface, role-based access control, audit logging, and zero-configuration network discovery via multicast DNS (mDNS). The specification further identifies several advanced objectives: LUKS-encrypted external storage, peer-to-peer file synchronization between trusted devices, attribute-based encryption for fine-grained access policies, and anomaly detection on access logs. These extensions are designated as stretch goals that build on the foundational system.
+
+The opportunity this project addresses is the gap between heavyweight commercial NAS appliances---which require permanent installation and network infrastructure---and simple USB thumb drives, which offer no access control, audit trail, or multi-user capability. TerraCrate occupies the middle ground: a device that can be powered on, discovered automatically by nearby clients, and used for secure multi-user file sharing within minutes, then powered off and carried away. The benefits extend to multiple stakeholders. For data owners, the system provides full custody and transparent control over shared files. For administrators, a web-based dashboard offers user management, permission configuration, and audit visibility. For end users, mDNS discovery and client certificate authentication provide a low-friction access experience once the initial certificate is installed. For the academic community, the project demonstrates how open protocols and commodity hardware can be composed into a production-grade secure system.
+
+\chapter{Problem Definition}
+
+The central problem this project addresses is the absence of a lightweight, portable file sharing solution that combines multi-user access control, certificate-based authentication, and zero-configuration discovery---without depending on cloud services or permanent network infrastructure. Existing approaches fall short in at least one dimension: USB drives lack access control and audit capabilities; commercial NAS appliances require dedicated infrastructure and are not portable; cloud platforms introduce third-party trust dependencies and require internet connectivity. No readily available system offers all of these properties in a single, self-contained device.
+
+\section{Project Goals}
+
+The primary goal is to design and implement a fully functional secure file sharing system that runs on a Raspberry Pi and can be deployed in any environment with Wi-Fi-capable client devices. The system must satisfy the following objectives derived from the client specification:
+
+\begin{enumerate}
+    \item \textbf{Secure transport and authentication.} All communication must occur over HTTPS. Regular users must authenticate via mutual TLS using X.509 client certificates issued by a local Certificate Authority. Administrators must authenticate via email and password credentials, with sessions managed through signed JSON Web Tokens (JWT).
+
+    \item \textbf{Certificate lifecycle management.} The system must support certificate generation, delivery (via SMTP with PKCS\#12 bundles), revocation (with a Certificate Revocation List enforced at the TLS layer), and automated revocation triggers for expiring certificates and CN mismatch abuse.
+
+    \item \textbf{Fine-grained access control.} A multi-tier permission model must govern folder-level access: domain-wide defaults for users matching an email domain, group-level permissions aggregated via OR logic, and per-user overrides with tri-state semantics (allow, deny, or inherit). Administrators must bypass all permission checks.
+
+    \item \textbf{Zero-configuration network discovery.} The device must advertise itself on the local network using multicast DNS (mDNS) via the Avahi daemon, allowing clients to discover the service at a \texttt{.local} hostname without manual IP configuration.
+
+    \item \textbf{Web-based administration.} A browser-based dashboard must provide user management (creation, approval, deletion), permission configuration across all three tiers, system settings, and an audit log viewer with filtering and pagination.
+
+    \item \textbf{Audit logging.} All administrative and security-relevant actions must be recorded with the acting user, target entity, timestamp, IP address, and action outcome, and must be queryable through the admin interface.
+
+    \item \textbf{Self-contained deployment.} The entire system must run as Docker containers orchestrated by Docker Compose, with no external service dependencies. A setup script must configure the host for mDNS advertisement and Wi-Fi access point fallback.
+\end{enumerate}
+
+\section{Deliverables}
+
+The project deliverables consist of:
+
+\begin{itemize}
+    \item A \textbf{Flask REST API backend} providing all authentication, authorization, file management, certificate, and audit endpoints, backed by a SQLite database.
+    \item A \textbf{React single-page application frontend} served by Nginx, providing login, file browsing, and a full admin dashboard with user, group, domain, and permission management.
+    \item An \textbf{Nginx reverse proxy configuration} that terminates TLS, enforces mTLS on protected routes, checks the Certificate Revocation List, and proxies API requests to the backend.
+    \item A \textbf{Docker Compose deployment} packaging the backend and frontend as two containers with shared certificate and database volumes.
+    \item A \textbf{host setup script} that configures Avahi mDNS advertisement, Wi-Fi access point fallback (hostapd + dnsmasq), and systemd service units for automatic startup.
+    \item A \textbf{CI/CD pipeline} with GitHub Actions workflows for backend linting, formatting, and unit testing; frontend linting, type checking, and build verification; Docker image builds; and tagged release packaging.
+    \item \textbf{Technical documentation} including a system architecture document, Mermaid diagrams of key flows, and this design report.
+\end{itemize}
+
+\chapter{Project Plan}
+
+\section{Team Roles and Responsibilities}
+
+The project was structured with the following intended role distribution:
+
+\begin{itemize}
+    \item \textbf{Andreas Neacsu:} Project lead, system architecture, implementation, testing, and documentation
+    \item \textbf{Devon Bryce:} [Originally assigned to hardware integration]
+    \item \textbf{Kevin Ellis:} [Originally assigned to security design]
+    \item \textbf{Adam Cobb:} [Originally assigned to frontend development]
+\end{itemize}
+
+In practice, the bulk of the technical implementation, integration, testing, and documentation was completed by the project lead due to differing availability and commitment among team members. This consolidated approach, while not ideal for workload distribution, ensured consistent architectural decisions and accelerated the development timeline.
+
+\section{Project Schedule}
+
+The initial project plan included a Gantt chart outlining key milestones and deliverables (see Appendix A). The actual development followed an iterative approach with the following major phases:
+
+\begin{itemize}
+    \item \textbf{Weeks 1-2:} Requirements gathering and initial architecture design
+    \item \textbf{Weeks 3-6:} Core system implementation (mTLS, backend API, database)
+    \item \textbf{Weeks 7-9:} Frontend development and integration
+    \item \textbf{Weeks 10-12:} Testing, documentation, and poster preparation
+\end{itemize}
+
+The project was completed on schedule for the Engineering EXPO 2026 presentation. The streamlined development process allowed for rapid prototyping and quick iteration on technical challenges as they arose.
+
+\chapter{Concepts Considered}
+
+Before arriving at the current architecture, two alternative designs were prototyped and evaluated. Each addressed a subset of the project requirements but revealed fundamental limitations that motivated the final approach.
+
+\section{Design 1: Distributed Docker Containers with SMB and Built-In mTLS}
+
+The first design attempted to meet the mutual TLS requirement by distributing Docker containers to both the server and every client machine. The server ran a containerized SMB (Server Message Block) file share, and each client ran a companion Docker container pre-loaded with a client certificate and the CA certificate needed to establish an mTLS tunnel to the server. File access occurred through the SMB protocol, tunneled over the mutually authenticated TLS connection between the two containers.
+
+This approach was functionally correct---it achieved mutual authentication and encrypted file transfer---but it imposed severe usability constraints. Every client machine needed Docker installed, and users were required to build and run a container locally before they could access any files. This out-of-band setup process contradicted the project's zero-configuration discovery goal and made onboarding new users impractical in the ad-hoc deployment scenarios the system was designed for. Furthermore, because the SMB share was mounted inside the client container rather than exposed to the host filesystem, files were only accessible within the container environment. Users could not open, preview, or interact with shared files using their native applications without additional manual steps to copy files out of the container. The design also offered no web-based administration interface, making user management and permission configuration impossible without direct server access.
+
+\section{Design 2: HTTPS File Sharing with QR Code Authentication}
+
+The second design eliminated the client-side container requirement by switching to a purely web-based architecture. The server ran an HTTPS file sharing interface accessible through a standard browser, removing the need for any client-side software installation. Authentication was handled by generating a QR code on the administrator's device that encoded a URL containing a signed JWT token. Clients would scan the QR code with a mobile device, which opened the file browser with the embedded token granting access.
+
+While this approach was significantly simpler to deploy and eliminated the Docker dependency on client machines, it fell short of the client specification in several ways. Most critically, it did not implement mutual TLS---the server authenticated itself to the client via its HTTPS certificate, but the client presented no certificate to the server. Authentication relied entirely on possession of the JWT token embedded in the URL, which could be shared, intercepted, or replayed without the server being able to distinguish between authorized and unauthorized holders. The QR code workflow also effectively limited the system to mobile clients with cameras, excluding laptop and desktop users from the primary access path. Finally, the single-token model provided no mechanism for fine-grained, per-user access control. All users who scanned the same QR code received identical permissions, making it impossible to implement the tiered folder permission model required by the specification. Features such as per-user audit trails, certificate revocation, and domain-based permission defaults were architecturally incompatible with this design.
+
+\chapter{Concept Selection}
+
+The final design synthesizes the strengths of both prior concepts while eliminating their critical weaknesses. From Design 1, it retains mutual TLS authentication with X.509 client certificates issued by a local CA. From Design 2, it retains the web-based architecture that requires no client-side software beyond a standard browser. The key architectural insight is that mTLS can be enforced at the reverse proxy layer---Nginx verifies client certificates on protected routes and passes the authenticated identity to the backend---while all file interaction occurs through a browser-based React SPA served over HTTPS. This eliminates both the client-side Docker dependency of Design 1 and the single-token security model of Design 2.
+
+\section{Strengths of the Selected Design}
+
+\begin{enumerate}
+    \item \textbf{mTLS without client-side infrastructure.} Client certificates are generated server-side, bundled into PKCS\#12 files, and delivered to users via SMTP email. Users install the certificate into their browser or operating system certificate store---a one-time operation that requires no technical expertise beyond following prompted instructions. Once installed, the browser presents the certificate automatically on every TLS handshake, achieving mutual authentication transparently.
+
+    \item \textbf{Universal client support.} Any device with a modern web browser and a certificate store---laptops, desktops, tablets, and phones---can access the system. There is no dependency on Docker, SMB client software, or a camera for QR scanning.
+
+    \item \textbf{Separation of authentication concerns.} Administrators authenticate via email and password with JWT tokens and never require a client certificate, keeping administrative access simple and available even before the certificate infrastructure is fully configured. Regular users authenticate via mTLS on file access routes, providing cryptographic proof of identity on every request. This dual-path model allows the admin to bootstrap and manage the system without circular dependencies on the certificate pipeline.
+
+    \item \textbf{Fine-grained, layered access control.} The three-tier permission model (domain defaults, group permissions, user overrides) provides flexible access policies that scale from simple single-domain deployments to complex multi-group organizations. The tri-state user override semantics (allow, deny, inherit) give administrators precise control without requiring exhaustive per-user configuration.
+
+    \item \textbf{Certificate lifecycle management.} The system handles the full certificate lifecycle---generation, delivery, revocation, and automated revocation triggers---with a CRL enforced at the Nginx TLS layer. Revoked certificates are rejected before any application logic executes, providing immediate access termination.
+
+    \item \textbf{Zero-configuration discovery.} mDNS advertisement via Avahi allows clients to reach the device at a \texttt{.local} hostname without manual IP configuration, and the Wi-Fi access point fallback ensures the device remains reachable even when no existing network is available.
+
+    \item \textbf{Self-contained containerized deployment.} The two-container Docker Compose architecture isolates the backend and frontend, simplifies updates, and ensures reproducible deployments across different host environments. Named volumes for the database and certificates persist state across container restarts.
+\end{enumerate}
+
+\section{Potential Weaknesses}
+
+\begin{enumerate}
+    \item \textbf{No native filesystem integration.} Unlike the SMB-based Design 1, the selected design does not expose shared files as a mounted filesystem on the client. Users interact with files exclusively through the web browser---uploading, downloading, previewing, and managing files via the SPA interface. This means files cannot be opened directly in native desktop applications, edited in place, or synchronized automatically. For workflows that depend on native file manager integration or real-time collaborative editing, the browser-based model introduces friction that a protocol like SMB or NFS would avoid.
+
+    \item \textbf{Client certificate installation complexity.} While installing a PKCS\#12 certificate is a one-time operation, the process varies across operating systems and browsers, and can be confusing for non-technical users. On some platforms (notably iOS and Android), the installation requires navigating system settings rather than a simple browser prompt. Users who clear their certificate store or switch devices must be re-issued certificates by an administrator.
+
+    \item \textbf{Self-signed CA trust warnings.} Because the server certificate is self-signed and acts as the CA, browsers display trust warnings on the first connection until the user accepts the certificate or installs the CA into their trust store. This is inherent to any self-hosted system without a publicly trusted CA, but it can alarm users unfamiliar with the deployment model.
+
+    \item \textbf{Single-node architecture.} The system runs on a single Raspberry Pi with no replication or failover. If the device fails or is powered off, all file access is lost until it is restored. The SQLite database, while appropriate for the expected concurrency level, does not support concurrent writes from multiple processes, limiting future horizontal scaling.
+
+    \item \textbf{No data-at-rest encryption.} The current implementation stores files on an unencrypted bind-mounted volume. If the storage medium is physically removed from the device, files are readable without authentication. LUKS-encrypted external storage is identified as a planned feature but is not yet implemented.
+\end{enumerate}
+
+Despite these limitations, the selected design satisfies all core requirements from the client specification---mutual TLS, certificate revocation, fine-grained access control, audit logging, mDNS discovery, and web-based administration---while maintaining a deployment model that is practical for the intended ad-hoc, infrastructure-less use cases. The weaknesses identified above represent deliberate trade-offs in favor of usability and portability, and several (LUKS encryption, native filesystem access) are candidates for future work.
+
+\chapter{System Architecture}
+
+TerraCrate is implemented as two Docker containers---a Flask REST API backend and a React single-page application frontend served by Nginx---orchestrated via Docker Compose on a Raspberry Pi or any Linux host. The system provides HTTPS file sharing with JWT authentication, mutual TLS for regular users, a three-tier folder permission model, SMTP email notifications with client certificate delivery, mDNS service discovery, and comprehensive audit logging. This chapter first presents the conceptual design rationale and justifies the architectural choices, then describes each component and how they are integrated, highlights the novel features that distinguish TerraCrate from existing solutions, and concludes with a requirements traceability analysis showing how each major component satisfies the project goals defined in Chapter~2.
+
+\section{Conceptual Design}
+
+The architecture is driven by a central tension identified during the concept evaluation phase: mutual TLS authentication---the client specification's primary security requirement---has traditionally demanded specialized client-side software, while the zero-configuration and web-based usability goals demand that any device with a standard browser can participate. The selected design resolves this tension by separating the mTLS enforcement point from the application layer.
+
+\textbf{Key architectural insight.} Rather than requiring clients to install custom software (as in Design~1) or weakening authentication to bearer tokens (as in Design~2), TerraCrate delegates mTLS verification to Nginx at the reverse proxy layer. Nginx checks each client certificate against the local CA and the Certificate Revocation List before any request reaches the application. The Flask backend then receives a pre-authenticated identity via HTTP headers---specifically the verified client certificate's Common Name---and uses it for authorization decisions. This decoupling means the backend never handles raw TLS handshakes, and the frontend never needs to implement certificate logic; each component operates within its natural responsibility boundary.
+
+\textbf{Dual authentication paths.} The design defines two distinct authentication flows to avoid a bootstrap problem. Administrators authenticate via email, password, and JWT tokens and never require a client certificate. This ensures the admin can configure the system, create users, and issue certificates before any client certificates exist. Regular users authenticate via mTLS for file access and via JWT for non-file operations. This dual-path model eliminates the circular dependency that would arise if the certificate-issuing admin also needed a certificate to access the system.
+
+\textbf{Justification for continued development.} The current system satisfies all seven core requirements defined in Section~2.1 and has been validated through a comprehensive test suite (see Chapter~8). The architecture's modular decomposition---with clearly separated proxy, backend, and frontend layers communicating through well-defined interfaces (HTTPS, HTTP headers, REST API)---provides a stable foundation for the stretch goals identified in the client specification: LUKS-encrypted storage, peer-to-peer synchronization, attribute-based encryption, and anomaly detection can each be added as isolated subsystems without restructuring the existing components.
+
+\section{High-Level Design}
+
+The system is organized into four layers. The \textbf{client layer} consists of standard web browsers and mobile devices that communicate over HTTPS on port~443. The \textbf{proxy layer} is an Nginx reverse proxy running in the frontend container that terminates TLS, serves the React SPA as static assets, enforces mTLS on protected routes (\texttt{/files} and \texttt{/guest/files}), checks the Certificate Revocation List on every mTLS handshake, and proxies API requests to the backend at \texttt{https://127.0.0.1:8443}. Clients that attempt to access protected routes without a valid client certificate are redirected to a \texttt{/cert-required} instructions page. The \textbf{application layer} is the Flask REST API, which handles authentication, authorization, file operations, certificate generation and revocation, email delivery, and audit logging. The \textbf{storage layer} comprises three persistent stores: a bind-mounted file volume for user-accessible files, a named Docker volume for the SQLite database, and a named Docker volume for TLS certificates and the CRL. Below the container stack, \textbf{host services} on the Raspberry Pi provide Avahi mDNS advertisement and a Wi-Fi access point fallback via hostapd and dnsmasq.
+
+\section{Docker Compose Services}
+
+The deployment is managed by a systemd unit (\texttt{terracrate.service}) that runs \texttt{docker compose up -d} on boot. Two services are defined:
+
+\begin{itemize}
+    \item \textbf{Backend} (\texttt{python:3.11} base image). Listens on port~8443 over HTTPS. Mounts the file storage directory as a bind mount, the \texttt{terracrate-db} named volume for the SQLite database, the \texttt{terracrate-certs} named volume for certificates and the CRL, and the Docker socket (read-only) for the system log viewer endpoint. A health check polls \texttt{https://localhost:8443/health} via \texttt{urllib}.
+
+    \item \textbf{Frontend} (multi-stage build: \texttt{node:22-slim} for the React build, \texttt{nginx:alpine} for serving). Listens on port~443 over HTTPS. Mounts the \texttt{terracrate-certs} volume read-only to access the server certificate, private key, CA certificate, and CRL. Depends on the backend being healthy before starting. A health check polls \texttt{https://localhost/} via \texttt{wget}.
+\end{itemize}
+
+Both containers use \texttt{network\_mode: host} for direct access to host networking, which is required for mDNS advertisement and simplifies port mapping. Three persistent stores ensure data survives container restarts: the bind-mounted \texttt{storage} directory for user files, the \texttt{terracrate-db} named volume for the SQLite database, and the \texttt{terracrate-certs} named volume shared between both containers for TLS certificates and the CRL.
+
+\section{Component Integration}
+
+The system's components interact through three integration mechanisms: HTTPS network calls, shared Docker volumes, and HTTP header propagation. Understanding these integration paths clarifies how the independently described components form a cohesive system.
+
+\textbf{Request lifecycle (user file access).} When a user navigates to \texttt{/files} in their browser, the request first reaches Nginx on port~443. Nginx performs the TLS handshake, verifies the client certificate against the CA certificate and CRL stored in the shared \texttt{terracrate-certs} volume, and---if verification succeeds---forwards the request to the Flask backend at \texttt{https://127.0.0.1:8443} with two injected headers: \texttt{X-SSL-Client-Verify} (the verification status) and \texttt{X-SSL-Client-S-DN} (the certificate's Distinguished Name containing the user's email as CN). The backend's \texttt{@require\_auth} decorator extracts the JWT token from the request, identifies the user, and the permission engine resolves the user's effective permissions by merging domain defaults, group grants, and user overrides through the three-tier system. The file listing is filtered to only include paths the user is authorized to see.
+
+\textbf{Certificate issuance and delivery pipeline.} When an administrator approves a user or invites a new user, the backend generates a client certificate signed by the server CA (stored in \texttt{terracrate-certs}), packages it with the private key and CA chain into a password-protected PKCS\#12 bundle, and sends it to the user's email via the SMTP service (configured through \texttt{SystemSettings}). The user installs the \texttt{.p12} file in their browser or OS certificate store, enabling automatic mTLS authentication on subsequent visits. This pipeline connects four components---the certificate generator, the SMTP email service, the database (for tracking certificate metadata on the \texttt{User} model), and Nginx (which trusts certificates signed by the same CA).
+
+\textbf{Certificate revocation propagation.} When a certificate is revoked---whether by an admin, by the CN mismatch detector, or by the expiry checker thread---the backend updates the \texttt{User} model and creates a \texttt{RevokedCertificate} record, then regenerates the CRL file and writes it atomically to the shared \texttt{terracrate-certs} volume. Because Nginx reads this CRL on every mTLS handshake, the revoked certificate is rejected at the TLS layer on the next connection attempt, before any Flask code executes. This cross-container integration through the shared volume ensures that revocation takes effect without restarting either container.
+
+\textbf{Frontend--backend coordination.} The React SPA communicates with the Flask backend exclusively through the \texttt{ApiClient} class, which routes all requests through the Nginx proxy at \texttt{/api/*}. The \texttt{AuthContext} manages JWT lifecycle (storage, refresh, expiry detection), while the \texttt{DataContext} maintains a synchronized view of server state (users, groups, domains, permissions, files). Changes made through the admin UI are immediately reflected via API calls, and the frontend's route protection (\texttt{ProtectedRoute} component) mirrors the backend's \texttt{@require\_auth} decorator, providing defense in depth at both client and server layers.
+
+\section{Flask REST API}
+
+The backend is a Flask~3.0.0 HTTPS server providing a versioned REST API under the \texttt{/api/v1/} prefix, plus legacy HTML endpoints retained for backward compatibility.
+
+\subsection{Configuration}
+
+All server behavior is controlled through environment variables. Table~\ref{tab:backend-config} lists the principal configuration parameters.
+
+\begin{table}[ht]
+\centering
+\caption{Backend configuration environment variables.}
+\label{tab:backend-config}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Variable} & \textbf{Default} & \textbf{Description} \\
+\hline
+\texttt{ADMIN\_PIN} & \emph{(required)} & Initial admin password \\
+\texttt{HOST} & \texttt{0.0.0.0} & Bind address \\
+\texttt{PORT} & \texttt{8443} & HTTPS port \\
+\texttt{STORAGE\_PATH} & \texttt{/app/storage} & Root storage directory \\
+\texttt{DATABASE\_URI} & \texttt{sqlite:///...} & SQLAlchemy database URI \\
+\texttt{TOKEN\_EXPIRY\_HOURS} & \texttt{24} & User JWT lifetime (hours) \\
+\texttt{ENABLE\_UPLOADS} & \texttt{true} & Allow file uploads \\
+\texttt{ENABLE\_DELETE} & \texttt{true} & Allow file/folder deletion \\
+\texttt{MAX\_UPLOAD\_SIZE} & \texttt{104857600} & Upload limit (100\,MB) \\
+\texttt{CORS\_ORIGINS} & \texttt{*} & Allowed CORS origins \\
+\texttt{CN\_MISMATCH\_THRESHOLD} & \texttt{3} & Auto-revoke after $N$ mismatches \\
+\texttt{CN\_MISMATCH\_WINDOW} & \texttt{60} & Mismatch window (minutes) \\
+\texttt{CERT\_EXPIRY\_CHECK\_DAYS} & \texttt{7} & Days before expiry to auto-revoke \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{API Endpoints}
+
+The REST API exposes endpoints across six functional areas: authentication, user management, file operations, permission and group management, certificate operations, and audit logging. Table~\ref{tab:api-endpoints} summarizes the endpoints.
+
+\begin{table}[ht]
+\centering
+\caption{REST API endpoint summary (\texttt{/api/v1/} prefix).}
+\label{tab:api-endpoints}
+\small
+\begin{tabular}{llll}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+\multicolumn{4}{l}{\textit{Authentication}} \\
+\texttt{POST} & \texttt{/auth/login} & None & Email + password login \\
+\texttt{POST} & \texttt{/auth/signup} & None & Self-registration \\
+\texttt{POST} & \texttt{/auth/logout} & Auth & Logout (stateless) \\
+\texttt{GET} & \texttt{/auth/me} & Auth & Current user info \\
+\texttt{POST} & \texttt{/auth/refresh} & Auth & Refresh JWT token \\
+\texttt{POST} & \texttt{/auth/change-password} & Auth & Change password \\
+\hline
+\multicolumn{4}{l}{\textit{User Management}} \\
+\texttt{GET} & \texttt{/users} & Admin & List users \\
+\texttt{POST} & \texttt{/users} & Admin & Create/invite user \\
+\texttt{GET/PUT/DELETE} & \texttt{/users/<id>} & Admin & Get/update/delete user \\
+\texttt{GET/PUT} & \texttt{/users/<id>/permissions} & Admin & User folder permissions \\
+\texttt{GET} & \texttt{/users/<id>/effective-perms} & Admin & Resolved permissions \\
+\hline
+\multicolumn{4}{l}{\textit{File Operations}} \\
+\texttt{GET} & \texttt{/files} & Auth & List files \\
+\texttt{POST} & \texttt{/files/upload} & Auth & Upload file \\
+\texttt{GET} & \texttt{/files/download} & Auth & Download file \\
+\texttt{POST} & \texttt{/files/mkdir} & Auth & Create directory \\
+\texttt{POST} & \texttt{/files/rename} & Auth & Rename file/directory \\
+\texttt{POST} & \texttt{/files/move} & Auth & Move file/directory \\
+\texttt{GET} & \texttt{/files/preview} & Auth & Stream file for preview \\
+\texttt{DELETE} & \texttt{/files} & Auth & Delete file/directory \\
+\hline
+\multicolumn{4}{l}{\textit{Domain, Group, and Permission Management}} \\
+\texttt{CRUD} & \texttt{/domains/*} & Admin & Domain configurations \\
+\texttt{CRUD} & \texttt{/groups/*} & Admin & Groups, members, perms \\
+\texttt{GET} & \texttt{/folders} & Admin & List storage folders \\
+\hline
+\multicolumn{4}{l}{\textit{Certificate Operations}} \\
+\texttt{POST} & \texttt{/users/<id>/revoke-cert} & Admin & Revoke client cert \\
+\texttt{POST} & \texttt{/users/<id>/reissue-cert} & Admin & Re-issue client cert \\
+\texttt{GET} & \texttt{/users/<id>/cert-status} & Admin & Cert status + history \\
+\hline
+\multicolumn{4}{l}{\textit{System}} \\
+\texttt{GET/PUT} & \texttt{/settings} & Public/Admin & System settings \\
+\texttt{GET} & \texttt{/stats/dashboard} & Admin & Dashboard statistics \\
+\texttt{GET} & \texttt{/audit-logs} & Admin & Query audit logs \\
+\texttt{GET} & \texttt{/audit-logs/stats} & Admin & Audit log statistics \\
+\texttt{GET} & \texttt{/system/logs} & Admin & Stream container logs \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Startup Process}
+
+The backend container starts by running a shell script (\texttt{start.sh}) that creates required directories, generates self-signed SSL certificates if they do not already exist, verifies that the CRL file matches the current CA, and validates the \texttt{ADMIN\_PIN} environment variable. The Python application then initializes the SQLAlchemy database and runs schema migrations, creates default \texttt{SystemSettings} if none exist, creates a default admin user (\texttt{admin@<hostname>.local}) if no admin account is present, registers the mDNS service advertisement, starts a background thread for certificate expiry checking, and starts the Flask HTTPS server with an SSL context on port~8443.
+
+\section{Authentication System}
+
+The authentication system provides JWT-based session management with bcrypt password hashing and two supported roles: \texttt{admin} and \texttt{user}.
+
+\subsection{Password Security}
+
+All passwords are hashed using bcrypt with an auto-generated salt via the \texttt{bcrypt} library (version~4.2.0). Plaintext passwords are never stored or logged.
+
+\subsection{Token Architecture}
+
+JSON Web Tokens are signed with HMAC-SHA256 (HS256) using a random 32-byte secret generated at application startup. Admin sessions expire after 2~hours; user sessions are configurable via \texttt{TOKEN\_EXPIRY\_HOURS} (default 24~hours). Each token payload contains the user ID, email, role, issued-at timestamp, expiration timestamp, and a unique token identifier (\texttt{jti}).
+
+Token extraction follows a priority order: the \texttt{Authorization: Bearer} header is checked first, followed by the \texttt{auth\_token} or \texttt{admin\_token} cookie, and finally a \texttt{?token=} URL query parameter. Two Python decorators enforce authentication: \texttt{@require\_auth} validates the token and attaches the authenticated user to the request context, and \texttt{@require\_admin} additionally verifies that the user's role is \texttt{admin}, returning HTTP~403 otherwise.
+
+\subsection{Legacy Guest Token System}
+
+A deprecated in-memory guest token system remains functional for backward compatibility. It maintains a registry of time-limited guest tokens with support for revocation.
+
+\section{Three-Tier Permission System}
+
+Folder access control is implemented as a three-tier model with increasing specificity:
+
+\begin{enumerate}
+    \item \textbf{Tier~1: Domain Defaults} (least specific). Permissions are applied to all users whose email matches a configured domain (e.g., \texttt{@company.com}). Managed via the \texttt{DomainConfig} and \texttt{DomainPermission} database models.
+
+    \item \textbf{Tier~2: Group Permissions}. Permissions are applied through group membership. When a user belongs to multiple groups, OR logic is used---the most permissive grant across groups wins. Managed via the \texttt{Group} and \texttt{GroupPermission} models.
+
+    \item \textbf{Tier~3: User Overrides} (most specific). Per-user, per-folder permissions with tri-state semantics: \texttt{allow}, \texttt{deny}, or \texttt{null}. An explicit \texttt{deny} overrides all lower tiers. A \texttt{null} value defers to the group and domain tiers. Managed via the \texttt{FolderPermission} model.
+\end{enumerate}
+
+Path matching uses a longest-prefix algorithm: a permission on \texttt{/docs} implicitly grants access to \texttt{/docs/sub/path}. Administrators bypass all permission checks entirely. The permission engine exposes several key functions: \texttt{resolve\_permissions} returns the merged permission set across all three tiers; \texttt{resolve\_permissions\_detailed} returns per-path breakdowns with source attribution; \texttt{check\_access} performs a boolean access check for a given user and folder path; and \texttt{visible\_paths} returns all paths a user is authorized to read, including navigation ancestor directories.
+
+\section{Database Models}
+
+The data layer uses SQLAlchemy ORM with SQLite as the default database engine (configurable via the \texttt{DATABASE\_URI} environment variable). The schema consists of the following entities:
+
+\begin{itemize}
+    \item \textbf{User}: Stores \texttt{email} (unique), \texttt{password\_hash}, \texttt{role} (admin or user), \texttt{is\_approved}, \texttt{created\_at}, \texttt{last\_login}, and certificate tracking fields (\texttt{cert\_serial\_number}, \texttt{cert\_revoked}, \texttt{cert\_issued\_at}, \texttt{cert\_expires\_at}). Maintains a many-to-many relationship with \texttt{Group} through the \texttt{GroupMembership} association table.
+
+    \item \textbf{SystemSettings} (singleton): Controls system-wide behavior including \texttt{mode} (open or protected), \texttt{auth\_method}, TLS settings, device name, SMTP configuration (\texttt{smtp\_enabled}, \texttt{smtp\_host}, \texttt{smtp\_port}, \texttt{smtp\_username}, \texttt{smtp\_password}, \texttt{smtp\_from\_email}, \texttt{smtp\_use\_tls}), and \texttt{allowed\_domains} (comma-separated domain allowlist for self-registration).
+
+    \item \textbf{FolderPermission}: Per-user, per-folder access rules with tri-state \texttt{can\_read} and \texttt{can\_write} columns (\texttt{allow}, \texttt{deny}, or \texttt{null}). Unique on the \texttt{(user\_id, folder\_path)} pair.
+
+    \item \textbf{DomainConfig} and \textbf{DomainPermission}: Domain-level default permissions. Each \texttt{DomainConfig} (keyed by domain name) has many \texttt{DomainPermission} rows, each specifying boolean \texttt{can\_read} and \texttt{can\_write} for a folder path.
+
+    \item \textbf{Group}, \textbf{GroupPermission}, and \textbf{GroupMembership}: Group-level permissions and membership. Each group has a name, description, associated folder permissions, and a many-to-many user membership.
+
+    \item \textbf{RevokedCertificate}: Permanent revocation history recording the serial number, revoking user, timestamp, and reason code (one of: \texttt{admin\_revoked}, \texttt{expiry\_approaching}, \texttt{cn\_mismatch\_abuse}, \texttt{reissued}). Uses \texttt{SET NULL} on user deletion to preserve the audit trail.
+
+    \item \textbf{MtlsMismatchLog}: Tracks instances where a client certificate's Common Name does not match the authenticated user, recording the presented CN, authenticated user, and timestamp. Used for abuse detection.
+
+    \item \textbf{AuditLog}: Records all significant administrative and system actions with the acting user, target entity, action type, description, IP address, status, and structured metadata as JSON.
+\end{itemize}
+
+All foreign keys use \texttt{CASCADE} delete semantics except \texttt{RevokedCertificate}, which uses \texttt{SET NULL} to preserve revocation records after user deletion.
+
+\section{Certificate Management}
+
+Self-signed X.509 certificate generation is implemented using the Python \texttt{cryptography} library.
+
+\subsection{Server Certificate}
+
+The server certificate is a 2048-bit RSA key with a SHA-256 signature. The subject is set to \texttt{C=US, ST=California, L=San Francisco, O=TerraCrate, CN=<hostname>}. Subject Alternative Names include the hostname, \texttt{<hostname>.local}, \texttt{localhost}, the host IP address, and \texttt{127.0.0.1}. The \texttt{BasicConstraints} extension is set to \texttt{CA=True}, allowing the server certificate to act as a Certificate Authority for signing client certificates. Validity is 365~days.
+
+\subsection{Client Certificate}
+
+Client certificates are 2048-bit RSA keys signed by the server CA. The subject is set to \texttt{O=terracrate, OU=member, CN=<user\_email>}, with the user's email address included as an RFC~822 Subject Alternative Name. The \texttt{ExtendedKeyUsage} extension is set to \texttt{ClientAuth}. Validity is 365~days.
+
+\subsection{PKCS\#12 Bundle}
+
+For delivery to end users, the client certificate, private key, and CA chain are packaged into a PKCS\#12 (\texttt{.p12}) file protected with a randomly generated password. This bundle is attached to email notifications sent through the SMTP service.
+
+\subsection{Certificate Revocation List}
+
+The CRL subsystem provides four functions: \texttt{generate\_crl} produces a PEM-encoded CRL containing all currently revoked serial numbers; \texttt{update\_crl\_file} atomically writes the CRL to disk; \texttt{generate\_empty\_crl} creates an initial empty CRL if none exists or the existing CRL does not match the current CA; and an internal verification function confirms that a CRL was signed by the current CA.
+
+\section{Certificate Revocation System}
+
+The revocation system provides full lifecycle management for client certificates, integrated across the backend API, Nginx, and the admin user interface.
+
+\subsection{Revocation Triggers}
+
+Certificates can be revoked through four mechanisms:
+
+\begin{enumerate}
+    \item \textbf{Admin-initiated}: An administrator explicitly revokes a certificate via the \texttt{/api/v1/users/<id>/revoke-cert} endpoint or the user management UI.
+    \item \textbf{CN mismatch abuse}: The system automatically revokes a certificate when its Common Name is used by a non-matching authenticated user more than \texttt{CN\_MISMATCH\_THRESHOLD} times (default~3) within \texttt{CN\_MISMATCH\_WINDOW\_MINUTES} (default~60).
+    \item \textbf{Expiry approaching}: A background thread periodically checks for certificates within \texttt{CERT\_EXPIRY\_CHECK\_DAYS} of expiration and auto-revokes them.
+    \item \textbf{Reissue}: When a new certificate is issued for a user via the reissue endpoint, the previous certificate is automatically revoked with the \texttt{reissued} reason code.
+\end{enumerate}
+
+\subsection{CRL Distribution}
+
+On each revocation event, the backend regenerates the PEM-encoded CRL file and writes it to the shared \texttt{terracrate-certs} volume at \texttt{/app/certs/crl.pem}. Nginx is configured with the \texttt{ssl\_crl} directive to check this file on every mTLS handshake, ensuring that revoked certificates are rejected at the TLS layer before any application logic executes.
+
+\subsection{Certificate Status Tracking}
+
+The \texttt{User} model tracks the current certificate's serial number, revocation status, issuance date, and expiration date. The \texttt{RevokedCertificate} model maintains a permanent revocation history with reason codes, and the \texttt{MtlsMismatchLog} model records CN mismatch events for abuse detection.
+
+\section{Supporting Services}
+
+\subsection{SMTP Email Service}
+
+Email notifications are sent using Python's \texttt{smtplib} with configuration drawn from the \texttt{SystemSettings} model. Three email types are supported: approval notifications (optionally attaching a \texttt{.p12} client certificate), invitation emails with an embedded P12 certificate and temporary password, and revocation notifications informing users that their client certificate has been revoked. All emails support TLS/STARTTLS and are sent as multipart messages with HTML and plain-text bodies plus optional attachments.
+
+\subsection{mDNS Service Discovery}
+
+Zero-configuration network discovery is provided by a platform-agnostic mDNS advertiser. On Linux, the advertiser uses the Avahi daemon via the D-Bus API. On macOS, it uses the Zeroconf/Bonjour library. On Windows, it provides an informational fallback. The backend advertises an \texttt{\_https.\_tcp} service at startup. On the Raspberry Pi host, Avahi also advertises the same service type on port~443 via a static service file, allowing clients to discover the device at a \texttt{.local} hostname without manual IP configuration.
+
+\subsection{QR Code Generator}
+
+A QR code generator produces codes embedding access URLs with authentication tokens for mobile device onboarding. Codes can be returned as PIL images, base64-encoded PNGs, files, or ASCII art. The embedded URL follows the format \texttt{\{base\_url\}/auth?token=\{token\}}.
+
+\subsection{Audit Logging}
+
+All administrative and security-relevant actions are recorded in the \texttt{AuditLog} database model. Each entry captures the acting user, target entity, action type, description, IP address, action outcome, and structured metadata as JSON. Tracked actions include user creation and approval, permission changes, certificate operations, and file management. Logs are queryable through the \texttt{/api/v1/audit-logs} endpoint with filtering by action, user, and date range, plus pagination. A statistics endpoint (\texttt{/api/v1/audit-logs/stats}) provides aggregate summaries.
+
+\section{Frontend Application}
+
+The frontend is a React~18 single-page application written in TypeScript with strict mode enabled. The build toolchain uses Vite with the \texttt{@vitejs/plugin-react} plugin. Client-side routing is provided by React Router~v7. The UI layer combines Tailwind CSS~4 with shadcn/ui components (built on Radix UI primitives), supplemented by Material UI~7 for additional components. Animations use the Motion library (Framer Motion), and toast notifications use Sonner.
+
+\subsection{Application Structure}
+
+The entry point (\texttt{main.tsx}) renders the \texttt{App} component, which nests an \texttt{AuthProvider}, a \texttt{DataProvider}, the router, and a toast notification container. The \texttt{AuthContext} manages authentication state---\texttt{isAuthenticated}, \texttt{user}, \texttt{loading}, and a \texttt{certRevoked} flag---and provides \texttt{login()}, \texttt{logout()}, and \texttt{updateUser()} methods. On mount, it checks localStorage for an existing token and validates it via the \texttt{/auth/me} endpoint. The \texttt{DataContext} manages global application state including settings, users, domains, groups, files, and the current file path. On authentication changes, it loads all relevant data, with admin-only resources failing silently for non-admin users.
+
+\subsection{Routes}
+
+Table~\ref{tab:frontend-routes} lists the frontend routes and their protection levels.
+
+\begin{table}[ht]
+\centering
+\caption{Frontend route definitions.}
+\label{tab:frontend-routes}
+\small
+\begin{tabular}{llll}
+\hline
+\textbf{Path} & \textbf{Component} & \textbf{Protection} & \textbf{Description} \\
+\hline
+\texttt{/}, \texttt{/login} & AdminLogin & Public & Login page \\
+\texttt{/signup} & Signup & Public & Self-registration \\
+\texttt{/reset-password} & PasswordReset & Public & Password change \\
+\texttt{/cert-required} & CertRequired & Public & Cert instructions \\
+\texttt{/guest} & GuestFileBrowser & Public & Guest file browser \\
+\texttt{/files} & UserFileBrowser & Auth + mTLS & User file browser \\
+\texttt{/admin/dashboard} & AdminDashboard & JWT only & Admin dashboard \\
+\texttt{/admin/settings} & SystemSettings & JWT only & System config \\
+\texttt{/admin/users} & UserManagement & JWT only & User management \\
+\texttt{/admin/permissions} & FolderPermissions & JWT only & Permissions \\
+\texttt{/admin/domains} & DomainConfig & JWT only & Domain config \\
+\texttt{/admin/groups} & GroupManagement & JWT only & Group management \\
+\texttt{/admin/audit-log} & AuditLog & JWT only & Audit log viewer \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{API Client}
+
+All backend communication is centralized in an \texttt{ApiClient} class (\texttt{services/api.ts}) that wraps every backend endpoint with typed methods. The client handles JWT token attachment, error normalization, and base URL configuration via the \texttt{VITE\_API\_BASE\_URL} environment variable.
+
+\section{Nginx Reverse Proxy}
+
+The frontend container runs Nginx on port~443 with TLS termination. The configuration defines several location blocks with distinct security policies:
+
+\begin{itemize}
+    \item \textbf{API proxy} (\texttt{/api/*}): Forwarded to \texttt{https://127.0.0.1:8443}. Authentication is handled by the backend via JWT; no client certificate is required at the Nginx layer.
+    \item \textbf{Public pages} (\texttt{/}, \texttt{/login}, \texttt{/signup}, \texttt{/reset-password}, \texttt{/cert-required}): Served without client certificate verification.
+    \item \textbf{Admin pages} (\texttt{/admin/*}): Served without client certificate verification; access is controlled by JWT authentication in the frontend and backend.
+    \item \textbf{Guest pages} (\texttt{/guest}): Served without client certificate verification (open access).
+    \item \textbf{Protected pages} (\texttt{/files} and catch-all): mTLS is enforced. Nginx verifies the client certificate against the CA and CRL, then passes the \texttt{X-SSL-Client-Verify} and \texttt{X-SSL-Client-S-DN} headers to the backend. Clients without a valid certificate are redirected to \texttt{/cert-required}.
+    \item \textbf{Static assets} (\texttt{/assets/*}): Cached for one year with standard cache headers.
+\end{itemize}
+
+Additional Nginx features include gzip compression for text, CSS, XML, JavaScript, and JSON responses (minimum 1024~bytes), security headers (\texttt{X-Frame-Options: SAMEORIGIN}, \texttt{X-Content-Type-Options: nosniff}, \texttt{X-XSS-Protection: 1; mode=block}), and \texttt{underscores\_in\_headers on} to support passing SSL-related headers.
+
+\section{Security Model}
+
+\subsection{Transport Security}
+
+All traffic is encrypted using TLS~1.2 or TLS~1.3. Nginx terminates TLS on port~443 for external clients, and the backend uses a self-signed certificate on port~8443 for internal communication. Mutual TLS is enforced on file access routes: the client must present a valid certificate signed by the local CA that is not present on the CRL.
+
+\subsection{Authentication}
+
+Two authentication paths are supported. Administrators and users authenticate via email and password, receiving a JWT token signed with HS256. Admin tokens expire after 2~hours; user tokens after a configurable period (default 24~hours). Regular users additionally authenticate via mTLS on protected routes, where Nginx verifies the client certificate and passes the Common Name to the backend for identity confirmation.
+
+\subsection{Authorization}
+
+Administrators have unrestricted access to all system functions, including file operations that bypass the permission engine. Regular users are governed by the three-tier permission system described in Section~6.5. Self-registration is controlled by a domain allowlist configured in \texttt{SystemSettings}; only users with email addresses matching an allowed domain can create accounts.
+
+\subsection{Attack Surface Mitigation}
+
+The system mitigates its attack surface through several complementary measures: self-hosting eliminates cloud dependencies; network isolation limits exposure to the local Wi-Fi segment; time-limited JWT tokens (2~hours for admins, 24~hours for users) bound session lifetimes; upload size limits (100\,MB default) prevent resource exhaustion; the CRL provides immediate mTLS access termination; CN mismatch abuse detection with automatic revocation prevents certificate sharing; path traversal prevention in file operations blocks directory escape attacks; standard security headers mitigate XSS, clickjacking, and MIME sniffing attacks; and audit logging of all administrative actions provides forensic visibility.
+
+\section{Deployment}
+
+\subsection{Host Setup}
+
+The \texttt{setup.sh} script, run with root privileges on the target Raspberry Pi, performs four configuration tasks. First, it generates a \texttt{.env} file with the \texttt{MDNS\_HOSTNAME} and \texttt{AP\_PASSPHRASE} variables. Second, it installs and configures the Avahi daemon for mDNS discovery at \texttt{<hostname>.local}. Third, it installs hostapd and dnsmasq for Wi-Fi access point fallback---if the system cannot associate with a known Wi-Fi network within 10~seconds, it switches the wireless interface to access point mode with SSID \texttt{TerraCrate-AP} (WPA2-PSK), gateway \texttt{192.168.4.1}, and DHCP range \texttt{192.168.4.10--50}. Fourth, it installs two systemd service units: \texttt{terracrate.service} (runs Docker Compose on boot) and \texttt{wifi-fallback.service} (runs the Wi-Fi check script after the network target is reached).
+
+\subsection{Network Configuration}
+
+Three network ports are used: port~443 (Nginx HTTPS frontend and API reverse proxy), port~8443 (Flask HTTPS backend, internal only), and port~5353 (Avahi mDNS discovery, UDP, host network). The device is discoverable at \texttt{<MDNS\_HOSTNAME>.local} (default: \texttt{terracrate.local}).
+
+\subsection{Storage Layout}
+
+Files are organized across three directories within the containers. User-accessible files reside under \texttt{/app/storage/}. The SQLite database is stored at \texttt{/app/data/terracrate.db}. TLS certificates and the CRL are stored under \texttt{/app/certs/}, which contains the server certificate (\texttt{server\_cert.pem}), server private key (\texttt{server\_key.pem}), and the Certificate Revocation List (\texttt{crl.pem}).
+
+\section{Technology Stack}
+
+Tables~\ref{tab:backend-stack} and~\ref{tab:frontend-stack} enumerate the principal technologies used in the backend and frontend, respectively.
+
+\begin{table}[ht]
+\centering
+\caption{Backend technology stack.}
+\label{tab:backend-stack}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\hline
+Python & 3.11+ & Runtime \\
+Flask & 3.0.0 & Web framework \\
+Flask-SQLAlchemy & 3.1.1 & ORM (SQLite) \\
+PyJWT & 2.8.0 & JWT authentication \\
+bcrypt & 4.2.0 & Password hashing \\
+cryptography & 41.0.7+ & Certificate generation + CRL \\
+qrcode + Pillow & 7.4.2+ / 10.2.0+ & QR code generation \\
+docker & 7.0.0+ & Docker API (log viewer) \\
+pytest & --- & Testing framework \\
+Ruff & --- & Linting and formatting \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Frontend technology stack.}
+\label{tab:frontend-stack}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\hline
+React & 18 & UI framework \\
+TypeScript & --- & Type safety (strict mode) \\
+Vite & --- & Build tool + dev server \\
+React Router & 7.13+ & Client-side routing \\
+Tailwind CSS & 4.2+ & Utility-first styling \\
+shadcn/ui (Radix) & --- & Component library \\
+MUI & 7.3+ & Additional components \\
+Motion & 12.38+ & Animations \\
+Sonner & 2.0+ & Toast notifications \\
+Recharts & 3.7+ & Dashboard charts \\
+\hline
+\end{tabular}
+\end{table}
+
+The infrastructure layer uses Docker and Docker Compose for containerization, Nginx for reverse proxying and TLS termination, systemd for service lifecycle management, Avahi for host-level mDNS advertisement, and hostapd with dnsmasq for Wi-Fi access point fallback.
+
+\section{Novel Features}
+
+While TerraCrate builds on well-established technologies (TLS, JWT, REST, Docker), several design decisions and implementation details represent novel contributions that distinguish it from both the prior design concepts and from general-purpose NAS or file sharing systems:
+
+\begin{enumerate}
+    \item \textbf{Proxy-layer mTLS with browser-native certificates.} The key innovation is enforcing mutual TLS at the Nginx reverse proxy rather than in the application or in client-side software. This achieves the cryptographic authentication strength of Design~1's container-to-container mTLS tunnel while requiring nothing more than a browser with an installed certificate---a capability natively supported by every major operating system and browser. No existing lightweight NAS solution combines proxy-enforced mTLS with a browser-based SPA.
+
+    \item \textbf{Three-tier permission model with tri-state semantics.} The domain--group--user permission hierarchy with tri-state override logic (\texttt{allow}, \texttt{deny}, \texttt{null}/inherit) provides access control granularity comparable to enterprise directory services, but implemented entirely within a self-contained SQLite-backed system running on a Raspberry Pi. The longest-prefix path matching algorithm further allows a single permission rule to govern an entire folder subtree, reducing administrative overhead.
+
+    \item \textbf{Automated certificate lifecycle management.} The system handles the full certificate lifecycle without manual intervention beyond the initial administrator action. Certificates are generated, bundled into PKCS\#12 files, delivered via email, tracked in the database, and automatically revoked on expiry approach, CN mismatch abuse, or reissuance. The CRL is regenerated atomically and enforced at the TLS layer in real time through the shared Docker volume, providing immediate revocation without service restarts.
+
+    \item \textbf{CN mismatch abuse detection.} The \texttt{MtlsMismatchLog} system introduces a behavioral detection layer not found in standard mTLS deployments. By tracking when a certificate's Common Name does not match the JWT-authenticated user and revoking after a configurable threshold, the system defends against certificate sharing and replay in a way that goes beyond simple CRL-based revocation.
+
+    \item \textbf{Zero-to-operational deployment.} The combination of the \texttt{setup.sh} host script, Docker Compose, mDNS, and Wi-Fi AP fallback means the device can go from a fresh Raspberry Pi OS installation to a fully operational secure file server---discoverable on the network, serving HTTPS, and ready for user onboarding---with a single setup command and no external infrastructure.
+\end{enumerate}
+
+\section{Requirements Satisfaction}
+
+Table~\ref{tab:req-satisfaction} maps each project goal from Section~2.1 to the architectural components that satisfy it, with a brief justification for each.
+
+\begin{table}[ht]
+\centering
+\caption{Mapping of project goals to architectural components.}
+\label{tab:req-satisfaction}
+\small
+\begin{tabular}{p{0.22\textwidth}p{0.30\textwidth}p{0.40\textwidth}}
+\hline
+\textbf{Goal} & \textbf{Components} & \textbf{How Satisfied} \\
+\hline
+1. Secure transport \& authentication &
+Nginx (TLS termination, mTLS), Auth system (bcrypt, JWT), Certificate management &
+All communication is HTTPS. Nginx enforces mTLS with CRL checking on file access routes. Admins authenticate via bcrypt-hashed passwords and HS256-signed JWTs. \\
+\hline
+2. Certificate lifecycle management &
+Certificate generator, SMTP email service, Revocation system, \texttt{start.sh} &
+Certificates are generated (RSA 2048, X.509), packaged as PKCS\#12, delivered via SMTP, tracked in the database, and revoked via four automated triggers with CRL enforcement at the TLS layer. \\
+\hline
+3. Fine-grained access control &
+Three-tier permission system, Database models (FolderPermission, DomainPermission, GroupPermission) &
+Domain defaults, group permissions (OR logic), and user overrides (tri-state) are resolved via longest-prefix matching. Admins bypass all checks. \\
+\hline
+4. Zero-config discovery &
+mDNS advertiser, Avahi service file, \texttt{setup.sh}, Wi-Fi AP fallback &
+Avahi advertises \texttt{\_https.\_tcp} at \texttt{<hostname>.local}. If no network exists, hostapd creates a dedicated AP, ensuring the device is always reachable. \\
+\hline
+5. Web-based administration &
+React SPA (13 pages), AdminLayout, DataContext, REST API (40+ endpoints) &
+A full admin dashboard provides user management, group/domain/permission configuration, system settings, file management, and audit log viewing---all through the browser. \\
+\hline
+6. Audit logging &
+AuditLog model, \texttt{audit.py} utility, \texttt{/audit-logs} API, AuditLog page &
+All admin and security actions are recorded with user, target, action, IP, status, and metadata. Queryable via API with filtering, pagination, and aggregate statistics. \\
+\hline
+7. Self-contained deployment &
+Docker Compose, \texttt{setup.sh}, systemd units, named volumes &
+Two containers with no external dependencies. \texttt{setup.sh} configures the host. \texttt{terracrate.service} starts the stack on boot. All state persists in local volumes. \\
+\hline
+\end{tabular}
+\end{table}
+
+Every core requirement is satisfied by at least two independently implemented components, providing defense in depth. For example, authentication is enforced at both the Nginx layer (mTLS) and the application layer (JWT validation), and access control is checked at both the frontend (route guards) and the backend (permission engine). This redundancy ensures that a failure in any single component does not compromise the security guarantees.
+
+\chapter{Design Evaluation}
+
+This chapter evaluates TerraCrate's quality through its testing procedures, CI/CD pipeline, security posture analysis, and sustainability assessment.
+
+\section{Backend Unit Tests}
+
+The backend is validated by a suite of 105 unit tests across seven test files, totaling approximately 1{,}500 lines of test code against a 4{,}900-line backend codebase. All tests use pytest with an in-memory SQLite database, ensuring complete isolation from the production data path. Shared fixtures defined in \texttt{conftest.py} create the Flask test application, seed required \texttt{SystemSettings}, and provision admin and regular user accounts with JWT tokens for authenticated test scenarios. Table~\ref{tab:test-coverage} summarizes the test suite.
+
+\begin{table}[ht]
+\centering
+\caption{Backend unit test coverage by module.}
+\label{tab:test-coverage}
+\small
+\begin{tabular}{llp{0.50\textwidth}}
+\hline
+\textbf{Test File} & \textbf{Tests} & \textbf{Coverage Area} \\
+\hline
+\texttt{test\_auth.py} & 20 & Password hashing (bcrypt round-trip), token generation and validation, session expiry enforcement (2\,h admin, configurable user), guest token tracking and revocation, token extraction from headers, cookies, and query parameters \\
+\hline
+\texttt{test\_permissions.py} & 24 & Three-tier permission resolution (domain, group, user), \texttt{check\_access} with longest-prefix matching, item visibility logic, tri-state \texttt{null} deferral, effective permissions with source attribution, domain API CRUD operations, admin bypass verification \\
+\hline
+\texttt{test\_generate\_certs.py} & 14 & Client certificate generation, X.509 subject fields (CN, O, OU), SAN email (RFC~822), \texttt{CA=False} constraint on client certs, \texttt{ClientAuth} EKU, issuer and signature validation against the CA, custom validity periods \\
+\hline
+\texttt{test\_utils.py} & 19 & File listing (sort order, hidden file exclusion, macOS \texttt{.DS\_Store} filtering), path resolution, directory traversal prevention (ensuring \texttt{../} sequences cannot escape the storage root) \\
+\hline
+\texttt{test\_models.py} & 12 & Model serialization (\texttt{to\_dict}), relationship integrity across foreign keys, cascade delete behavior, field defaults and constraints \\
+\hline
+\texttt{test\_signup.py} & 9 & Domain allowlist enforcement, disallowed domain rejection, account claiming flow for pre-created users, multi-domain support, admin settings updates via API \\
+\hline
+\texttt{test\_revocation.py} & 7 & Certificate revocation flow, CRL generation with correct serial numbers, automatic revocation on CN mismatch abuse exceeding threshold, expiry-approaching auto-revocation, reissue flow (old cert revoked, new cert tracked), revocation reason codes \\
+\hline
+\end{tabular}
+\end{table}
+
+The tests are designed to verify security-critical invariants. For example, \texttt{test\_auth.py} confirms that expired tokens are rejected and that bcrypt hashes are not reversible; \texttt{test\_permissions.py} verifies that an explicit \texttt{deny} at the user tier overrides an \texttt{allow} at the domain or group tier; \texttt{test\_utils.py} confirms that path traversal attempts (e.g., \texttt{../../etc/passwd}) are blocked before reaching the filesystem; and \texttt{test\_revocation.py} validates that the CN mismatch counter correctly triggers automatic revocation after the configured threshold.
+
+\section{Frontend Static Analysis}
+
+The frontend does not include a runtime test suite (e.g., Jest or Playwright). Quality assurance relies on three complementary static analysis tools:
+
+\begin{enumerate}
+    \item \textbf{ESLint} with the \texttt{@eslint/js} recommended rules, \texttt{typescript-eslint} recommended rules, and \texttt{eslint-plugin-react-hooks}. The configuration warns on unused variables (with \texttt{\_}-prefixed exceptions) and discourages \texttt{any} types. This catches common React pitfalls such as missing hook dependencies and stale closures.
+
+    \item \textbf{TypeScript strict mode} via \texttt{npm run typecheck} (\texttt{tsc --noEmit}). Strict mode enables \texttt{strictNullChecks}, \texttt{strictFunctionTypes}, and \texttt{noImplicitAny}, ensuring that the entire frontend codebase is fully typed and that type errors are caught at build time rather than at runtime.
+
+    \item \textbf{Vite production build} (\texttt{npm run build}). The production build resolves all imports, applies tree-shaking, and emits optimized bundles. Any unresolved import, circular dependency, or module resolution failure causes the build to fail, providing an additional layer of validation beyond type checking.
+\end{enumerate}
+
+While static analysis does not replace end-to-end testing, it provides strong guarantees for a React SPA: type safety eliminates an entire class of runtime errors, ESLint enforces React-specific best practices, and the production build verifies that all code paths resolve correctly. Adding browser-based end-to-end tests (e.g., Playwright or Cypress) is identified as future work.
+
+\section{CI/CD Pipeline}
+
+Three GitHub Actions workflows automate quality enforcement on every push to the \texttt{main} branch:
+
+\subsection{Backend CI}
+
+Triggered on pushes and pull requests affecting the \texttt{backend/} directory or \texttt{docker-compose.yml}. The \texttt{validate} job runs on Ubuntu with Python~3.11 and performs four steps: dependency installation from \texttt{requirements.txt}, Ruff linting (\texttt{ruff check .}), Ruff format verification (\texttt{ruff format --check .}), and pytest execution (\texttt{python -m pytest tests/ -v}). A fifth step validates that the certificate generation script can produce valid PEM files. The \texttt{docker} job, which depends on \texttt{validate} passing, builds the backend Docker image using BuildKit with GitHub Actions cache and validates the Docker Compose configuration.
+
+\subsection{Frontend CI}
+
+Triggered on pushes and pull requests affecting the \texttt{frontend/} directory. The \texttt{build} job runs on Ubuntu with Node.js~20 and performs four steps: dependency installation (\texttt{npm ci}), ESLint linting (\texttt{npm run lint}), TypeScript type checking (\texttt{npm run typecheck}), and Vite production build (\texttt{npm run build}). The \texttt{docker} job, which depends on \texttt{build} passing, builds the frontend Docker image using BuildKit with GitHub Actions cache.
+
+\subsection{Release}
+
+Triggered on version tag pushes (\texttt{v*}). Creates a source archive excluding sensitive files (\texttt{.git}, \texttt{node\_modules}, \texttt{.pem}, \texttt{.key}, \texttt{.db}, environment configs) and publishes a GitHub Release with auto-generated release notes.
+
+\subsection{Pipeline Effectiveness}
+
+The CI pipeline enforces a strict quality gate: no code reaches the \texttt{main} branch without passing linting, formatting checks, all 105 backend tests, full type checking, and a successful Docker image build. This automated enforcement is particularly important given the single-developer workflow that emerged during the project, since it substitutes for peer code review by providing objective quality checks on every commit.
+
+\section{Security Evaluation}
+
+The security model was evaluated against the threats inherent to the deployment scenario---a portable device operating on untrusted wireless networks.
+
+\subsection{Authentication Strength}
+
+The dual authentication model provides defense in depth. For regular users, mTLS with X.509 client certificates provides cryptographic proof of identity on every request, resistant to session hijacking and replay attacks (since the private key never leaves the client device). For administrators, bcrypt password hashing with auto-generated salts prevents offline dictionary attacks, and short-lived JWT tokens (2~hours) limit the window of exposure if a token is compromised. The JWT secret is a random 32-byte key generated at each application startup, ensuring it cannot be predicted or extracted from source code.
+
+\subsection{Certificate Security}
+
+The certificate subsystem addresses several attack vectors. Certificate sharing is deterred by the CN mismatch detection system, which revokes certificates used by non-matching users. Certificate theft is mitigated by the CRL mechanism, which allows immediate revocation enforced at the TLS layer. Certificate expiry is handled proactively by the background checker thread, which revokes certificates approaching expiration before they can be used in a degraded security state. The PKCS\#12 bundles are generated with random passwords, preventing bulk extraction from intercepted emails.
+
+\subsection{Data Protection}
+
+All data in transit is encrypted via TLS~1.2/1.3. Path traversal attacks are prevented by the file utility module, which validates and resolves all paths before filesystem access---confirmed by dedicated unit tests. Upload size limits (100\,MB default) prevent resource exhaustion attacks. Security headers (\texttt{X-Frame-Options}, \texttt{X-Content-Type-Options}, \texttt{X-XSS-Protection}) mitigate browser-based attacks. Files at rest are stored on the bind-mounted volume without application-level encryption, though the host-level LUKS encryption described in the deployment configuration provides physical security for the storage medium.
+
+\subsection{Audit Trail Completeness}
+
+All administrative actions---user creation, approval, deletion, permission changes, certificate revocation and reissuance, and settings modifications---are recorded with the acting user, target entity, IP address, timestamp, action outcome, and structured metadata. This audit trail supports both operational forensics (detecting unauthorized changes) and compliance requirements (demonstrating who had access to what data and when).
+
+\section{Sustainability Assessment}
+
+\subsection{Maintainability}
+
+The codebase is organized into clearly separated concerns: the Flask API server handles routing and request processing; the \texttt{auth}, \texttt{permissions}, and \texttt{models} modules encapsulate distinct business logic; utility modules (\texttt{generate\_certs}, \texttt{email\_sender}, \texttt{audit}, \texttt{mdns\_advertiser}) are independently testable. The frontend follows a standard React pattern with context providers for shared state, page components for views, and a centralized API client. Ruff enforces consistent Python style, and ESLint with TypeScript strict mode enforces consistent frontend style. This separation means that modifications to one subsystem---for example, replacing SQLite with PostgreSQL or adding a new permission tier---can be made without affecting unrelated components.
+
+\subsection{Scalability Constraints}
+
+The system is designed for single-node deployment on a Raspberry Pi, which imposes inherent scalability limits. SQLite does not support concurrent write transactions from multiple processes, limiting throughput under heavy simultaneous uploads. The in-process Flask server (without a WSGI server like Gunicorn) handles requests sequentially on the main thread, with the exception of the background certificate expiry checker. For the intended use case---ad-hoc file sharing among a small number of users on a local network---these constraints are acceptable. Scaling beyond this scenario would require migrating to a multi-process WSGI server and a concurrent-write-capable database.
+
+\subsection{Dependency Management}
+
+Backend dependencies are pinned in \texttt{requirements.txt} and locked to specific versions, ensuring reproducible builds. Frontend dependencies are locked via \texttt{package-lock.json} and installed with \texttt{npm ci} in CI. Docker images are built from versioned base images (\texttt{python:3.11}, \texttt{node:22-slim}, \texttt{nginx:alpine}). The CI pipeline rebuilds all images on every push, ensuring that dependency issues are detected immediately rather than at deployment time.
+
+\subsection{Operational Sustainability}
+
+The system is designed to operate without ongoing maintenance once deployed. Systemd units ensure automatic startup on boot. The Wi-Fi fallback script ensures network availability even when the configured Wi-Fi network is absent. Certificate expiry is handled automatically by the background checker. The only recurring operational requirement is administrator intervention to approve new users and manage permissions---tasks that are performed through the web-based admin dashboard without requiring SSH access to the device.
+
+\chapter{Future Work}
+
+While TerraCrate satisfies all core requirements defined in the client specification, several extensions would strengthen the system's capabilities, resilience, and usability. This chapter outlines planned future work, organized by priority and feasibility.
+
+\section{Clustered Deployment}
+
+The current single-node architecture (identified as a weakness in Section~5.2) limits both availability and throughput. A natural evolution is deploying TerraCrate across a small cluster of Raspberry Pi devices---for example, two or three nodes behind a shared hostname---to provide replication and redundancy.
+
+This would require three architectural changes. First, the SQLite database must be replaced with a database engine that supports concurrent writes from multiple processes, such as PostgreSQL or CockroachDB, or alternatively a lightweight distributed key-value store like etcd for metadata with a shared filesystem for user files. Second, the file storage layer must be replicated across nodes, either through a distributed filesystem (e.g., GlusterFS or Syncthing for eventual consistency) or through an active-passive model where one node owns the canonical copy and others replicate asynchronously. Third, a load balancer or DNS round-robin mechanism must distribute incoming requests across nodes while ensuring that mTLS state (the shared CA and CRL) remains consistent. The certificate volume, currently shared via a Docker named volume on a single host, would need to be synchronized across nodes---potentially through the same replication mechanism used for files. The modular separation between the Nginx proxy, Flask backend, and storage layer simplifies this migration, since each can be scaled independently.
+
+\section{Frontend End-to-End Testing}
+
+The frontend currently relies on static analysis (ESLint, TypeScript strict mode, and Vite build verification) for quality assurance, as noted in Section~8.2. Adding browser-based end-to-end tests using a framework such as Playwright or Cypress would provide runtime validation of critical user flows: login, file upload and download, permission enforcement in the UI, certificate installation guidance, and admin dashboard operations. These tests would run against a local Docker Compose stack in CI, exercising the full request path from browser through Nginx to the Flask backend. This is the most impactful testing improvement, as it would catch integration issues between the frontend, Nginx proxy, and backend that unit tests and static analysis cannot detect.
+
+\section{SMB File Access}
+
+The browser-only file interaction model (identified as a weakness in Section~5.2) prevents users from opening shared files directly in native desktop applications. Adding an SMB (Server Message Block) endpoint---running as a third Docker container or as a sidecar process within the backend container---would expose the same permission-controlled file tree as a network share mountable by Windows, macOS, and Linux file managers. The SMB service would authenticate users via their existing credentials and enforce the same three-tier permission model, ensuring consistency between the web and native access paths. This combines the native filesystem integration strength of Design~1 with the web-based administration of the current design, without requiring client-side Docker containers.
+
+\section{Advanced File Preview}
+
+The current file preview system supports images, plain text, and PDF files rendered inline in the browser. Extending preview support to additional formats would significantly improve usability for common office workflows:
+
+\begin{itemize}
+    \item \textbf{Video and audio.} HTML5 \texttt{<video>} and \texttt{<audio>} elements with streaming via the existing \texttt{/files/preview} endpoint, supporting MP4, WebM, MP3, and WAV formats natively in the browser without server-side transcoding.
+    \item \textbf{Microsoft Office documents.} Server-side conversion of \texttt{.docx}, \texttt{.pptx}, and \texttt{.xlsx} files to PDF or HTML using a library such as LibreOffice in headless mode or a lightweight converter like \texttt{python-docx} for Word documents and \texttt{openpyxl} for Excel spreadsheets. Converted output would be cached and served through the existing preview infrastructure.
+    \item \textbf{Markdown and code.} Client-side rendering of Markdown files using a library like \texttt{react-markdown}, and syntax-highlighted code preview using a library like \texttt{react-syntax-highlighter}, both operating on the raw file content returned by the preview endpoint.
+\end{itemize}
+
+\section{HTTP Streaming for File Transfers}
+
+The current file transfer implementation buffers entire files in memory during uploads and downloads. For the small-to-moderate file sizes typical of the intended use case, this is acceptable, but it becomes a bottleneck on Raspberry Pi hardware when handling large files---memory pressure can cause failed transfers or degrade performance for concurrent users.
+
+Replacing the buffered model with HTTP chunked transfer encoding would allow the backend to stream file data incrementally. For downloads, Flask's \texttt{send\_file} with \texttt{conditional=True} already supports range requests, but the download endpoint could be extended to use generator-based streaming (\texttt{Response} with an iterator) for files exceeding a configurable size threshold, reducing peak memory consumption from $O(n)$ to $O(1)$ relative to file size. For uploads, switching to a streaming multipart parser---such as \texttt{flask-streaming-upload} or manual chunk reassembly via \texttt{request.stream}---would allow the backend to write incoming data directly to disk without buffering the entire file in memory. On the frontend, the \texttt{XMLHttpRequest} or Fetch API with \texttt{ReadableStream} would enable upload progress reporting and resumable uploads via the \texttt{Content-Range} header, allowing users to retry interrupted transfers without re-uploading from the beginning. Combined with Nginx's \texttt{client\_max\_body\_size} and \texttt{proxy\_request\_buffering off} directives, this end-to-end streaming pipeline would support file transfers limited only by available storage rather than available RAM.
+
+\section{Client Specification Stretch Goals}
+
+The client specification identifies three advanced objectives that remain unimplemented:
+
+\begin{enumerate}
+    \item \textbf{Peer-to-peer file synchronization.} Enabling two or more TerraCrate devices to synchronize their file stores over a mutually authenticated channel. This would allow distributed deployments where files uploaded to one node propagate to others, supporting scenarios such as multi-site field teams sharing a common file set. Implementation could leverage an existing synchronization protocol (e.g., Syncthing or rsync over mTLS) rather than building a custom replication layer.
+
+    \item \textbf{Attribute-based encryption (ABE).} Encrypting individual files with policies tied to user attributes (role, group membership, domain) so that only users satisfying the policy can decrypt. ABE would provide cryptographic access control in addition to the current permission-based model, ensuring that even a compromised storage medium or database yields no readable file content without the correct attribute keys. Libraries such as \texttt{charm-crypto} or \texttt{OpenABE} could provide the underlying cryptographic primitives.
+
+    \item \textbf{Anomaly detection on access logs.} Applying statistical or machine learning models to the audit log data to detect unusual access patterns---such as bulk downloads, access outside normal hours, or geographic anomalies (if IP geolocation is available). The existing \texttt{AuditLog} model with its structured metadata provides a rich data source for this analysis. Implementation could range from simple threshold-based alerts to a lightweight ML pipeline using scikit-learn, running as a periodic background task.
+\end{enumerate}
+
+These extensions are architecturally compatible with the current system. The modular decomposition described in Chapter~6---with well-defined interfaces between the proxy, backend, and frontend layers---ensures that each feature can be developed and integrated incrementally without restructuring existing components.
+
+% ============================================
+% APPENDICES
+% ============================================
+\appendix
+
+TBD
+
+\end{document}

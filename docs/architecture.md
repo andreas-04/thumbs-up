@@ -239,7 +239,7 @@ SQLAlchemy ORM with SQLite (configurable via `DATABASE_URI`).
 
 **User**: `id`, `email` (unique), `password_hash`, `role` (admin/user), `is_default_pin`, `is_approved`, `created_at`, `last_login`, `cert_serial_number`, `cert_revoked`, `cert_issued_at`, `cert_expires_at`. Many-to-many relationship with `Group` via `GroupMembership`.
 
-**SystemSettings** (singleton): `auth_method` (email/email+password/username+password), `tls_enabled`, `https_port`, `device_name`, SMTP configuration (`smtp_enabled`, `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `smtp_from_email`, `smtp_use_tls`), `allowed_domains` (comma-separated domain allowlist for self-registration).
+**SystemSettings** (singleton): `mode` (open/protected), `auth_method` (email/email+password/username+password), `tls_enabled`, `https_port`, `device_name`, SMTP configuration (`smtp_enabled`, `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `smtp_from_email`, `smtp_use_tls`), `allowed_domains` (comma-separated domain allowlist for self-registration).
 
 **FolderPermission**: `user_id` (FK), `folder_path`, `can_read` (allow/deny/null), `can_write` (allow/deny/null). Unique on `(user_id, folder_path)`.
 
@@ -374,7 +374,7 @@ src/
 │   │   ├── AdminLayout.tsx     # Sidebar navigation + responsive layout
 │   │   ├── FilePreview.tsx     # Dialog for previewing images/text/PDF inline
 │   │   ├── ProtectedRoute.tsx  # Redirects to /login if unauthenticated
-│   │   ├── GuestRoute.tsx      # Redirects to /admin/dashboard if authenticated
+│   │   ├── GuestRoute.tsx      # Redirects to /admin/dashboard if authenticated (not currently used in routes)
 │   │   ├── SystemStatus.tsx    # Dashboard stats cards
 │   │   └── ui/                 # shadcn/ui component library
 │   └── pages/
@@ -391,7 +391,7 @@ src/
 │       ├── GroupManagement.tsx # Groups with members + permissions
 │       ├── FileBrowser.tsx     # Admin file management (legacy, not routed)
 │       ├── UserFileBrowser.tsx # Authenticated user file browser
-│       └── GuestFileBrowser.tsx # Legacy guest file browser (not routed)
+│       └── GuestFileBrowser.tsx # Guest file browser (routed at /guest)
 └── services/
     └── api.ts                  # ApiClient class wrapping all backend endpoints
 ```
@@ -404,6 +404,7 @@ src/
 | `/signup` | Signup | Public | Self-registration |
 | `/reset-password` | PasswordReset | Public | Password change |
 | `/cert-required` | CertRequired | Public | Certificate instructions |
+| `/guest` | GuestFileBrowser | Public | Guest file browser |
 | `/files` | UserFileBrowser | Auth + mTLS | User file browser |
 | `/admin/dashboard` | AdminDashboard | Auth (JWT only) | Admin dashboard |
 | `/admin/settings` | SystemSettings | Auth (JWT only) | System configuration |
@@ -426,7 +427,8 @@ The frontend container runs Nginx on **port 443** with TLS:
 - **API proxy**: `/api/*` → `https://127.0.0.1:8443` (JWT auth at backend, no client cert required)
 - **Public pages**: `/`, `/login`, `/signup`, `/reset-password`, `/cert-required` — no client cert
 - **Admin pages**: `/admin/*` — no client cert (JWT auth only)
-- **Protected pages**: `/files`, `/guest/files` — **mTLS enforced**, redirects to `/cert-required` on failure
+- **Guest pages**: `/guest` — no client cert required (open access)
+- **Protected pages**: `/files` and catch-all — **mTLS enforced**, redirects to `/cert-required` on failure
 - **CRL checking**: `ssl_crl` directive configured to check certificate revocation list on every mTLS handshake
 - **Static assets**: `/assets/*` — cached 1 year
 - **Gzip compression**: Enabled for text, CSS, XML, JavaScript, and JSON responses (min 1024 bytes)
@@ -483,13 +485,13 @@ Run on the target Raspberry Pi (requires root):
 ```yaml
 services:
   backend:
-    image: python:3.11
+    build: ./backend/api (Dockerfile, python:3.11 base)
     port: 8443 (HTTPS)
     volumes: storage (bind), terracrate-db, terracrate-certs, /var/run/docker.sock (read-only)
     healthcheck: urllib to https://localhost:8443/health
 
   frontend:
-    image: nginx:alpine (multi-stage: node:22-slim build → nginx)
+    build: ./frontend (Dockerfile, multi-stage: node:22-slim build → nginx:alpine)
     port: 443 (HTTPS)
     volumes: terracrate-certs (read-only)
     depends_on: backend (healthy)
@@ -662,8 +664,8 @@ Triggered by changes in `backend/**`, `docker-compose.yml`, or the workflow file
 5. **Certificate validation** — generates a test server cert and verifies the output files exist
 
 **`docker` job** (depends on `validate`):
-1. **Validate docker compose config** — `docker compose config --quiet`
-2. **Build backend image** — `docker/build-push-action` with GitHub Actions cache (`type=gha`), push disabled
+1. **Build backend image** — `docker/build-push-action` with GitHub Actions cache (`type=gha`), push disabled
+2. **Validate docker compose config** — `docker compose config --quiet`
 
 ### Frontend CI (`.github/workflows/frontend-ci.yml`)
 
