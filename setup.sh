@@ -199,27 +199,65 @@ if [[ -f /etc/terracrate/luks.key ]] && [[ -f /etc/systemd/system/terracrate-luk
     LUKS_UUID=$(grep -oP 'by-uuid/\K[^ ]+' /etc/systemd/system/terracrate-luks.service || true)
     if [[ -n "$LUKS_UUID" ]]; then
         echo "Existing LUKS configuration detected (UUID=$LUKS_UUID)"
-        echo "Reinstalling service files from updated templates..."
+        echo
+        echo "  [1] Update service files only (keep existing encryption)"
+        echo "  [2] Re-encrypt drive (DESTROYS ALL DATA)"
+        echo "  [3] Skip LUKS setup"
+        echo
+        read -r -p "Choose [1/2/3] (default: 1): " LUKS_RERUN_CHOICE
+        LUKS_RERUN_CHOICE="${LUKS_RERUN_CHOICE:-1}"
 
-        # Reinstall terracrate-luks.service
-        LUKS_SVC_SRC="$SCRIPT_DIR/config/terracrate-luks.service"
-        LUKS_SVC_DST="/etc/systemd/system/terracrate-luks.service"
-        if [[ -f "$LUKS_SVC_SRC" ]]; then
-            sed "s|__LUKS_UUID__|$LUKS_UUID|g" "$LUKS_SVC_SRC" > "$LUKS_SVC_DST"
-            echo "Reinstalled terracrate-luks.service"
+        if [[ "$LUKS_RERUN_CHOICE" == "1" ]]; then
+            echo "Reinstalling service files from updated templates..."
+
+            # Close any stale mapper with the old name if it differs
+            for mapper in $(dmsetup ls --target crypt 2>/dev/null | awk '{print $1}'); do
+                if [[ "$mapper" != "terracrate-store" ]]; then
+                    # Check if this mapper is backed by our LUKS UUID
+                    backing=$(cryptsetup status "$mapper" 2>/dev/null | awk '/device:/{print $2}')
+                    if [[ -n "$backing" ]] && [[ "$(blkid -s UUID -o value "$backing" 2>/dev/null)" == "$LUKS_UUID" ]]; then
+                        echo "Renaming old mapper '$mapper' -> closing and reopening as terracrate-store..."
+                        umount /mnt/storage 2>/dev/null || true
+                        cryptsetup luksClose "$mapper" 2>/dev/null || true
+                    fi
+                fi
+            done
+
+            # Reinstall terracrate-luks.service
+            LUKS_SVC_SRC="$SCRIPT_DIR/config/terracrate-luks.service"
+            LUKS_SVC_DST="/etc/systemd/system/terracrate-luks.service"
+            if [[ -f "$LUKS_SVC_SRC" ]]; then
+                sed "s|__LUKS_UUID__|$LUKS_UUID|g" "$LUKS_SVC_SRC" > "$LUKS_SVC_DST"
+                echo "Reinstalled terracrate-luks.service"
+            fi
+
+            systemctl daemon-reload
+            systemctl reset-failed terracrate-luks 2>/dev/null || true
+            systemctl enable terracrate-luks
+            systemctl start terracrate-luks
+            echo "LUKS services updated and started"
+
+            # Ensure docker-compose.yml uses /mnt/storage
+            sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
+                "$SCRIPT_DIR/docker-compose.yml"
+
+            LUKS_ENABLED=true
+
+        elif [[ "$LUKS_RERUN_CHOICE" == "2" ]]; then
+            echo "Re-encryption selected — will proceed to fresh LUKS setup below."
+            # Stop services and close existing LUKS so fresh setup can claim the drive
+            systemctl stop terracrate 2>/dev/null || true
+            systemctl stop terracrate-luks 2>/dev/null || true
+            umount /mnt/storage 2>/dev/null || true
+            for mapper in $(dmsetup ls --target crypt 2>/dev/null | awk '{print $1}'); do
+                cryptsetup luksClose "$mapper" 2>/dev/null || true
+            done
+            rm -f /etc/terracrate/luks.key
+            # LUKS_ENABLED stays false → falls through to fresh setup
+        else
+            echo "Skipping LUKS setup."
+            LUKS_ENABLED=true  # prevent fresh setup from running
         fi
-
-        systemctl daemon-reload
-        systemctl reset-failed terracrate-luks 2>/dev/null || true
-        systemctl enable terracrate-luks
-        systemctl start terracrate-luks
-        echo "LUKS services updated and started"
-
-        # Ensure docker-compose.yml uses /mnt/storage
-        sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
-            "$SCRIPT_DIR/docker-compose.yml"
-
-        LUKS_ENABLED=true
     fi
 fi
 
