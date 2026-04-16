@@ -193,6 +193,35 @@ echo
 echo "--- LUKS Drive Encryption Setup ---"
 LUKS_ENABLED=false
 
+# Check for an existing LUKS setup (re-run detection)
+if [[ -f /etc/terracrate/luks.key ]] && [[ -f /etc/systemd/system/terracrate-luks.service ]]; then
+    # Extract the UUID from the installed service file
+    LUKS_UUID=$(grep -oP 'by-uuid/\K[^ ]+' /etc/systemd/system/terracrate-luks.service || true)
+    if [[ -n "$LUKS_UUID" ]]; then
+        echo "Existing LUKS configuration detected (UUID=$LUKS_UUID)"
+        echo "Reinstalling service files from updated templates..."
+
+        # Reinstall terracrate-luks.service
+        LUKS_SVC_SRC="$SCRIPT_DIR/config/terracrate-luks.service"
+        LUKS_SVC_DST="/etc/systemd/system/terracrate-luks.service"
+        if [[ -f "$LUKS_SVC_SRC" ]]; then
+            sed "s|__LUKS_UUID__|$LUKS_UUID|g" "$LUKS_SVC_SRC" > "$LUKS_SVC_DST"
+            echo "Reinstalled terracrate-luks.service"
+        fi
+
+        systemctl daemon-reload
+        systemctl enable terracrate-luks
+        echo "LUKS services updated"
+
+        # Ensure docker-compose.yml uses /mnt/storage
+        sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
+            "$SCRIPT_DIR/docker-compose.yml"
+
+        LUKS_ENABLED=true
+    fi
+fi
+
+if [[ "$LUKS_ENABLED" == "false" ]]; then
 # Detect the boot drive so we can exclude it
 BOOT_DRIVE=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /)" 2>/dev/null || true)
 
@@ -316,16 +345,16 @@ else
 
             # --- Open and verify ---
             echo "Opening LUKS volume..."
-            cryptsetup luksOpen "$SELECTED_DRIVE" terracrate-storage \
+            cryptsetup luksOpen "$SELECTED_DRIVE" terracrate-store \
                 --key-file /etc/terracrate/luks.key
 
             # --- Create ext4 filesystem ---
             echo "Creating ext4 filesystem..."
-            mkfs.ext4 -L terracrate-storage /dev/mapper/terracrate-storage -q
+            mkfs.ext4 -L terracrate-store /dev/mapper/terracrate-store -q
 
             # --- Mount ---
             mkdir -p /mnt/storage
-            mount /dev/mapper/terracrate-storage /mnt/storage
+            mount /dev/mapper/terracrate-store /mnt/storage
             echo "LUKS volume mounted at /mnt/storage"
 
             # --- Get UUID for stable reference ---
@@ -362,6 +391,7 @@ else
         fi
     fi
 fi
+fi # end LUKS_ENABLED==false fresh-setup block
 
 # ---------------------------------------------------------------------------
 # 6. Install and enable the TerraCrate docker compose service

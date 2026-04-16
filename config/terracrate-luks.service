@@ -7,10 +7,10 @@ Before=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/cryptsetup luksOpen /dev/disk/by-uuid/__LUKS_UUID__ terracrate-storage --key-file /etc/terracrate/luks.key
-ExecStart=/usr/bin/mount /dev/mapper/terracrate-storage /mnt/storage
+ExecStart=/bin/sh -c 'test -e /dev/mapper/terracrate-store || /usr/sbin/cryptsetup luksOpen /dev/disk/by-uuid/__LUKS_UUID__ terracrate-store --key-file /etc/terracrate/luks.key'
+ExecStart=/bin/sh -c 'mountpoint -q /mnt/storage || /usr/bin/mount /dev/mapper/terracrate-store /mnt/storage'
 ExecStop=/usr/bin/umount /mnt/storage
-ExecStop=/usr/sbin/cryptsetup luksClose terracrate-storage
+ExecStop=/usr/sbin/cryptsetup luksClose terracrate-store
 
 [Install]
 WantedBy=multi-user.target
