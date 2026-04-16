@@ -210,8 +210,10 @@ if [[ -f /etc/terracrate/luks.key ]] && [[ -f /etc/systemd/system/terracrate-luk
         fi
 
         systemctl daemon-reload
+        systemctl reset-failed terracrate-luks 2>/dev/null || true
         systemctl enable terracrate-luks
-        echo "LUKS services updated"
+        systemctl start terracrate-luks
+        echo "LUKS services updated and started"
 
         # Ensure docker-compose.yml uses /mnt/storage
         sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
@@ -414,6 +416,11 @@ if [[ -f "$TERRACRATE_SVC_SRC" ]]; then
     fi
 
     systemctl daemon-reload
+    if [[ "$LUKS_ENABLED" == "true" ]]; then
+        systemctl reset-failed terracrate-luks 2>/dev/null || true
+        systemctl start terracrate-luks
+    fi
+    systemctl reset-failed terracrate 2>/dev/null || true
     systemctl enable terracrate
     systemctl start terracrate
     echo "Installed, enabled, and started terracrate.service -> $TERRACRATE_SVC_DST"
