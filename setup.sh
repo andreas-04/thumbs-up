@@ -282,6 +282,18 @@ else
                 fi
             done
 
+            # --- Release the drive (unmount partitions, close LUKS mappings) ---
+            echo "Preparing $SELECTED_DRIVE (unmounting any existing partitions)..."
+            for part in $(lsblk -lnpo NAME "$SELECTED_DRIVE" | tail -n +2); do
+                umount "$part" 2>/dev/null || true
+            done
+            # Close any existing device-mapper mappings (old LUKS, LVM, etc.)
+            for dm in $(lsblk -lnpo NAME,TYPE "$SELECTED_DRIVE" | awk '$2 == "crypt" {print $1}'); do
+                cryptsetup luksClose "$(basename "$dm")" 2>/dev/null || true
+            done
+            # Wipe partition table / filesystem signatures so cryptsetup sees a clean device
+            wipefs -a "$SELECTED_DRIVE" >/dev/null 2>&1 || true
+
             # --- Generate random keyfile ---
             echo "Generating keyfile at /etc/terracrate/luks.key..."
             mkdir -p /etc/terracrate
