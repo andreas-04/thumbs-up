@@ -50,6 +50,7 @@ fi
 
 # Ensure .env is not world-readable (it stores the AP passphrase)
 chmod 600 "$ENV_FILE"
+chown "${SUDO_USER:-root}:${SUDO_USER:-root}" "$ENV_FILE"
 
 MDNS_HOSTNAME="${MDNS_HOSTNAME:-terracrate}"
 
