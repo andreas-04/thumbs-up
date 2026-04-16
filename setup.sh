@@ -186,18 +186,195 @@ systemctl unmask hostapd dnsmasq 2>/dev/null || true
 systemctl disable hostapd dnsmasq 2>/dev/null || true
 echo "hostapd and dnsmasq unmasked and disabled from auto-start (wifi-check.sh controls them)"
 
-# Install and enable the TerraCrate docker compose service
+# ---------------------------------------------------------------------------
+# 5. LUKS Drive Encryption (optional)
+# ---------------------------------------------------------------------------
+echo
+echo "--- LUKS Drive Encryption Setup ---"
+LUKS_ENABLED=false
+
+# Detect the boot drive so we can exclude it
+BOOT_DRIVE=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /)" 2>/dev/null || true)
+
+# Find all non-boot disk block devices
+mapfile -t AVAILABLE_DRIVES < <(
+    lsblk -dnpo NAME,SIZE,TYPE | awk '$3 == "disk"' | while read -r name size type; do
+        dev_name=$(basename "$name")
+        if [[ "$dev_name" != "$BOOT_DRIVE" ]]; then
+            echo "$name"
+        fi
+    done
+)
+
+if [[ ${#AVAILABLE_DRIVES[@]} -eq 0 ]]; then
+    echo "No additional drives detected — skipping LUKS encryption setup."
+else
+    echo
+    echo "Detected storage drives:"
+    for i in "${!AVAILABLE_DRIVES[@]}"; do
+        dev="${AVAILABLE_DRIVES[$i]}"
+        info=$(lsblk -dnpo NAME,SIZE,MODEL "$dev" 2>/dev/null)
+        printf "  [%d] %s\n" "$((i + 1))" "$info"
+    done
+    echo
+
+    read -r -p "Would you like to LUKS encrypt a storage drive? [y/N]: " ENCRYPT_CHOICE
+    if [[ "${ENCRYPT_CHOICE,,}" == "y" ]]; then
+
+        # Install cryptsetup if not present
+        if ! command -v cryptsetup &>/dev/null; then
+            echo "Installing cryptsetup..."
+            apt-get update -qq
+            apt-get install -y --no-install-recommends cryptsetup
+        fi
+
+        # --- Drive selection ---
+        if [[ ${#AVAILABLE_DRIVES[@]} -eq 1 ]]; then
+            SELECTED_DRIVE="${AVAILABLE_DRIVES[0]}"
+            echo "Auto-selected the only available drive: $SELECTED_DRIVE"
+        else
+            while true; do
+                read -r -p "Select drive number [1-${#AVAILABLE_DRIVES[@]}]: " DRIVE_NUM
+                if [[ "$DRIVE_NUM" =~ ^[0-9]+$ ]] && (( DRIVE_NUM >= 1 && DRIVE_NUM <= ${#AVAILABLE_DRIVES[@]} )); then
+                    SELECTED_DRIVE="${AVAILABLE_DRIVES[$((DRIVE_NUM - 1))]}"
+                    break
+                fi
+                echo "Invalid selection. Try again."
+            done
+        fi
+
+        # --- Destructive operation warning ---
+        echo
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║                                                            ║"
+        echo "║   WARNING: ALL DATA ON $SELECTED_DRIVE WILL BE DESTROYED"
+        echo "║                                                            ║"
+        echo "║   This operation will:                                     ║"
+        echo "║     1. Wipe ALL existing data on the selected drive        ║"
+        echo "║     2. Create a new LUKS2 encrypted volume                 ║"
+        echo "║     3. Format it with ext4                                 ║"
+        echo "║                                                            ║"
+        echo "║   This CANNOT be undone.                                   ║"
+        echo "║                                                            ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo
+        read -r -p "Type 'YES' (all caps) to confirm: " CONFIRM
+
+        if [[ "$CONFIRM" != "YES" ]]; then
+            echo "Aborted — no changes made to $SELECTED_DRIVE."
+        else
+            # --- Passphrase prompt (backup recovery key) ---
+            echo
+            echo "Enter a recovery passphrase. The Pi will auto-unlock using a"
+            echo "keyfile stored on the SD card. This passphrase is a backup for"
+            echo "manual recovery only."
+            while true; do
+                read -r -s -p "Enter LUKS passphrase: " LUKS_PASSPHRASE
+                echo
+                read -r -s -p "Confirm LUKS passphrase: " LUKS_PASSPHRASE_CONFIRM
+                echo
+                if [[ "$LUKS_PASSPHRASE" != "$LUKS_PASSPHRASE_CONFIRM" ]]; then
+                    echo "Passphrases do not match. Try again."
+                elif [[ ${#LUKS_PASSPHRASE} -lt 8 ]]; then
+                    echo "Passphrase must be at least 8 characters."
+                else
+                    break
+                fi
+            done
+
+            # --- Generate random keyfile ---
+            echo "Generating keyfile at /etc/terracrate/luks.key..."
+            mkdir -p /etc/terracrate
+            dd if=/dev/urandom of=/etc/terracrate/luks.key bs=4096 count=1 status=none
+            chmod 400 /etc/terracrate/luks.key
+            chown root:root /etc/terracrate/luks.key
+
+            # --- LUKS format with passphrase ---
+            echo "Formatting $SELECTED_DRIVE with LUKS2 encryption..."
+            echo -n "$LUKS_PASSPHRASE" | cryptsetup luksFormat \
+                --type luks2 --batch-mode "$SELECTED_DRIVE" -
+
+            # --- Add keyfile as secondary key slot ---
+            echo "Adding keyfile to LUKS volume..."
+            echo -n "$LUKS_PASSPHRASE" | cryptsetup luksAddKey \
+                "$SELECTED_DRIVE" /etc/terracrate/luks.key -
+
+            # Clear passphrase from memory
+            unset LUKS_PASSPHRASE LUKS_PASSPHRASE_CONFIRM
+
+            # --- Open and verify ---
+            echo "Opening LUKS volume..."
+            cryptsetup luksOpen "$SELECTED_DRIVE" terracrate-storage \
+                --key-file /etc/terracrate/luks.key
+
+            # --- Create ext4 filesystem ---
+            echo "Creating ext4 filesystem..."
+            mkfs.ext4 -L terracrate-storage /dev/mapper/terracrate-storage -q
+
+            # --- Mount ---
+            mkdir -p /mnt/storage
+            mount /dev/mapper/terracrate-storage /mnt/storage
+            echo "LUKS volume mounted at /mnt/storage"
+
+            # --- Get UUID for stable reference ---
+            LUKS_UUID=$(blkid -s UUID -o value "$SELECTED_DRIVE")
+
+            # --- Install terracrate-luks.service ---
+            LUKS_SVC_SRC="$SCRIPT_DIR/config/terracrate-luks.service"
+            LUKS_SVC_DST="/etc/systemd/system/terracrate-luks.service"
+            if [[ -f "$LUKS_SVC_SRC" ]]; then
+                sed "s|__LUKS_UUID__|$LUKS_UUID|g" "$LUKS_SVC_SRC" > "$LUKS_SVC_DST"
+                echo "Installed terracrate-luks.service (UUID=$LUKS_UUID)"
+            else
+                echo "Error: $LUKS_SVC_SRC not found"
+                exit 1
+            fi
+
+            # --- Enable terracrate-luks.service ---
+            systemctl daemon-reload
+            systemctl enable terracrate-luks
+            echo "Enabled terracrate-luks.service"
+
+            # --- Update docker-compose.yml to use /mnt/storage ---
+            sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
+                "$SCRIPT_DIR/docker-compose.yml"
+            echo "Updated docker-compose.yml to mount /mnt/storage"
+
+            LUKS_ENABLED=true
+            echo
+            echo "LUKS encryption setup complete!"
+            echo "  Drive: $SELECTED_DRIVE"
+            echo "  UUID:  $LUKS_UUID"
+            echo "  Keyfile: /etc/terracrate/luks.key"
+            echo "  Mount point: /mnt/storage"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Install and enable the TerraCrate docker compose service
+# ---------------------------------------------------------------------------
+RUN_USER="${SUDO_USER:-pi}"
 TERRACRATE_SVC_SRC="$SCRIPT_DIR/config/terracrate.service"
 TERRACRATE_SVC_DST="/etc/systemd/system/terracrate.service"
-RUN_USER="${SUDO_USER:-pi}"
 if [[ -f "$TERRACRATE_SVC_SRC" ]]; then
     # Template User= and WorkingDirectory= from the actual install location
     sed -e "s|^User=.*|User=$RUN_USER|" \
         -e "s|^WorkingDirectory=.*|WorkingDirectory=$SCRIPT_DIR|" \
         "$TERRACRATE_SVC_SRC" > "$TERRACRATE_SVC_DST"
+
+    # If LUKS is enabled, patch the unit to depend on terracrate-luks.service
+    if [[ "$LUKS_ENABLED" == "true" ]]; then
+        sed -i -e 's|^After=.*|After=terracrate-luks.service network.target docker.service|' \
+               -e '/^After=/a Requires=terracrate-luks.service\nWants=docker.service' \
+               "$TERRACRATE_SVC_DST"
+        echo "Patched terracrate.service with LUKS dependency"
+    fi
+
     systemctl daemon-reload
     systemctl enable terracrate
-    echo "Installed and enabled terracrate.service -> $TERRACRATE_SVC_DST"
+    systemctl start terracrate
+    echo "Installed, enabled, and started terracrate.service -> $TERRACRATE_SVC_DST"
 else
     echo "Warning: $TERRACRATE_SVC_SRC not found — skipping terracrate.service install"
 fi
@@ -224,7 +401,11 @@ echo "   (Customize MDNS_HOSTNAME in .env to change the hostname)"
 echo
 echo "WiFi fallback: if the Pi cannot join a known network on boot it will"
 echo "  broadcast an AP — SSID is TerraCrate-AP, passphrase is in $ENV_FILE (AP_PASSPHRASE)"
-echo
-echo "Next steps:"
-echo "  docker compose up -d"
-echo
+if [[ "$LUKS_ENABLED" == "true" ]]; then
+    echo
+    echo "LUKS encryption: storage drive is encrypted and auto-unlocks on boot."
+    echo "  Keyfile: /etc/terracrate/luks.key (on SD card)"
+    echo "  Recovery: use your passphrase with cryptsetup luksOpen if the keyfile is lost"
+    echo "  Units: terracrate-luks.service -> terracrate.service (patched with LUKS dependency)"
+fi
+
