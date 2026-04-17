@@ -1,0 +1,16 @@
+[Unit]
+Description=TerraCrate LUKS Storage Unlock and Mount
+DefaultDependencies=no
+After=systemd-udevd.service local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c '/usr/sbin/cryptsetup status terracrate-store >/dev/null 2>&1 || /usr/sbin/cryptsetup luksOpen /dev/disk/by-uuid/__LUKS_UUID__ terracrate-store --key-file /etc/terracrate/luks.key'
+ExecStart=/bin/sh -c 'mountpoint -q /mnt/storage || /usr/bin/mount /dev/mapper/terracrate-store /mnt/storage'
+ExecStop=/usr/bin/umount /mnt/storage
+ExecStop=/usr/sbin/cryptsetup luksClose terracrate-store
+
+[Install]
+WantedBy=multi-user.target
