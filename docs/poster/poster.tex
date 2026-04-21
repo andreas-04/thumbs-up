@@ -1,0 +1,171 @@
+%!TEX program = xelatex
+\documentclass[aspectratio=169]{beamer}
+
+% ---------- packages ----------
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage[absolute,overlay]{textpos}
+
+% ---------- font ----------
+\setmainfont{GeistMono}[
+  Extension      = .ttf,
+  UprightFont    = *-Regular,
+  BoldFont       = *-Bold,
+  ItalicFont     = *-Italic,
+  BoldItalicFont = *-BoldItalic,
+  Path           = ./fonts/
+]
+\setsansfont{GeistMono}[
+  Extension      = .ttf,
+  UprightFont    = *-Regular,
+  BoldFont       = *-Bold,
+  ItalicFont     = *-Italic,
+  Path           = ./fonts/
+]
+\setmonofont{GeistMono}[
+  Extension      = .ttf,
+  UprightFont    = *-Regular,
+  BoldFont       = *-Bold,
+  Path           = ./fonts/
+]
+
+% ---------- beamer theme ----------
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+\setbeamertemplate{footline}{}
+
+% White background
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{normal text}{fg=black}
+
+% ---------- colours ----------
+\definecolor{uigold}{HTML}{FFCD00}
+\definecolor{uiblack}{HTML}{1A1A1A}
+
+% ---------- kill beamer spacing ----------
+\setlength{\parskip}{0pt}
+\setlength{\parsep}{0pt}
+\setlength{\itemsep}{0pt}
+\setlength{\topsep}{0pt}
+\linespread{0.82}
+
+% ---------- text position unit ----------
+\setlength{\TPHorizModule}{\paperwidth}
+\setlength{\TPVertModule}{\paperheight}
+
+% ---------- pill label command ----------
+% Usage: \pillhead{Label Text}
+\newcommand{\pillhead}[1]{%
+  \tikz[baseline=(n.base)]\node[
+    fill=uiblack,
+    rounded corners=3pt,
+    inner xsep=4pt,
+    inner ysep=2pt,
+  ](n){\textcolor{uigold}{\fontsize{6}{7}\selectfont\bfseries #1}};%
+}
+
+% ======================================================================
+\begin{document}
+\begin{frame}[t]
+
+% ---- dark header band ----
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[uiblack] (current page.north west)
+    rectangle ([yshift=-0.185\paperheight]current page.north east);
+\end{tikzpicture}
+
+% ---- gold column dividers ----
+\begin{tikzpicture}[remember picture, overlay]
+  \draw[uigold, line width=0.5pt]
+    ([xshift=0.335\paperwidth, yshift=-0.185\paperheight]current page.north west)
+    -- ([xshift=0.335\paperwidth]current page.south west);
+  \draw[uigold, line width=0.5pt]
+    ([xshift=0.667\paperwidth, yshift=-0.185\paperheight]current page.north west)
+    -- ([xshift=0.667\paperwidth]current page.south west);
+\end{tikzpicture}
+
+% ---- top-left: EXPO logo ----
+\begin{textblock}{0.28}(0.02, 0.02)
+  \includegraphics[height=1.2cm]{expo.png}
+\end{textblock}
+
+% ---- top-right: UI Block I logo ----
+\begin{textblock}{0.10}(0.91, -0.01)
+  \includegraphics[height=1.6cm]{uiLogo.png}
+\end{textblock}
+
+% ---- bottom-right: College of Engineering logo ----
+\begin{textblock}{0.25}(0.82, 0.90)
+  \includegraphics[height=0.7cm]{UIcollegeOfEngLogo.png}
+\end{textblock}
+
+% ---- title ----
+\begin{textblock}{0.55}(0.25, 0.03)
+  {\fontsize{11}{12}\selectfont\bfseries\color{white} TerraCrate}
+\end{textblock}
+
+% ---- subtitle ----
+\begin{textblock}{0.65}(0.25, 0.09)
+  {\fontsize{5}{6}\selectfont\color{uigold} Secure, offline-first file storage for local networks}
+\end{textblock}
+
+% ---- authors ----
+\begin{textblock}{0.65}(0.25, 0.135)
+  {\fontsize{4.5}{5.5}\selectfont\color{white} Andreas Neacsu, Adam Cobb, Kevin Ellis, and Devon Bryce}
+\end{textblock}
+
+% ==============================================================
+% COLUMN 1  (x = 0.02, width = 0.295)
+% ==============================================================
+
+% -- Value Proposition --
+\begin{textblock}{0.295}(0.02, 0.2)
+  \setlength{\baselineskip}{4pt}\setlength{\parskip}{1pt}%
+  \pillhead{Value Proposition}\vspace{3pt}\par
+  {\fontsize{5}{6}\selectfont\setlength{\baselineskip}{6.5pt}%
+    Existing file-sharing solutions force a trade-off between security and portability.
+    USB drives lack access control, commercial NAS requires permanent infrastructure,
+    and cloud platforms introduce third-party trust dependencies and internet requirements.
+    No lightweight solution combines certificate-based authentication, fine-grained access
+    control, and zero-configuration discovery in a single self-contained device.\par}
+\end{textblock}
+
+% -- Objective --
+\begin{textblock}{0.295}(0.02, 0.53)
+  \setlength{\baselineskip}{4pt}\setlength{\parskip}{1pt}%
+  \pillhead{Objective}\vspace{3pt}\par
+  {\fontsize{5}{6}\selectfont\setlength{\baselineskip}{6.5pt}%
+    Build a portable, self-hosted file server on a Raspberry Pi that provides secure
+    multi-user file sharing with mTLS authentication, three-tier permissions, and mDNS
+    discovery, deployable in any environment without cloud infrastructure or client
+    software beyond a browser.\par}
+\end{textblock}
+
+% -- Problem Definition --
+\begin{textblock}{0.295}(0.02, 0.76)
+  \setlength{\baselineskip}{4pt}\setlength{\parskip}{1pt}%
+  \pillhead{Problem Definition}\vspace{3pt}\par
+  {\fontsize{5}{6}\selectfont\setlength{\baselineskip}{6.5pt}%
+    TerraCrate gives you full custody of your data in a device you can carry in your
+    pocket. Plug it in and it is discoverable. Approve a user and they get a certificate
+    in their inbox. Pull the plug and your data goes with you. No cloud, no residue,
+    no trust required.\par}
+\end{textblock}
+
+% ==============================================================
+% COLUMN 2  (x = 0.352, width = 0.29)
+% ==============================================================
+
+
+
+% ==============================================================
+% COLUMN 3  (x = 0.684, width = 0.29)
+% ==============================================================
+
+
+
+\end{frame}
+\end{document}

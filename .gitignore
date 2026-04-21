@@ -8,3 +8,9 @@ config.env
 **/dist/
 **/storage/
 *.pyc
+*.toc
+*.log
+*.aux
+*.out
+*.snm
+*.nav
