@@ -1,14 +1,15 @@
+%%{init: {'theme': 'base', 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100, 'wrappingWidth': 300, 'diagramPadding': 30}, 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#f1f5f9', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'monospace', 'fontSize': '28px'}}}%%
 graph TB
     subgraph Roles["User Roles"]
-        Admin["🔑 Admin<br/>role = 'admin'<br/>2-hour session<br/>Bypasses all permission checks"]
-        ApprovedUser["👤 Approved User<br/>role = 'user'<br/>is_approved = true<br/>24-hour session"]
-        PendingUser["⏳ Pending User<br/>role = 'user'<br/>is_approved = false"]
+        Admin["Admin<br/>role = 'admin'<br/>2-hour session<br/>Bypasses all permission checks"]
+        ApprovedUser["Approved User<br/>role = 'user'<br/>is_approved = true<br/>24-hour session"]
+        PendingUser["Pending User<br/>role = 'user'<br/>is_approved = false"]
     end
 
-    subgraph PermTiers["Three-Tier Permission Resolution (core/permissions.py)"]
-        Tier1["Tier 1: Domain Defaults<br/>DomainConfig matched by email domain<br/>Base read/write per folder path"]
-        Tier2["Tier 2: Group Permissions<br/>OR across all user groups<br/>Overrides domain at same path"]
-        Tier3["Tier 3: User Overrides<br/>Tri-state: allow / deny / None<br/>allow and deny override lower tiers<br/>None defers to group or domain"]
+    subgraph PermTiers["Three-Tier Permission Resolution"]
+        Tier1["Tier 1: Domain Defaults<br/>DomainConfig matched by email domain<br/>"]
+        Tier2["Tier 2: Group Permissions<br/>OR across all user groups<br/>"]
+        Tier3["Tier 3: User Overrides<br/>allow / deny / None<br/>allow and deny override lower tiers<br/>None defers to group or domain"]
     end
 
     subgraph Capabilities["Permission Capabilities"]
@@ -19,12 +20,12 @@ graph TB
     end
 
     subgraph Enforcement["Enforcement Points"]
-        JWTCheck["JWT Token Validation<br/>@auth.require_auth()"]
-        AdminCheck["Admin Role Check<br/>@auth.require_admin()"]
-        mTLSCheck["mTLS Certificate Check<br/>X-SSL-Client-Verify<br/>+ CRL revocation check"]
-        ACLCheck["Layered ACL Check<br/>check_access() via<br/>resolve_permissions()"]
-        ApprovalCheck["Approval Check<br/>is_approved flag"]
-        AuditCheck["Audit Logging<br/>utils/audit.py"]
+        JWTCheck["JWT Token Validation"]
+        AdminCheck["Admin Role Check"]
+        mTLSCheck["mTLS Certificate Check"]
+        ACLCheck["Layered ACL Check"]
+        ApprovalCheck["Approval Check"]
+        AuditCheck["Audit Logging"]
     end
 
     Admin -->|"Full Access"| SysMgmt
@@ -45,3 +46,5 @@ graph TB
     FileAccess -.->|"Non-admin requires"| mTLSCheck
     FileAccess -.->|"Requires"| ACLCheck
     FileAccess -.->|"Requires"| ApprovalCheck
+    classDef darkNode fill:#1e293b,stroke:#475569,color:#f1f5f9
+    class Admin,ApprovedUser,PendingUser,Tier1,Tier2,Tier3,SysMgmt,UserAdmin,FileAccess,AuthOnly,JWTCheck,AdminCheck,mTLSCheck,ACLCheck,ApprovalCheck,AuditCheck darkNode

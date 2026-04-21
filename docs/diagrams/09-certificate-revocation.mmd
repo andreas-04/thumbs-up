@@ -1,3 +1,4 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#f1f5f9', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'monospace'}}}%%
 flowchart TD
     subgraph Triggers["Revocation Triggers"]
         AdminRevoke["Admin Action<br/>POST /api/v1/users/id/revoke-cert"]
@@ -60,3 +61,5 @@ flowchart TD
     LogMismatch --> CountWindow --> ThresholdCheck
     ThresholdCheck -->|Yes| FindAbused --> AutoRevoke --> GetSerial
     ThresholdCheck -->|No| Ignore(["No action"])
+    classDef darkNode fill:#1e293b,stroke:#475569,color:#f1f5f9
+    class AdminRevoke,CNAbuse,ExpiryApproach,Reissue,GetSerial,CreateRecord,UpdateUser,RebuildCRL,WriteCRL,AuditEntry,SendEmail,NginxCRL,Reject,GenNewCert,UpdateSerial,EmailNewCert,LogMismatch,CountWindow,FindAbused,AutoRevoke,Ignore darkNode

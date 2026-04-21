@@ -1,3 +1,4 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#f1f5f9', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'monospace'}}}%%
 graph TB
     subgraph Clients["Client Layer"]
         Browser["Web Browser"]
@@ -13,15 +14,23 @@ graph TB
 
         subgraph BackendContainer["Backend Container (Flask)"]
             Flask["Flask API Server<br/>Port 8443"]
-            Auth["JWT Auth Module<br/>core/auth.py"]
-            PermResolver["Permission Resolver<br/>core/permissions.py"]
-            FileOps["File Operations<br/>(CRUD + rename/move/preview)"]
-            UserMgmt["User & Group Management"]
-            CertGen["Certificate Generator<br/>+ CRL Management<br/>utils/generate_certs.py"]
-            CertRevoke["Certificate Revocation<br/>Engine"]
-            EmailSvc["Email Service<br/>utils/email_sender.py"]
-            AuditLog["Audit Logger<br/>utils/audit.py"]
-            DockerAPI["Docker API Client<br/>(system logs)"]
+            subgraph AuthGroup["Auth & Permissions"]
+                Auth["JWT Auth Module<br/>core/auth.py"]
+                PermResolver["Permission Resolver<br/>core/permissions.py"]
+            end
+            subgraph DataGroup["Data & Files"]
+                FileOps["File Operations<br/>(CRUD + rename/move/preview)"]
+                UserMgmt["User & Group Management"]
+            end
+            subgraph CertGroup["Certificate Services"]
+                CertGen["Certificate Generator<br/>+ CRL Management<br/>utils/generate_certs.py"]
+                CertRevoke["Certificate Revocation<br/>Engine"]
+            end
+            subgraph UtilGroup["Utilities"]
+                EmailSvc["Email Service<br/>utils/email_sender.py"]
+                AuditLog["Audit Logger<br/>utils/audit.py"]
+                DockerAPI["Docker API Client<br/>(system logs)"]
+            end
         end
 
         subgraph Storage["Persistent Volumes"]
@@ -64,3 +73,9 @@ graph TB
     EmailSvc -->|"SMTP"| SMTP
     DockerAPI -->|"Read-only"| DockerSock
     Flask -.->|"Advertise"| mDNS
+
+    Storage ~~~ Host
+    classDef darkNode fill:#1e293b,stroke:#475569,color:#f1f5f9
+    classDef dbNode fill:#0f172a,stroke:#475569,color:#f1f5f9
+    class Browser,Mobile,Nginx,SPA,mTLS,Flask,Auth,PermResolver,FileOps,UserMgmt,CertGen,CertRevoke,EmailSvc,AuditLog,DockerAPI,Certs,FileStore,SMTP,mDNS,DockerSock darkNode
+    class DB dbNode

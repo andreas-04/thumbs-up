@@ -1,3 +1,4 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#f1f5f9', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'monospace'}}}%%
 flowchart TD
     subgraph Sources["Audit Event Sources"]
         UserAPI["User Management<br/>Create, update, delete,<br/>approve users"]
@@ -21,9 +22,6 @@ flowchart TD
         LogStats["GET /api/v1/audit-logs/stats<br/>Aggregate summaries"]
     end
 
-    subgraph Frontend["Admin UI"]
-        AuditPage["Audit Log Page<br/>/admin/audit-log<br/>Filterable table view"]
-    end
 
     UserAPI --> LogEntry
     CertOps --> LogEntry
@@ -37,5 +35,9 @@ flowchart TD
     DB --> ListLogs
     DB --> LogStats
 
-    ListLogs --> AuditPage
-    LogStats --> AuditPage
+
+
+    classDef darkNode fill:#1e293b,stroke:#475569,color:#f1f5f9
+    classDef dbNode fill:#0f172a,stroke:#475569,color:#f1f5f9
+    class UserAPI,CertOps,PermOps,FileOps,AuthEvents,SettingsOps,LogEntry,ListLogs,LogStats darkNode
+    class DB dbNode

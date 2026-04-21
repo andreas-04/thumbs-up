@@ -1,0 +1,40 @@
+%%{init: {'theme': 'base', 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100, 'wrappingWidth': 300, 'diagramPadding': 30}, 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#f1f5f9', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'monospace', 'fontSize': '28px'}}}%%
+graph
+    Client["Browser / Mobile\n(X.509 cert installed)"]
+
+    subgraph Pi["Raspberry Pi"]
+        subgraph Frontend["Frontend Container"]
+            Nginx["Nginx\nmTLS termination\nCRL enforcement"]
+            SPA["React SPA"]
+        end
+
+        subgraph Backend["Backend Container"]
+            Flask["Flask API"]
+            Auth["JWT + bcrypt"]
+            Perms["3-tier permissions\n(domain / group / user)"]
+            CertSvc["Cert lifecycle\ngen + revoke + CRL"]
+        end
+
+        subgraph Volumes["Persistent Volumes"]
+            DB[("SQLite")]
+            Certs["Certs + CRL"]
+            Files["File Storage"]
+        end
+    end
+
+    SMTP["SMTP\n(cert delivery)"]
+    mDNS["Avahi mDNS\n(.local discovery)"]
+
+    Client -->|"HTTPS + mTLS"| Nginx
+    Nginx --> SPA
+    Nginx -->|"proxy + SSL headers"| Flask
+    Nginx --- Certs
+    Flask --- Auth
+    Flask --- Perms
+    Flask --- CertSvc
+    Auth --- DB
+    Perms --- DB
+    CertSvc --- Certs
+    Flask --- Files
+    CertSvc -->|"PKCS12 bundle"| SMTP
+    Pi -.->|"zero-config"| mDNS
