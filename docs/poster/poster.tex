@@ -43,8 +43,8 @@
 \setbeamercolor{normal text}{fg=black}
 
 % ---------- colours ----------
-\definecolor{uigold}{HTML}{FFCD00}
-\definecolor{uiblack}{HTML}{2C2C2E}
+\definecolor{uigold}{HTML}{061025}
+\definecolor{uiblack}{HTML}{696969}
 
 % ---------- kill beamer spacing ----------
 \setlength{\parskip}{0pt}
@@ -62,7 +62,7 @@
 \newcommand{\pillhead}[1]{%
   \tikz[baseline=(n.base)]\node[
     fill=uiblack,
-    rounded corners=20pt,
+    rounded corners=0pt,
     inner xsep=24pt,
     inner ysep=12pt,
   ](n){\textcolor{uigold}{\fontsize{42}{50}\selectfont\bfseries #1}};%
@@ -127,15 +127,11 @@
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Value Proposition}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
-    Existing file-sharing solutions force a trade-off between security and portability.
-    USB drives lack access control, commercial NAS requires permanent infrastructure,
-    and cloud platforms introduce third-party trust dependencies and internet requirements.
-    No lightweight solution combines certificate based authentication, fine-grained access
-    control, and zero configuration discovery in a single self contained device.\par}
+    No lightweight solution combines certificate-based authentication, fine-grained access control, and zero-config discovery in one device.\par}
 \end{textblock}
 
 % -- Objective --
-\begin{textblock}{0.295}(0.02, 0.37)
+\begin{textblock}{0.295}(0.02, 0.265)
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Objective}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
@@ -146,30 +142,40 @@
 \end{textblock}
 
 % -- Problem Definition --
-\begin{textblock}{0.295}(0.02, 0.52)
+\begin{textblock}{0.295}(0.02, 0.41)
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Problem Definition}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
-    TerraCrate gives you full custody of your data in a device you can carry in your
-    pocket. Plug it in and it is discoverable. Approve a user and they get a certificate
-    in their inbox. Pull the plug and your data goes with you. No cloud, no residue,
-    no trust required.\par}
+    Pocket-sized, self-contained file storage with certificate-based access. Plug in, sign up, and your certificate arrives by email. Unplug to take your data. No cloud, no residue.\par}
 \end{textblock}
-\begin{textblock}{0.295}(0.02, 0.67)
+
+% -- guest image --
+\begin{textblock}{0.295}(0.02, 0.52)
+  \includegraphics[width=\linewidth]{guest.png}
+\end{textblock}
+\begin{textblock}{0.295}(0.02, 0.75)
+  {\fontsize{24}{30}\selectfont\itshape\color{black} Users can browse shared files
+  directly in the browser after installing their client certificate.\par}
+\end{textblock}
+
+\begin{textblock}{0.295}(0.02, 0.778)
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Key Requirements}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
- All communication must occur over HTTPS, with regular users authenticating via mutual TLS. The system must handle the full certificate lifecycle including generation, delivery via SMTP, and CRL-enforced revocation. A three-tier permission model spanning domain, group, and per-user overrides govern folder access. The device must advertise itself via mDNS with a Wi-Fi AP fallback for infrastructure less environments. All security relevant actions must be recorded in an audit log, and the entire system must run self-contained with no external dependencies.\par}
+    All traffic uses HTTPS; regular users authenticate via mTLS. The full certificate
+    lifecycle is managed on-device. A three-tier permission model covers domain, group, and per-user overrides. mDNS
+    with Wi-Fi AP fallback enables zero-config discovery. All security events are
+    logged and the system runs fully self-contained.\par}
 \end{textblock}
 
 % -- bottom-left images --
-\begin{textblock}{0.05}(0, 0.932)
+\begin{textblock}{0.04}(0, 0.946)
   \includegraphics[width=\linewidth]{9.PNG}
 \end{textblock}
-\begin{textblock}{0.05}(0.05, 0.932)
+\begin{textblock}{0.04}(0.04, 0.946)
   \includegraphics[width=\linewidth]{11.PNG}
 \end{textblock}
-\begin{textblock}{0.05}(0.1, 0.932)
+\begin{textblock}{0.04}(0.08, 0.946)
   \includegraphics[width=\linewidth]{12.PNG}
 \end{textblock}
 
@@ -218,30 +224,38 @@ Two prior designs were evaluated: an SMB-over-mTLS approach requiring client-sid
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Validation}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
-    TerraCrate is validated through automated testing, static analysis, and security evaluation. The backend has 105 unit tests covering authentication, permission resolution, certificate lifecycle, and path traversal prevention, with security-critical invariants explicitly verified: token expiry, deny override logic, and CN mismatch triggered revocation.
-The frontend enforces quality through ESLint, TypeScript strict mode, and Vite build verification. A GitHub Actions pipeline enforces all checks on every push before code reaches the main branch.
-Security was evaluated against threats inherent to an untrusted wireless environment. mTLS provides replay and session hijacking resistance, bcrypt with short-lived JWTs limits credential exposure, and the CRL ensures immediate access termination on revocation. All administrative actions are captured in a queryable audit log supporting forensics and access accountability.\par}
+    The backend is verified by 105 unit tests across authentication, permission resolution,
+    certificate lifecycle, and path traversal prevention. The frontend is enforced through
+    ESLint, TypeScript strict mode, and Vite builds. A three-workflow GitHub Actions
+    pipeline runs linting, type checking, all backend tests, and Docker builds on every push.\par}
+\end{textblock}
+
+% -- sys-log image --
+\begin{textblock}{0.29}(0.684, 0.373)
+  \includegraphics[width=\linewidth]{sys-log.png}
+\end{textblock}
+\begin{textblock}{0.29}(0.684, 0.6)
+  {\fontsize{24}{30}\selectfont\itshape\color{black} The real-time audit log captures every
+  security-relevant action with timestamp, user, and outcome for auditability.\par}
 \end{textblock}
 
 % -- Conclusion --
-\begin{textblock}{0.29}(0.684, 0.56)
+\begin{textblock}{0.29}(0.684, 0.65)
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Conclusion}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
-    TerraCrate delivers a secure, portable, self-hosted file sharing system that operates
-    entirely without cloud infrastructure. By delegating mTLS verification to Nginx, the
-    system achieves cryptographic mutual authentication with no client-side software
-    beyond a standard browser. The three-tier permission model, automated certificate
-    lifecycle management, mDNS discovery, and comprehensive audit logging together
-    satisfy all core requirements defined by the client. Future work includes clustered deployment, SMB filesystem access, peer-to-peer synchronization, attribute-based encryption, and anomaly detection on access logs.\par}
+    TerraCrate delivers a secure, portable, self-hosted file sharing system with no cloud
+    dependencies. mTLS verification delegated to Nginx provides cryptographic mutual
+    authentication requiring only a browser. The three-tier permissions, certificate
+    lifecycle, mDNS discovery, and audit logging satisfy all core requirements.\par}
 \end{textblock}
 
 % -- Acknowledgements --
-\begin{textblock}{0.29}(0.684, 0.845)
+\begin{textblock}{0.29}(0.684, 0.85)
   \setlength{\baselineskip}{28pt}\setlength{\parskip}{6pt}%
   \pillhead{Acknowledgements}\vspace{18pt}\par
   {\fontsize{28}{36}\selectfont\setlength{\baselineskip}{38pt}%
-    The team would like to thank Dr.\ Konstantinos Kolias proposing the project and providing guidance
+    The team would like to thank Dr.\ Constantinos Kolias proposing the project and providing guidance
     throughout the design process.\par}
 \end{textblock}
 
