@@ -55,7 +55,7 @@
     "react-dnd-html5-backend": "16.0.1",
     "react-hook-form": "7.71.2",
     "react-popper": "2.3.0",
-    "react-resizable-panels": "^4.6.5",
+    "react-resizable-panels": "^4.8.0",
     "react-responsive-masonry": "2.7.1",
     "react-router": "7.13.1",
     "react-slick": "0.31.0",
