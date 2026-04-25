@@ -12,7 +12,7 @@ aiohttp-cors>=0.7.0
 
 # Authentication & Security
 PyJWT==2.8.0
-cryptography>=41.0.7
+cryptography>=47.0.0
 
 # QR Code Generation
 qrcode[pil]>=7.4.2
