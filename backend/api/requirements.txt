@@ -8,7 +8,7 @@ Werkzeug==3.0.1
 
 # Async HTTP (for apiv1 if needed)
 aiohttp>=3.9.0
-aiohttp-cors>=0.7.0
+aiohttp-cors>=0.8.1
 
 # Authentication & Security
 PyJWT==2.8.0
