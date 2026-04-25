@@ -24,4 +24,4 @@ python-dotenv==1.0.0
 bcrypt==5.0.0
 
 # Docker API (for system log viewer)
-docker>=7.0.0
+docker>=7.1.0
