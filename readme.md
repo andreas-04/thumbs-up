@@ -2,6 +2,8 @@
 
 ### TerraCrate is a secure, self hosted file sharing solution for a Raspberry Pi
 
+#### University of Idaho Capstone Project
+
 ## Quick Start
 
 ```bash
