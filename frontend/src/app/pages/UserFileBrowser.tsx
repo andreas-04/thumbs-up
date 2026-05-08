@@ -119,40 +119,13 @@ export default function UserFileBrowser() {
   };
 
   const handleDownload = (item: FileItem) => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const url = `${baseUrl}/api/v1/files/download?path=${encodeURIComponent(item.path)}`;
-    const token = localStorage.getItem('auth_token');
-
-    if (token) {
-      fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(response => {
-          if (!response.ok) throw new Error('Download failed');
-          return response.blob();
-        })
-        .then(blob => {
-          const blobUrl = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          link.download = item.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        })
-        .catch(err => {
-          console.error('Download error:', err);
-          setError('Download failed');
-        });
-    } else {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = item.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    const url = api.getDownloadUrl(item.path);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const goBack = () => {

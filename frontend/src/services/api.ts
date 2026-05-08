@@ -593,6 +593,12 @@ class ApiClient {
     return response.json();
   }
 
+  getDownloadUrl(path: string): string {
+    const params = new URLSearchParams({ path });
+    if (this.token) params.set('token', this.token);
+    return `${this.baseUrl}/api/v1/files/download?${params.toString()}`;
+  }
+
   async downloadFile(path: string): Promise<Response> {
     const queryParams = new URLSearchParams({ path });
     const endpoint = `/api/v1/files/download?${queryParams.toString()}`;

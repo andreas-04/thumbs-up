@@ -251,36 +251,13 @@ export default function FileBrowser() {
   };
 
   const downloadFile = (filePath: string, fileName: string) => {
-    const token = localStorage.getItem('auth_token');
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const url = `${baseUrl}/api/v1/files/download?path=${encodeURIComponent(filePath)}`;
-    
+    const url = api.getDownloadUrl(filePath);
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
-    
-    if (token) {
-      fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(response => {
-          if (!response.ok) throw new Error('Download failed');
-          return response.blob();
-        })
-        .then(blob => {
-          const blobUrl = URL.createObjectURL(blob);
-          link.href = blobUrl;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        })
-        .catch(err => console.error('Download error:', err));
-    } else {
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (

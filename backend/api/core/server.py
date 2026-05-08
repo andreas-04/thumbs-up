@@ -5,6 +5,7 @@ Ad-hoc file sharing server with web interface.
 """
 
 import os
+import shutil
 import socket
 import ssl
 import sys
@@ -1538,10 +1539,7 @@ def api_guest_download_file():
 
     log_audit("file.guest_download", target_type="file", target_id=path, description=f"Guest downloaded {path}")
 
-    return send_file(str(file_path), as_attachment=True)
-
-
-@app.route("/api/v1/files", methods=["GET"])
+    return send_file(str(file_path), as_attachment=True, conditional=True)
 @auth.require_auth()
 def api_list_files():
     """List files in directory.
@@ -1640,7 +1638,8 @@ def api_upload_file():
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / filename
 
-    file.save(str(target_path))
+    with open(str(target_path), "wb") as dest:
+        shutil.copyfileobj(file.stream, dest, 1024 * 1024)  # stream in 1 MiB chunks
 
     # Return file info
     stat = target_path.stat()
@@ -1695,10 +1694,7 @@ def api_download_file():
 
     log_audit("file.download", target_type="file", target_id=path, description=f"Downloaded {path}")
 
-    return send_file(str(file_path), as_attachment=True)
-
-
-@app.route("/api/v1/files/preview", methods=["GET"])
+    return send_file(str(file_path), as_attachment=True, conditional=True)
 @auth.require_auth()
 def api_preview_file():
     """Stream file inline for in-browser preview (requires authentication)."""
@@ -2591,7 +2587,8 @@ def upload_file():
     full_path = os.path.join(CONFIG["STORAGE_PATH"], path, filename)
 
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    file.save(full_path)
+    with open(full_path, "wb") as dest:
+        shutil.copyfileobj(file.stream, dest, 1024 * 1024)  # stream in 1 MiB chunks
 
     token = auth.get_token_from_request()
     return redirect(f"/?path={path}&token={token}")
