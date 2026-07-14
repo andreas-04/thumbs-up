@@ -1,0 +1,71 @@
+// System settings and the admin dashboard stats.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// System settings. `smtpPassword` is always masked ("*****" when set,
+// "" otherwise).
+message SystemSettings {
+  int32 id = 1;
+  // "email", "email+password", or "username+password".
+  string auth_method = 2;
+  bool tls_enabled = 3;
+  int32 https_port = 4;
+  string device_name = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  bool smtp_enabled = 7;
+  string smtp_host = 8;
+  int32 smtp_port = 9;
+  string smtp_username = 10;
+  string smtp_password = 11;
+  string smtp_from_email = 12;
+  bool smtp_use_tls = 13;
+  repeated string allowed_domains = 14;
+}
+
+// Partial update; only present fields are applied. Sending smtpPassword as
+// the mask "*****" leaves the stored password unchanged.
+message UpdateSettingsRequest {
+  optional string auth_method = 1;
+  optional bool tls_enabled = 2;
+  optional int32 https_port = 3;
+  optional string device_name = 4;
+  optional bool smtp_enabled = 5;
+  optional string smtp_host = 6;
+  optional int32 smtp_port = 7;
+  optional string smtp_username = 8;
+  optional string smtp_password = 9;
+  optional string smtp_from_email = 10;
+  optional bool smtp_use_tls = 11;
+  repeated string allowed_domains = 12;
+}
+
+message DashboardStats {
+  int32 user_count = 1;
+  int32 file_count = 2;
+  int32 folder_count = 3;
+  int64 total_size = 4;
+  bool tls_enabled = 5;
+}
+
+service SettingsService {
+  // Public (unauthenticated) read.
+  rpc GetSettings(google.protobuf.Empty) returns (SystemSettings) {
+    option (google.api.http) = {get: "/api/v1/settings"};
+  }
+  // Admin only.
+  rpc UpdateSettings(UpdateSettingsRequest) returns (SystemSettings) {
+    option (google.api.http) = {
+      put: "/api/v1/settings"
+      body: "*"
+    };
+  }
+  // Admin only.
+  rpc GetDashboardStats(google.protobuf.Empty) returns (DashboardStats) {
+    option (google.api.http) = {get: "/api/v1/stats/dashboard"};
+  }
+}

@@ -1,0 +1,83 @@
+// Authentication: login, signup, session management, password change.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "terracrate/v1/common.proto";
+import "terracrate/v1/user.proto";
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message SignupRequest {
+  string email = 1;
+  string password = 2;
+  // Accepted for backwards compatibility; ignored.
+  string username = 3;
+}
+
+// JWT plus the authenticated user.
+message TokenUserResponse {
+  string token = 1;
+  User user = 2;
+}
+
+message TokenResponse {
+  string token = 1;
+}
+
+message MeResponse {
+  UserDetail user = 1;
+}
+
+message SignupResponse {
+  string token = 1;
+  User user = 2;
+  // One-time link to download the mTLS client certificate; empty when the
+  // signup domain has no certificate flow configured.
+  string claim_url = 3;
+}
+
+message ChangePasswordRequest {
+  // May be omitted on a forced first-time password change
+  // (requiresPasswordChange = true).
+  string current_password = 1;
+  string new_password = 2;
+}
+
+service AuthService {
+  // 200 on success; 401 INVALID_CREDENTIALS otherwise.
+  rpc Login(LoginRequest) returns (TokenUserResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/login"
+      body: "*"
+    };
+  }
+  // 201 for a new account, 200 when claiming a pre-approved account,
+  // 403 DOMAIN_NOT_ALLOWED when the email domain isn't allowlisted.
+  rpc Signup(SignupRequest) returns (SignupResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/signup"
+      body: "*"
+    };
+  }
+  rpc Logout(google.protobuf.Empty) returns (SuccessResponse) {
+    option (google.api.http) = {post: "/api/v1/auth/logout"};
+  }
+  rpc Me(google.protobuf.Empty) returns (MeResponse) {
+    option (google.api.http) = {get: "/api/v1/auth/me"};
+  }
+  rpc Refresh(google.protobuf.Empty) returns (TokenResponse) {
+    option (google.api.http) = {post: "/api/v1/auth/refresh"};
+  }
+  rpc ChangePassword(ChangePasswordRequest) returns (TokenUserResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/change-password"
+      body: "*"
+    };
+  }
+}

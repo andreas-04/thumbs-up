@@ -14,6 +14,7 @@ import Signup from './pages/Signup';
 import PasswordReset from './pages/PasswordReset';
 import CertRequired from './pages/CertRequired';
 import GuestFileBrowser from './pages/GuestFileBrowser';
+import ClaimCert from './pages/ClaimCert';
 
 export const router = createBrowserRouter([
   {
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
   {
     path: '/cert-required',
     Component: CertRequired,
+  },
+  {
+    path: '/claim/:token',
+    Component: ClaimCert,
   },
   {
     path: '/guest',

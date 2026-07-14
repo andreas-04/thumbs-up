@@ -320,7 +320,7 @@ if [[ -f /etc/terracrate/luks.key ]] && [[ -f /etc/systemd/system/terracrate-luk
             echo "LUKS services updated and started"
 
             # Ensure docker-compose.yml uses /mnt/storage
-            sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
+            sed -i "s|^\(\s*-\s*\)./backend/storage:/app/storage|\1/mnt/storage:/app/storage|" \
                 "$SCRIPT_DIR/docker-compose.yml"
 
             LUKS_ENABLED=true
@@ -499,7 +499,7 @@ else
             echo "Enabled terracrate-luks.service"
 
             # --- Update docker-compose.yml to use /mnt/storage ---
-            sed -i "s|^\(\s*-\s*\)./backend/api/storage:/app/storage|\1/mnt/storage:/app/storage|" \
+            sed -i "s|^\(\s*-\s*\)./backend/storage:/app/storage|\1/mnt/storage:/app/storage|" \
                 "$SCRIPT_DIR/docker-compose.yml"
             echo "Updated docker-compose.yml to mount /mnt/storage"
 

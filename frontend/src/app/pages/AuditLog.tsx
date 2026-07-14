@@ -127,14 +127,14 @@ function TerminalPane({ entries, loading, hasMore, onLoadMore, isLive }: Termina
         )}
         {entries.map((e) => (
           <div key={e.id} className="flex gap-2 whitespace-nowrap hover:bg-glass-highlight transition-colors">
-            <span className="text-term-dim" title={formatDate(e.timestamp)}>
-              [{formatTime(e.timestamp)}]
+            <span className="text-term-dim" title={formatDate(e.timestamp ?? '')}>
+              [{formatTime(e.timestamp ?? '')}]
             </span>
             <span className={`${actionColor(e.action)} uppercase w-12 text-right shrink-0`}>
               {e.action.split('.')[0]}
             </span>
             <span className="text-foreground w-44 shrink-0 overflow-hidden text-ellipsis" title={e.userEmail ?? undefined}>
-              {truncateEmail(e.userEmail)}
+              {truncateEmail(e.userEmail ?? null)}
             </span>
             <span className="text-term-dim">→</span>
             <span className="text-foreground flex-1 overflow-hidden text-ellipsis">
@@ -435,7 +435,7 @@ function initialTabState(category?: string): TabState {
     total: 0,
     page: 1,
     pages: 1,
-    filters: category ? { category, page: 1, perPage: 100 } : { page: 1, perPage: 100 },
+    filters: category ? { category, page: 1, limit: 100 } : { page: 1, limit: 100 },
     loading: false,
     initialized: false,
   };
@@ -499,7 +499,7 @@ export default function AuditLog() {
             entries,
             total: res.total,
             page: res.page,
-            pages: res.pages,
+            pages: Math.max(1, Math.ceil(res.total / (res.limit || 100))),
             loading: false,
             initialized: true,
           };
@@ -565,9 +565,9 @@ export default function AuditLog() {
           // Temporarily set filters with since for polling, then reset
           const pollFilters: AuditLogFilters = {
             ...state.filters,
-            since: latest.timestamp,
+            since: latest.timestamp ?? undefined,
             page: 1,
-            perPage: 100,
+            limit: 100,
           };
           api
             .getAuditLogs(pollFilters)

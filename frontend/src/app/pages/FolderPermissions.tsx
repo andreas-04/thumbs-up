@@ -107,7 +107,7 @@ export default function FolderPermissions() {
       const existing = prev.find((p) => p.path === folderPath);
       
       if (existing) {
-        const newVal = nextPermState(existing[permType]);
+        const newVal = nextPermState(existing[permType] ?? null);
         const updated = prev.map((p) =>
           p.path === folderPath ? { ...p, [permType]: newVal } : p
         );
@@ -139,8 +139,8 @@ export default function FolderPermissions() {
 
     // Only send rows where at least one flag is set (allow or deny)
     const cleanedPermissions = permissions
-      .filter((p) => p.read !== null || p.write !== null)
-      .map((p) => ({ path: p.path, read: p.read, write: p.write }));
+      .filter((p) => (p.read ?? null) !== null || (p.write ?? null) !== null)
+      .map((p) => ({ path: p.path, read: p.read ?? null, write: p.write ?? null }));
 
     try {
       await updateUserPermissions(selectedUser.id, cleanedPermissions);

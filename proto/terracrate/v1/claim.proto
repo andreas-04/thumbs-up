@@ -1,0 +1,39 @@
+// One-time certificate claim links.
+//
+// Instead of emailing the .p12 bundle and its import password together,
+// users receive an expiring single-use link. Claiming generates the client
+// certificate on demand, so no key material is stored or sent over email.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+
+message ClaimCertRequest {
+  // The opaque token from the claim URL (/claim/<token>).
+  string token = 1;
+}
+
+message ClaimCertResponse {
+  // PKCS#12 bundle (base64 in JSON) containing the client cert, key, and CA.
+  bytes p12 = 1;
+  string filename = 2;
+  // Import password for the .p12. For admin-invited accounts this is also
+  // the temporary login password (a password change is forced on first
+  // login); empty when the account already has a user-chosen password.
+  string password = 3;
+  // Whether `password` is also the temporary login password.
+  bool password_is_login = 4;
+  string email = 5;
+}
+
+// Public (unauthenticated) endpoint: possession of a valid, unexpired,
+// unused token is the credential.
+service CertClaimService {
+  rpc ClaimCert(ClaimCertRequest) returns (ClaimCertResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/certs/claim"
+      body: "*"
+    };
+  }
+}
