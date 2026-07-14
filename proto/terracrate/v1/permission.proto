@@ -1,0 +1,123 @@
+// Folder permission shapes: user-level tri-state ACLs and the layered
+// (domain -> group -> user) effective-permission breakdown.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// A user-level folder ACL row. `read`/`write` are tri-state:
+// "allow", "deny", or null (defer to group/domain tiers).
+message FolderPermission {
+  int32 id = 1;
+  int32 user_id = 2;
+  string path = 3;
+  optional string read = 4;
+  optional string write = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+// Tri-state permission input for user-level ACL updates.
+message TriStatePermissionInput {
+  string path = 1;
+  optional string read = 2;
+  optional string write = 3;
+}
+
+// Boolean permission input for domain/group ACL updates.
+message BoolPermissionInput {
+  string path = 1;
+  bool read = 2;
+  bool write = 3;
+}
+
+message GetUserPermissionsRequest {
+  int32 user_id = 1;
+}
+
+message UpdateUserPermissionsRequest {
+  int32 user_id = 1;
+  repeated TriStatePermissionInput permissions = 2;
+}
+
+message FolderPermissionsResponse {
+  repeated FolderPermission permissions = 1;
+}
+
+// -- Effective (resolved) permissions with source attribution ---------------
+
+message TierFlags {
+  bool can_read = 1;
+  bool can_write = 2;
+}
+
+message GroupTierEntry {
+  int32 group_id = 1;
+  string group_name = 2;
+  bool can_read = 3;
+  bool can_write = 4;
+}
+
+// Tri-state user tier: "allow", "deny", or null per flag.
+message UserTierFlags {
+  optional string can_read = 1;
+  optional string can_write = 2;
+}
+
+message EffectiveFlags {
+  bool can_read = 1;
+  bool can_write = 2;
+  // "domain", "group", "user", or "none".
+  string source = 3;
+}
+
+message EffectivePermissionEntry {
+  // Null when no domain tier applies at this path.
+  TierFlags domain = 1;
+  repeated GroupTierEntry groups = 2;
+  // Null when no group tier applies at this path.
+  TierFlags group_merged = 3;
+  // Null when no user tier applies at this path.
+  UserTierFlags user = 4;
+  EffectiveFlags effective = 5;
+}
+
+message GetEffectivePermissionsRequest {
+  int32 user_id = 1;
+}
+
+message EffectivePermissionsResponse {
+  // Keyed by normalised folder path (e.g. "/docs").
+  map<string, EffectivePermissionEntry> permissions = 1;
+}
+
+message Folder {
+  string path = 1;
+  string name = 2;
+}
+
+message ListFoldersResponse {
+  repeated Folder folders = 1;
+}
+
+// User-level ACL management (admin only).
+service PermissionService {
+  rpc GetUserPermissions(GetUserPermissionsRequest) returns (FolderPermissionsResponse) {
+    option (google.api.http) = {get: "/api/v1/users/{user_id}/permissions"};
+  }
+  rpc UpdateUserPermissions(UpdateUserPermissionsRequest) returns (FolderPermissionsResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}/permissions"
+      body: "*"
+    };
+  }
+  rpc GetEffectivePermissions(GetEffectivePermissionsRequest) returns (EffectivePermissionsResponse) {
+    option (google.api.http) = {get: "/api/v1/users/{user_id}/effective-permissions"};
+  }
+  // Lists every folder under storage/files for the permission editor UI.
+  rpc ListFolders(google.protobuf.Empty) returns (ListFoldersResponse) {
+    option (google.api.http) = {get: "/api/v1/folders"};
+  }
+}

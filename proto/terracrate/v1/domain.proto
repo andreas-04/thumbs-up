@@ -1,0 +1,79 @@
+// Email-domain configs: default folder permissions for all users of a domain.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "terracrate/v1/common.proto";
+import "terracrate/v1/permission.proto";
+
+message DomainPermission {
+  int32 id = 1;
+  int32 domain_id = 2;
+  string path = 3;
+  bool read = 4;
+  bool write = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message DomainConfig {
+  int32 id = 1;
+  string domain = 2;
+  repeated DomainPermission permissions = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message ListDomainsResponse {
+  repeated DomainConfig domains = 1;
+}
+
+message CreateDomainRequest {
+  string domain = 1;
+  repeated BoolPermissionInput permissions = 2;
+}
+
+message DomainResponse {
+  DomainConfig domain = 1;
+}
+
+message GetDomainRequest {
+  int32 domain_id = 1;
+}
+
+message UpdateDomainRequest {
+  int32 domain_id = 1;
+  optional string domain = 2;
+  repeated BoolPermissionInput permissions = 3;
+}
+
+message DeleteDomainRequest {
+  int32 domain_id = 1;
+}
+
+// Admin-only domain config endpoints.
+service DomainService {
+  rpc ListDomains(google.protobuf.Empty) returns (ListDomainsResponse) {
+    option (google.api.http) = {get: "/api/v1/domains"};
+  }
+  rpc CreateDomain(CreateDomainRequest) returns (DomainResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/domains"
+      body: "*"
+    };
+  }
+  rpc GetDomain(GetDomainRequest) returns (DomainResponse) {
+    option (google.api.http) = {get: "/api/v1/domains/{domain_id}"};
+  }
+  rpc UpdateDomain(UpdateDomainRequest) returns (DomainResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/domains/{domain_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteDomain(DeleteDomainRequest) returns (SuccessResponse) {
+    option (google.api.http) = {delete: "/api/v1/domains/{domain_id}"};
+  }
+}

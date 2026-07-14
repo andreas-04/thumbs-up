@@ -2,7 +2,7 @@ services:
   # Backend API Service
   backend:
     build:
-      context: ./backend/api
+      context: ./backend
       dockerfile: Dockerfile
     container_name: terracrate-backend
     hostname: ${MDNS_HOSTNAME:-terracrate}
@@ -18,13 +18,13 @@ services:
       - SERVICE_NAME=Terracrate File Share
       - CORS_ORIGINS=*
     volumes:
-      - ./backend/api/storage:/app/storage
+      - ./backend/storage:/app/storage
       - terracrate-db:/app/data
       - terracrate-certs:/app/certs
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:8443/health', context=__import__('ssl')._create_unverified_context())"]
+      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=1", "--spider", "https://localhost:8443/health"]
       interval: 30s
       timeout: 10s
       retries: 3

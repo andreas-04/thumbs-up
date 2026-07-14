@@ -1,0 +1,130 @@
+// Permission groups: named sets of users with shared folder ACLs.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "terracrate/v1/common.proto";
+import "terracrate/v1/permission.proto";
+
+message GroupPermission {
+  int32 id = 1;
+  int32 group_id = 2;
+  string path = 3;
+  bool read = 4;
+  bool write = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message GroupMember {
+  int32 id = 1;
+  string email = 2;
+}
+
+// Group without member/permission details.
+message GroupSummary {
+  int32 id = 1;
+  string name = 2;
+  optional string description = 3;
+  int32 member_count = 4;
+  int32 permission_count = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// Group with members and permissions embedded.
+message GroupDetail {
+  int32 id = 1;
+  string name = 2;
+  optional string description = 3;
+  int32 member_count = 4;
+  int32 permission_count = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  repeated GroupMember members = 8;
+  repeated GroupPermission permissions = 9;
+}
+
+message ListGroupsResponse {
+  repeated GroupSummary groups = 1;
+}
+
+message CreateGroupRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message GroupSummaryResponse {
+  GroupSummary group = 1;
+}
+
+message GetGroupRequest {
+  int32 group_id = 1;
+}
+
+message GroupDetailResponse {
+  GroupDetail group = 1;
+}
+
+message UpdateGroupRequest {
+  int32 group_id = 1;
+  optional string name = 2;
+  optional string description = 3;
+}
+
+message DeleteGroupRequest {
+  int32 group_id = 1;
+}
+
+message UpdateGroupPermissionsRequest {
+  int32 group_id = 1;
+  repeated BoolPermissionInput permissions = 2;
+}
+
+message GroupPermissionsResponse {
+  repeated GroupPermission permissions = 1;
+}
+
+message UpdateGroupMembersRequest {
+  int32 group_id = 1;
+  repeated int32 user_ids = 2;
+}
+
+// Admin-only group management endpoints.
+service GroupService {
+  rpc ListGroups(google.protobuf.Empty) returns (ListGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/groups"};
+  }
+  rpc CreateGroup(CreateGroupRequest) returns (GroupSummaryResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/groups"
+      body: "*"
+    };
+  }
+  rpc GetGroup(GetGroupRequest) returns (GroupDetailResponse) {
+    option (google.api.http) = {get: "/api/v1/groups/{group_id}"};
+  }
+  rpc UpdateGroup(UpdateGroupRequest) returns (GroupDetailResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/groups/{group_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteGroup(DeleteGroupRequest) returns (SuccessResponse) {
+    option (google.api.http) = {delete: "/api/v1/groups/{group_id}"};
+  }
+  rpc UpdateGroupPermissions(UpdateGroupPermissionsRequest) returns (GroupPermissionsResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/groups/{group_id}/permissions"
+      body: "*"
+    };
+  }
+  rpc UpdateGroupMembers(UpdateGroupMembersRequest) returns (GroupDetailResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/groups/{group_id}/members"
+      body: "*"
+    };
+  }
+}
