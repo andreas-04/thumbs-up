@@ -1,0 +1,192 @@
+// User accounts, admin user management, and client-certificate lifecycle.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "terracrate/v1/common.proto";
+import "terracrate/v1/permission.proto";
+
+message GroupRef {
+  int32 id = 1;
+  string name = 2;
+}
+
+// Public user shape.
+message User {
+  int32 id = 1;
+  string email = 2;
+  // "admin" or "user".
+  string role = 3;
+  // True while the account still uses its initial PIN / temporary password.
+  bool requires_password_change = 4;
+  bool is_approved = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_login = 7;
+  repeated GroupRef groups = 8;
+  bool cert_revoked = 9;
+  google.protobuf.Timestamp cert_issued_at = 10;
+  google.protobuf.Timestamp cert_expires_at = 11;
+}
+
+// User shape with folder permissions embedded (admin views).
+message UserDetail {
+  int32 id = 1;
+  string email = 2;
+  string role = 3;
+  bool requires_password_change = 4;
+  bool is_approved = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_login = 7;
+  repeated GroupRef groups = 8;
+  bool cert_revoked = 9;
+  google.protobuf.Timestamp cert_issued_at = 10;
+  google.protobuf.Timestamp cert_expires_at = 11;
+  repeated FolderPermission folder_permissions = 12;
+}
+
+message RevokedCertificate {
+  int32 id = 1;
+  string serial_number = 2;
+  optional int32 user_id = 3;
+  google.protobuf.Timestamp revoked_at = 4;
+  string reason = 5;
+  optional int32 revoked_by = 6;
+}
+
+// -- User management (admin only) --------------------------------------------
+
+message ListUsersRequest {
+  string search = 1;
+  int32 page = 2;
+  int32 limit = 3;
+}
+
+message ListUsersResponse {
+  repeated UserDetail users = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  // Optional; when empty the account starts with an unguessable random
+  // password and the user receives a temporary one via the claim link.
+  string password = 2;
+  string role = 3;
+}
+
+// 201 response for a newly created user. Posting an existing email is a
+// 409 EMAIL_EXISTS; use PUT /users/{user_id} to approve existing accounts.
+message CreateUserResponse {
+  User user = 1;
+  // One-time link where the user downloads their mTLS certificate (also
+  // emailed when SMTP is enabled).
+  string claim_url = 2;
+}
+
+message GetUserRequest {
+  int32 user_id = 1;
+}
+
+message UserDetailResponse {
+  UserDetail user = 1;
+}
+
+message UpdateUserRequest {
+  int32 user_id = 1;
+  optional string email = 2;
+  optional string password = 3;
+  optional string role = 4;
+  optional bool approved = 5;
+}
+
+message UserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  int32 user_id = 1;
+}
+
+message UpdateUserGroupsRequest {
+  int32 user_id = 1;
+  repeated int32 group_ids = 2;
+}
+
+// -- Certificate lifecycle ----------------------------------------------------
+
+message RevokeCertRequest {
+  int32 user_id = 1;
+}
+
+message RevokeCertResponse {
+  string message = 1;
+  optional string revoked_serial = 2;
+  User user = 3;
+}
+
+message ReissueCertRequest {
+  int32 user_id = 1;
+}
+
+message ReissueCertResponse {
+  string message = 1;
+  User user = 2;
+  // One-time link where the user downloads the replacement certificate.
+  string claim_url = 3;
+}
+
+message CertStatusRequest {
+  int32 user_id = 1;
+}
+
+message CertStatusResponse {
+  optional string serial = 1;
+  google.protobuf.Timestamp issued_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  bool is_revoked = 4;
+  repeated RevokedCertificate revocation_history = 5;
+}
+
+// Admin-only user management endpoints.
+service UserService {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {get: "/api/v1/users"};
+  }
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/users"
+      body: "*"
+    };
+  }
+  rpc GetUser(GetUserRequest) returns (UserDetailResponse) {
+    option (google.api.http) = {get: "/api/v1/users/{user_id}"};
+  }
+  rpc UpdateUser(UpdateUserRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteUser(DeleteUserRequest) returns (SuccessResponse) {
+    option (google.api.http) = {delete: "/api/v1/users/{user_id}"};
+  }
+  rpc UpdateUserGroups(UpdateUserGroupsRequest) returns (UserDetailResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}/groups"
+      body: "*"
+    };
+  }
+  rpc RevokeCert(RevokeCertRequest) returns (RevokeCertResponse) {
+    option (google.api.http) = {post: "/api/v1/users/{user_id}/revoke-cert"};
+  }
+  rpc ReissueCert(ReissueCertRequest) returns (ReissueCertResponse) {
+    option (google.api.http) = {post: "/api/v1/users/{user_id}/reissue-cert"};
+  }
+  rpc CertStatus(CertStatusRequest) returns (CertStatusResponse) {
+    option (google.api.http) = {get: "/api/v1/users/{user_id}/cert-status"};
+  }
+}

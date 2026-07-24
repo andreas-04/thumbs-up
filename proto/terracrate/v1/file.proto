@@ -1,0 +1,151 @@
+// File browsing and manipulation, including the unauthenticated guest area.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/api/httpbody.proto";
+import "google/protobuf/timestamp.proto";
+import "terracrate/v1/common.proto";
+
+// A directory entry; `size` is 0 for folders.
+message FileItem {
+  // Relative path, doubling as a stable ID.
+  string id = 1;
+  string name = 2;
+  string path = 3;
+  // "file" or "folder".
+  string type = 4;
+  int64 size = 5;
+  google.protobuf.Timestamp modified_at = 6;
+  string parent_path = 7;
+}
+
+message ListFilesRequest {
+  // Relative path within the files area ("" = root).
+  string path = 1;
+  // Case-insensitive substring filter on names.
+  string search = 2;
+}
+
+message ListFilesResponse {
+  repeated FileItem files = 1;
+  string current_path = 2;
+  optional string parent_path = 3;
+}
+
+// The upload body itself is multipart/form-data with fields `file` and
+// `path`; this message documents the non-file field.
+message UploadFileRequest {
+  string path = 1;
+}
+
+message UploadedFile {
+  string name = 1;
+  string path = 2;
+  int64 size = 3;
+  google.protobuf.Timestamp modified_at = 4;
+}
+
+message UploadFileResponse {
+  UploadedFile file = 1;
+}
+
+message DownloadFileRequest {
+  string path = 1;
+}
+
+message MkdirRequest {
+  string path = 1;
+  string name = 2;
+}
+
+// Folder shape returned by mkdir (name/path of the created directory,
+// after filename sanitisation).
+message CreatedFolder {
+  string name = 1;
+  string path = 2;
+}
+
+message MkdirResponse {
+  CreatedFolder folder = 1;
+}
+
+message DeleteFileRequest {
+  string path = 1;
+}
+
+message RenameFileRequest {
+  string path = 1;
+  string new_name = 2;
+}
+
+message RenameFileResponse {
+  bool success = 1;
+  string new_path = 2;
+  string new_name = 3;
+}
+
+message MoveFileRequest {
+  string src_path = 1;
+  string dest_dir = 2;
+}
+
+message MoveFileResponse {
+  bool success = 1;
+  string new_path = 2;
+}
+
+// Authenticated file operations. Non-admin users additionally require a
+// verified mTLS client certificate (X-SSL-Client-Verify/-S-DN headers set by
+// nginx) and folder ACL grants.
+service FileService {
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse) {
+    option (google.api.http) = {get: "/api/v1/files"};
+  }
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/upload"
+      body: "*"
+    };
+  }
+  // Streams the file as an attachment (supports range requests).
+  rpc DownloadFile(DownloadFileRequest) returns (google.api.HttpBody) {
+    option (google.api.http) = {get: "/api/v1/files/download"};
+  }
+  // Streams the file inline with a guessed Content-Type.
+  rpc PreviewFile(DownloadFileRequest) returns (google.api.HttpBody) {
+    option (google.api.http) = {get: "/api/v1/files/preview"};
+  }
+  rpc Mkdir(MkdirRequest) returns (MkdirResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/mkdir"
+      body: "*"
+    };
+  }
+  rpc DeleteFile(DeleteFileRequest) returns (SuccessResponse) {
+    option (google.api.http) = {delete: "/api/v1/files"};
+  }
+  rpc RenameFile(RenameFileRequest) returns (RenameFileResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/rename"
+      body: "*"
+    };
+  }
+  rpc MoveFile(MoveFileRequest) returns (MoveFileResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/move"
+      body: "*"
+    };
+  }
+}
+
+// Unauthenticated, read-only access to the storage/files/guest subtree.
+service GuestFileService {
+  rpc ListGuestFiles(ListFilesRequest) returns (ListFilesResponse) {
+    option (google.api.http) = {get: "/api/v1/guest/files"};
+  }
+  rpc DownloadGuestFile(DownloadFileRequest) returns (google.api.HttpBody) {
+    option (google.api.http) = {get: "/api/v1/guest/files/download"};
+  }
+}

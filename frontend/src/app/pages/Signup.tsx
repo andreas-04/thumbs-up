@@ -35,10 +35,17 @@ export default function Signup() {
 
     try {
       const { api } = await import('../../services/api');
-      await api.signup({ email, password, username });
-      
-      toast.success('account created -- check email for certificate', { duration: 8000 });
-      navigate('/login');
+      const result = await api.signup({ email, password, username });
+
+      if (result.claimUrl) {
+        // Send the user straight to their one-time certificate download.
+        toast.success('account created -- downloading your certificate', { duration: 8000 });
+        const claimPath = new URL(result.claimUrl).pathname;
+        navigate(claimPath);
+      } else {
+        toast.success('account created -- check email for certificate', { duration: 8000 });
+        navigate('/login');
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'registration failed';
       setError(errorMessage);

@@ -88,10 +88,11 @@ export default function UserManagement() {
 
     try {
       const result = await addUser({ email: formData.email });
-      if (result?.approved) {
-        toast.success('User approved for protected file access');
-      } else {
-        toast.success('Email approved successfully');
+      try {
+        await navigator.clipboard.writeText(result.claimUrl);
+        toast.success('User invited — one-time certificate link copied to clipboard');
+      } catch {
+        toast.success('User invited — certificate link emailed (SMTP) or available via re-issue');
       }
       setShowAddDialog(false);
       resetForm();
@@ -128,8 +129,13 @@ export default function UserManagement() {
   const handleReissue = async () => {
     if (!selectedUser) return;
     try {
-      await api.reissueCert(selectedUser.id);
-      toast.success('New certificate issued and emailed to user');
+      const result = await api.reissueCert(selectedUser.id);
+      try {
+        await navigator.clipboard.writeText(result.claimUrl);
+        toast.success('Claim link issued and copied to clipboard');
+      } catch {
+        toast.success('Claim link issued (emailed when SMTP is enabled)');
+      }
       setShowReissueDialog(false);
       setSelectedUser(null);
       await refreshUsers();
@@ -211,12 +217,12 @@ export default function UserManagement() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className={`text-xs ${user.last_login ? 'text-foreground' : 'text-muted-foreground'}`}>
-                          {user.last_login ? 'registered' : 'invited'}
+                        <span className={`text-xs ${user.lastLogin ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {user.lastLogin ? 'registered' : 'invited'}
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs hidden sm:table-cell">
-                        {new Date(user.createdAt).toLocaleDateString()}
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-0.5">

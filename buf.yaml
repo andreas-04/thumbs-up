@@ -1,0 +1,18 @@
+version: v2
+modules:
+  - path: proto
+deps:
+  - buf.build/googleapis/googleapis
+lint:
+  use:
+    - STANDARD
+  except:
+    # The legacy REST API shares generic request/response shapes across RPCs
+    # (e.g. SuccessResponse, TokenUserResponse); keeping those shared messages
+    # is intentional so the wire contract stays the single source of truth.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

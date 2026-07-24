@@ -1,0 +1,47 @@
+// Health check and Docker container log streaming.
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+message SystemLogLine {
+  string timestamp = 1;
+  string line = 2;
+}
+
+message GetSystemLogsRequest {
+  // "backend" or "frontend".
+  string container = 1;
+  // Number of trailing lines, capped at 1000.
+  int32 tail = 2;
+  // ISO-8601 lower bound.
+  string since = 3;
+}
+
+// `available` is false (with `error` set, still HTTP 200) when the Docker
+// socket is not mounted or unreachable.
+message GetSystemLogsResponse {
+  repeated SystemLogLine logs = 1;
+  string container = 2;
+  bool available = 3;
+  optional string error = 4;
+}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+  string service = 3;
+}
+
+service SystemService {
+  // Admin only; requires /var/run/docker.sock mounted.
+  rpc GetSystemLogs(GetSystemLogsRequest) returns (GetSystemLogsResponse) {
+    option (google.api.http) = {get: "/api/v1/system/logs"};
+  }
+  // Public health check (compose healthcheck hits this).
+  rpc Health(google.protobuf.Empty) returns (HealthResponse) {
+    option (google.api.http) = {get: "/health"};
+  }
+}

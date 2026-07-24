@@ -1,0 +1,61 @@
+// Append-only audit log querying (admin only).
+syntax = "proto3";
+
+package terracrate.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+message AuditLogEntry {
+  int32 id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  optional int32 user_id = 3;
+  optional string user_email = 4;
+  // Dotted action identifier, e.g. "auth.login", "file.upload".
+  string action = 5;
+  optional string target_type = 6;
+  optional string target_id = 7;
+  optional string description = 8;
+  optional string ip_address = 9;
+  // "success" or "failure".
+  string status = 10;
+}
+
+message ListAuditLogsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  // Prefix filter on action (ignored when category is set).
+  string action = 3;
+  // "files" or "security" shortcut filters.
+  string category = 4;
+  string user_email = 5;
+  string status = 6;
+  // ISO-8601 lower bound on timestamp.
+  string since = 7;
+  // Substring filter on description.
+  string search = 8;
+}
+
+message ListAuditLogsResponse {
+  repeated AuditLogEntry logs = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message AuditLogStats {
+  int32 total = 1;
+  int32 today = 2;
+  int32 failed_auth_today = 3;
+  int32 active_users_today = 4;
+}
+
+service AuditService {
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListAuditLogsResponse) {
+    option (google.api.http) = {get: "/api/v1/audit-logs"};
+  }
+  rpc GetAuditLogStats(google.protobuf.Empty) returns (AuditLogStats) {
+    option (google.api.http) = {get: "/api/v1/audit-logs/stats"};
+  }
+}

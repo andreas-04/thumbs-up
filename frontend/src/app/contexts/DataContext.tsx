@@ -21,10 +21,10 @@ export interface User {
   email: string;
   username?: string;
   password?: string;
-  createdAt: string;
+  createdAt?: string;
   folderPermissions: FolderPermission[];
   role?: 'admin' | 'user';
-  last_login?: string | null;
+  lastLogin?: string | null;
   isApproved?: boolean;
   groups?: { id: number; name: string }[];
   certRevoked?: boolean;
@@ -43,7 +43,7 @@ interface DataContextType {
   
   // User management
   users: User[];
-  addUser: (userData: { email: string; password?: string; role?: 'admin' | 'user' }) => Promise<{ approved?: boolean }>;
+  addUser: (userData: { email: string; password?: string; role?: 'admin' | 'user' }) => Promise<{ claimUrl: string }>;
   updateUser: (id: number, updates: Partial<{ email: string; password: string; role: 'admin' | 'user'; approved: boolean }>) => Promise<void>;
   deleteUser: (id: number) => Promise<void>;
   refreshUsers: () => Promise<void>;
@@ -113,8 +113,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         id: u.id,
         email: u.email,
         role: u.role,
-        createdAt: u.created_at,
-        last_login: u.last_login,
+        createdAt: u.createdAt ?? undefined,
+        lastLogin: u.lastLogin,
         isApproved: u.isApproved,
         folderPermissions: u.folderPermissions || [],
         groups: u.groups || [],
@@ -148,12 +148,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addUser = async (userData: { email: string; password?: string; role?: 'admin' | 'user' }): Promise<{ approved?: boolean }> => {
+  const addUser = async (userData: { email: string; password?: string; role?: 'admin' | 'user' }): Promise<{ claimUrl: string }> => {
     try {
       const result = await api.createUser(userData);
       // Refresh user list
       await refreshUsers();
-      return { approved: (result as any).approved };
+      return { claimUrl: result.claimUrl };
     } catch (err) {
       console.error('Failed to add user:', err);
       throw err;
@@ -237,8 +237,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
               id: u.id,
               email: u.email,
               role: u.role,
-              createdAt: u.created_at,
-              last_login: u.last_login,
+              createdAt: u.createdAt ?? undefined,
+              lastLogin: u.lastLogin,
               isApproved: u.isApproved,
               folderPermissions: u.folderPermissions || [],
               groups: u.groups || [],

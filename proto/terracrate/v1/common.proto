@@ -1,0 +1,20 @@
+// Common wire shapes shared by every TerraCrate v1 REST endpoint.
+//
+// These protos are the single source of truth for the HTTP/JSON API served
+// by the Go backend. The wire format follows standard proto3 JSON mapping
+// (protojson): lowerCamelCase field names, RFC 3339 timestamps, and int64
+// values encoded as strings.
+syntax = "proto3";
+
+package terracrate.v1;
+
+// Error envelope returned with any non-2xx status.
+message ErrorResponse {
+  string error = 1;
+  string code = 2;
+}
+
+// Generic {"success": true} acknowledgement.
+message SuccessResponse {
+  bool success = 1;
+}

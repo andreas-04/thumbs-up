@@ -23,8 +23,8 @@ updates:
       - dependency-name: "react-dom"
         update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: "pip"
-    directory: "/backend/api"
+  - package-ecosystem: "gomod"
+    directory: "/backend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -33,7 +33,7 @@ updates:
       - "backend"
 
   - package-ecosystem: "docker"
-    directory: "/backend/api"
+    directory: "/backend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
